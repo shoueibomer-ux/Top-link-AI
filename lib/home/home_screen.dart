@@ -5,6 +5,8 @@ import '../app_colors.dart';
 import '../onboarding/onboarding_screen.dart';
 import '../onboarding/service_category.dart';
 import '../onboarding/urgency_step.dart';
+import '../widgets/app_drawer.dart';
+import '../widgets/app_logo.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({
@@ -22,7 +24,8 @@ class HomeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.lightBackground,
-      appBar: AppBar(title: const Text('Top Link AI')),
+      appBar: AppBar(title: const AppLogo()),
+      drawer: const AppDrawer(),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(24),

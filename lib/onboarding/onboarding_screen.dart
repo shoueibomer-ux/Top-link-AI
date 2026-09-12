@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../api/api_client.dart';
 import '../app_colors.dart';
 import '../home/home_screen.dart';
+import '../widgets/app_drawer.dart';
+import '../widgets/app_logo.dart';
 import 'category_step.dart';
 import 'confirmation_step.dart';
 import 'location_step.dart';
@@ -88,6 +90,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.lightBackground,
+      appBar: AppBar(title: const AppLogo()),
+      drawer: const AppDrawer(),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(24),
