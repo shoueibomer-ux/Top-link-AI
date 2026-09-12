@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import 'match_result.dart';
@@ -13,8 +14,17 @@ class ApiException implements Exception {
   String toString() => message;
 }
 
+// The Android emulator can't reach the host machine via "localhost" — that
+// resolves to the emulator itself. 10.0.2.2 is its alias for the host.
+String _defaultBaseUrl() {
+  final host = !kIsWeb && defaultTargetPlatform == TargetPlatform.android
+      ? '10.0.2.2'
+      : 'localhost';
+  return 'http://$host:8000/api';
+}
+
 class ApiClient {
-  ApiClient({this.baseUrl = 'http://localhost:8000/api'});
+  ApiClient({String? baseUrl}) : baseUrl = baseUrl ?? _defaultBaseUrl();
 
   final String baseUrl;
 

@@ -6,6 +6,9 @@ class Category(models.Model):
     name = models.CharField(max_length=100, unique=True)
     keywords = models.JSONField(default=list, blank=True)  # used by ai_categorize() fallback/seed
 
+    class Meta:
+        verbose_name_plural = "categories"
+
     def __str__(self):
         return self.name
 
