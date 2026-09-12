@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../api/match_result.dart';
 import '../app_colors.dart';
 import '../onboarding/onboarding_screen.dart';
 import '../onboarding/service_category.dart';
@@ -10,10 +11,12 @@ class HomeScreen extends StatelessWidget {
     super.key,
     required this.category,
     required this.urgency,
+    required this.matches,
   });
 
   final ServiceCategory category;
   final Urgency urgency;
+  final List<MatchResult> matches;
 
   @override
   Widget build(BuildContext context) {
@@ -49,10 +52,13 @@ class HomeScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 12),
-            for (final provider in _mockProviders) ...[
-              _ProviderCard(provider: provider, category: category),
-              const SizedBox(height: 12),
-            ],
+            if (matches.isEmpty)
+              const _EmptyProvidersNotice()
+            else
+              for (final match in matches) ...[
+                _ProviderCard(match: match),
+                const SizedBox(height: 12),
+              ],
             const SizedBox(height: 12),
             Center(
               child: TextButton(
@@ -140,28 +146,34 @@ class _IconBadge extends StatelessWidget {
   }
 }
 
-class _MockProvider {
-  const _MockProvider(this.name, this.rating, this.distanceKm);
-
-  final String name;
-  final double rating;
-  final double distanceKm;
-}
-
-const _mockProviders = [
-  _MockProvider('Ahmed Plumbing Co.', 4.6, 2.1),
-  _MockProvider('QuickFix Pros', 4.8, 3.4),
-  _MockProvider('Reliable Home Services', 4.5, 5.0),
-];
-
-class _ProviderCard extends StatelessWidget {
-  const _ProviderCard({required this.provider, required this.category});
-
-  final _MockProvider provider;
-  final ServiceCategory category;
+class _EmptyProvidersNotice extends StatelessWidget {
+  const _EmptyProvidersNotice();
 
   @override
   Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE1E8EF)),
+      ),
+      child: Text(
+        "No providers found nearby yet — we'll notify you as soon as one is available.",
+        style: TextStyle(fontSize: 14, color: AppColors.navy.withValues(alpha: 0.6)),
+      ),
+    );
+  }
+}
+
+class _ProviderCard extends StatelessWidget {
+  const _ProviderCard({required this.match});
+
+  final MatchResult match;
+
+  @override
+  Widget build(BuildContext context) {
+    final profile = match.profile;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -171,14 +183,25 @@ class _ProviderCard extends StatelessWidget {
       ),
       child: Row(
         children: [
-          _IconBadge(icon: category.icon),
+          CircleAvatar(
+            radius: 24,
+            backgroundColor: AppColors.turquoise.withValues(alpha: 0.12),
+            child: Text(
+              '${match.score.round()}%',
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: AppColors.turquoise,
+              ),
+            ),
+          ),
           const SizedBox(width: 16),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  provider.name,
+                  profile.name,
                   style: const TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w600,
@@ -191,7 +214,7 @@ class _ProviderCard extends StatelessWidget {
                     const Icon(Icons.star, size: 14, color: Colors.amber),
                     const SizedBox(width: 4),
                     Text(
-                      '${provider.rating} · ${provider.distanceKm} km away',
+                      '${profile.rating} · ${match.distanceKm} km away',
                       style: TextStyle(fontSize: 13, color: AppColors.navy.withValues(alpha: 0.6)),
                     ),
                   ],
