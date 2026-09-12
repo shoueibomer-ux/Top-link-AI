@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../app_colors.dart';
+import '../home/home_screen.dart';
 import 'category_step.dart';
 import 'confirmation_step.dart';
 import 'service_category.dart';
@@ -36,11 +37,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     if (_step < _stepCount - 1) {
       setState(() => _step++);
     } else {
-      setState(() {
-        _step = 0;
-        _selectedCategory = null;
-        _selectedUrgency = null;
-      });
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => HomeScreen(
+            category: _selectedCategory!,
+            urgency: _selectedUrgency!,
+          ),
+        ),
+      );
     }
   }
 
