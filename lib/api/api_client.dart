@@ -18,11 +18,15 @@ class ApiClient {
 
   final String baseUrl;
 
-  // Demo location (Edmonton) used until the app collects a real one.
+  // Demo location (Edmonton) used to prefill the location step.
   static const demoLat = 53.5444;
   static const demoLng = -113.4909;
 
-  Future<int> createAnonymousProfile({required String description}) async {
+  Future<int> createAnonymousProfile({
+    required String description,
+    required double lat,
+    required double lng,
+  }) async {
     final response = await http.post(
       Uri.parse('$baseUrl/profiles/'),
       headers: {'Content-Type': 'application/json'},
@@ -30,8 +34,8 @@ class ApiClient {
         'name': 'App User',
         'role': 'individual',
         'description': description,
-        'lat': demoLat,
-        'lng': demoLng,
+        'lat': lat,
+        'lng': lng,
         // This profile represents a requester, not a service provider, so it
         // must never turn up as a candidate in someone else's match results.
         'available': false,
@@ -47,6 +51,8 @@ class ApiClient {
   Future<List<MatchResult>> requestMatch({
     required int requesterId,
     required String requestText,
+    required double lat,
+    required double lng,
     double maxDistanceKm = 25,
   }) async {
     final response = await http.post(
@@ -55,8 +61,8 @@ class ApiClient {
       body: jsonEncode({
         'requester': requesterId,
         'request_text': requestText,
-        'lat': demoLat,
-        'lng': demoLng,
+        'lat': lat,
+        'lng': lng,
         'max_distance_km': maxDistanceKm,
       }),
     );

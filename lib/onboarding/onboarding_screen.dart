@@ -5,6 +5,7 @@ import '../app_colors.dart';
 import '../home/home_screen.dart';
 import 'category_step.dart';
 import 'confirmation_step.dart';
+import 'location_step.dart';
 import 'service_category.dart';
 import 'urgency_step.dart';
 
@@ -16,13 +17,15 @@ class OnboardingScreen extends StatefulWidget {
 }
 
 class _OnboardingScreenState extends State<OnboardingScreen> {
-  static const _stepCount = 3;
+  static const _stepCount = 4;
 
   final _apiClient = ApiClient();
 
   int _step = 0;
   ServiceCategory? _selectedCategory;
   Urgency? _selectedUrgency;
+  double _lat = ApiClient.demoLat;
+  double _lng = ApiClient.demoLng;
   bool _isSubmitting = false;
 
   bool get _canContinue {
@@ -50,11 +53,16 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     try {
       final requestText =
           'Looking for a ${category.label} provider. Urgency: ${urgency.label}.';
-      final requesterId =
-          await _apiClient.createAnonymousProfile(description: requestText);
+      final requesterId = await _apiClient.createAnonymousProfile(
+        description: requestText,
+        lat: _lat,
+        lng: _lng,
+      );
       final matches = await _apiClient.requestMatch(
         requesterId: requesterId,
         requestText: requestText,
+        lat: _lat,
+        lng: _lng,
       );
 
       if (!mounted) return;
@@ -98,6 +106,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       selected: _selectedUrgency,
                       onSelect: (urgency) =>
                           setState(() => _selectedUrgency = urgency),
+                    ),
+                  2 => LocationStep(
+                      lat: _lat,
+                      lng: _lng,
+                      onLocationChanged: (location) => setState(() {
+                        _lat = location.lat;
+                        _lng = location.lng;
+                      }),
                     ),
                   _ => ConfirmationStep(
                       categoryLabel: _selectedCategory?.label ?? 'service',
