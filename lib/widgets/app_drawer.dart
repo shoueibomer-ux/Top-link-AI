@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 
 import '../app_colors.dart';
-import '../pages/placeholder_page.dart';
+import '../app_styles.dart';
+import '../pages/about_us_page.dart';
+import '../pages/mission_vision_page.dart';
+import '../pages/settings_page.dart';
 import 'app_logo.dart';
+import 'pressable.dart';
 
 class AppDrawer extends StatelessWidget {
   const AppDrawer({super.key});
@@ -10,59 +14,35 @@ class AppDrawer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Drawer(
-      backgroundColor: AppColors.white,
+      backgroundColor: AppColors.lightBackground,
       child: ListView(
-        padding: EdgeInsets.zero,
+        padding: const EdgeInsets.only(bottom: 12),
         children: [
           const _DrawerHeader(),
+          const SizedBox(height: 12),
           _DrawerItem(
             icon: Icons.info_outline,
             label: 'About Us',
-            onTap: () => _openPlaceholder(
-              context,
-              title: 'About Us',
-              icon: Icons.info_outline,
-              description: "We're building the easiest way to find trusted "
-                  'local service providers. More about our story is coming soon.',
-            ),
+            onTap: () => _navigateTo(context, const AboutUsPage()),
           ),
           _DrawerItem(
             icon: Icons.flag_outlined,
             label: 'Mission & Vision',
-            onTap: () => _openPlaceholder(
-              context,
-              title: 'Mission & Vision',
-              icon: Icons.flag_outlined,
-              description: 'Our mission and vision statement is coming soon.',
-            ),
+            onTap: () => _navigateTo(context, const MissionVisionPage()),
           ),
           _DrawerItem(
             icon: Icons.settings_outlined,
             label: 'Settings',
-            onTap: () => _openPlaceholder(
-              context,
-              title: 'Settings',
-              icon: Icons.settings_outlined,
-              description: 'App settings and preferences are coming soon.',
-            ),
+            onTap: () => _navigateTo(context, const SettingsPage()),
           ),
         ],
       ),
     );
   }
 
-  void _openPlaceholder(
-    BuildContext context, {
-    required String title,
-    required IconData icon,
-    required String description,
-  }) {
+  void _navigateTo(BuildContext context, Widget page) {
     Navigator.of(context).pop();
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => PlaceholderPage(title: title, icon: icon, description: description),
-      ),
-    );
+    Navigator.of(context).push(MaterialPageRoute(builder: (_) => page));
   }
 }
 
@@ -73,7 +53,7 @@ class _DrawerHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(20, 56, 20, 20),
+      padding: const EdgeInsets.fromLTRB(20, 56, 20, 24),
       color: AppColors.navy,
       child: const Align(
         alignment: Alignment.centerLeft,
@@ -92,13 +72,32 @@ class _DrawerItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
-      leading: Icon(icon, color: AppColors.navy),
-      title: Text(
-        label,
-        style: const TextStyle(color: AppColors.navy, fontWeight: FontWeight.w500),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      child: Pressable(
+        child: Container(
+          decoration: BoxDecoration(
+            color: AppColors.white,
+            borderRadius: BorderRadius.circular(kRadius),
+            boxShadow: kCardShadow,
+          ),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(kRadius),
+              onTap: onTap,
+              child: ListTile(
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(kRadius)),
+                leading: Icon(icon, color: AppColors.navy),
+                title: Text(
+                  label,
+                  style: const TextStyle(color: AppColors.navy, fontWeight: FontWeight.w500),
+                ),
+              ),
+            ),
+          ),
+        ),
       ),
-      onTap: onTap,
     );
   }
 }

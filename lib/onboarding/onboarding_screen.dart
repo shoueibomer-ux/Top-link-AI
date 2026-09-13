@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 
 import '../api/api_client.dart';
 import '../app_colors.dart';
+import '../app_styles.dart';
 import '../home/home_screen.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/app_logo.dart';
+import '../widgets/pressable.dart';
 import 'category_step.dart';
 import 'confirmation_step.dart';
 import 'location_step.dart';
@@ -98,59 +100,81 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           child: Column(
             children: [
               _StepProgress(currentStep: _step, stepCount: _stepCount),
-              const SizedBox(height: 24),
+              const SizedBox(height: 28),
               Expanded(
-                child: switch (_step) {
-                  0 => CategoryStep(
-                      selected: _selectedCategory,
-                      onSelect: (category) =>
-                          setState(() => _selectedCategory = category),
-                    ),
-                  1 => UrgencyStep(
-                      selected: _selectedUrgency,
-                      onSelect: (urgency) =>
-                          setState(() => _selectedUrgency = urgency),
-                    ),
-                  2 => LocationStep(
-                      lat: _lat,
-                      lng: _lng,
-                      onLocationChanged: (location) => setState(() {
-                        _lat = location.lat;
-                        _lng = location.lng;
-                      }),
-                    ),
-                  _ => ConfirmationStep(
-                      categoryLabel: _selectedCategory?.label ?? 'service',
-                    ),
-                },
-              ),
-              const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                height: 52,
-                child: ElevatedButton(
-                  onPressed: _canContinue ? _onContinue : null,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.turquoise,
-                    disabledBackgroundColor: AppColors.turquoise.withValues(alpha: 0.35),
-                    foregroundColor: AppColors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 250),
+                  layoutBuilder: (currentChild, previousChildren) =>
+                      currentChild ?? const SizedBox.shrink(),
+                  transitionBuilder: (child, animation) => FadeTransition(
+                    opacity: animation,
+                    child: SlideTransition(
+                      position: Tween<Offset>(
+                        begin: const Offset(0.04, 0),
+                        end: Offset.zero,
+                      ).animate(animation),
+                      child: child,
                     ),
                   ),
-                  child: _isSubmitting
-                      ? const SizedBox(
-                          width: 22,
-                          height: 22,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2.5,
-                            valueColor: AlwaysStoppedAnimation(AppColors.white),
-                          ),
-                        )
-                      : Text(
-                          _step == _stepCount - 1 ? 'Continue' : 'Next',
-                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                  child: KeyedSubtree(
+                    key: ValueKey(_step),
+                    child: switch (_step) {
+                      0 => CategoryStep(
+                          selected: _selectedCategory,
+                          onSelect: (category) =>
+                              setState(() => _selectedCategory = category),
                         ),
+                      1 => UrgencyStep(
+                          selected: _selectedUrgency,
+                          onSelect: (urgency) =>
+                              setState(() => _selectedUrgency = urgency),
+                        ),
+                      2 => LocationStep(
+                          lat: _lat,
+                          lng: _lng,
+                          onLocationChanged: (location) => setState(() {
+                            _lat = location.lat;
+                            _lng = location.lng;
+                          }),
+                        ),
+                      _ => ConfirmationStep(
+                          categoryLabel: _selectedCategory?.label ?? 'service',
+                        ),
+                    },
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Pressable(
+                enabled: _canContinue,
+                child: SizedBox(
+                  width: double.infinity,
+                  height: 56,
+                  child: ElevatedButton(
+                    onPressed: _canContinue ? _onContinue : null,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.turquoise,
+                      disabledBackgroundColor: AppColors.turquoise.withValues(alpha: 0.35),
+                      foregroundColor: AppColors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(kRadius),
+                      ),
+                    ),
+                    child: _isSubmitting
+                        ? const SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.5,
+                              valueColor: AlwaysStoppedAnimation(AppColors.white),
+                            ),
+                          )
+                        : Text(
+                            _step == _stepCount - 1 ? 'Continue' : 'Next',
+                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                          ),
+                  ),
                 ),
               ),
             ],

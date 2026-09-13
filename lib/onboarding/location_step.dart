@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 
 import '../app_colors.dart';
+import '../app_styles.dart';
+import '../widgets/pressable.dart';
 
 class LocationStep extends StatefulWidget {
   const LocationStep({
@@ -89,7 +91,7 @@ class _LocationStepState extends State<LocationStep> {
         const Text(
           'Where are you located?',
           style: TextStyle(
-            fontSize: 22,
+            fontSize: 24,
             fontWeight: FontWeight.bold,
             color: AppColors.navy,
           ),
@@ -97,28 +99,31 @@ class _LocationStepState extends State<LocationStep> {
         const SizedBox(height: 8),
         Text(
           "We'll use this to find providers near you.",
-          style: TextStyle(fontSize: 14, color: AppColors.navy.withValues(alpha: 0.6)),
+          style: TextStyle(fontSize: 14, color: AppColors.muted),
         ),
-        const SizedBox(height: 24),
-        SizedBox(
-          width: double.infinity,
-          child: OutlinedButton.icon(
-            onPressed: _isLocating ? null : _useCurrentLocation,
-            icon: _isLocating
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.my_location, color: AppColors.turquoise),
-            label: Text(
-              _isLocating ? 'Detecting location…' : 'Use my current location',
-              style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.navy),
-            ),
-            style: OutlinedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              side: const BorderSide(color: AppColors.turquoise),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        const SizedBox(height: 28),
+        Pressable(
+          enabled: !_isLocating,
+          child: SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: _isLocating ? null : _useCurrentLocation,
+              icon: _isLocating
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.my_location, color: AppColors.turquoise),
+              label: Text(
+                _isLocating ? 'Detecting location…' : 'Use my current location',
+                style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.navy),
+              ),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 18),
+                side: const BorderSide(color: AppColors.turquoise),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(kRadius)),
+              ),
             ),
           ),
         ),
@@ -132,7 +137,7 @@ class _LocationStepState extends State<LocationStep> {
             ),
           ),
         ],
-        const SizedBox(height: 28),
+        const SizedBox(height: 32),
         Text(
           'OR ENTER MANUALLY',
           style: TextStyle(
@@ -142,7 +147,7 @@ class _LocationStepState extends State<LocationStep> {
             color: AppColors.navy.withValues(alpha: 0.5),
           ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 14),
         Row(
           children: [
             Expanded(
@@ -152,7 +157,7 @@ class _LocationStepState extends State<LocationStep> {
                 onChanged: (_) => _applyManualEntry(),
               ),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 14),
             Expanded(
               child: _CoordinateField(
                 label: 'Longitude',
@@ -190,7 +195,7 @@ class _CoordinateField extends StatelessWidget {
         filled: true,
         fillColor: AppColors.white,
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(kRadius),
           borderSide: const BorderSide(color: Color(0xFFE1E8EF)),
         ),
       ),

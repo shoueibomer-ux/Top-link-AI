@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../app_colors.dart';
+import '../app_styles.dart';
+import '../widgets/pressable.dart';
 
 enum Urgency {
   today('Today', 'Need someone as soon as possible', Icons.bolt),
@@ -32,7 +34,7 @@ class UrgencyStep extends StatelessWidget {
         const Text(
           'How soon do you need this done?',
           style: TextStyle(
-            fontSize: 22,
+            fontSize: 24,
             fontWeight: FontWeight.bold,
             color: AppColors.navy,
           ),
@@ -40,16 +42,16 @@ class UrgencyStep extends StatelessWidget {
         const SizedBox(height: 8),
         Text(
           'This helps us prioritize the right providers for you.',
-          style: TextStyle(fontSize: 14, color: AppColors.navy.withValues(alpha: 0.6)),
+          style: TextStyle(fontSize: 14, color: AppColors.muted),
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: 28),
         for (final urgency in Urgency.values) ...[
           _UrgencyTile(
             urgency: urgency,
             isSelected: urgency == selected,
             onTap: () => onSelect(urgency),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
         ],
       ],
     );
@@ -69,57 +71,59 @@ class _UrgencyTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: isSelected ? AppColors.turquoise.withValues(alpha: 0.12) : AppColors.white,
-      borderRadius: BorderRadius.circular(16),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: isSelected ? AppColors.turquoise : const Color(0xFFE1E8EF),
-              width: isSelected ? 2 : 1,
+    return Pressable(
+      child: Container(
+        decoration: BoxDecoration(
+          color: isSelected ? AppColors.turquoise.withValues(alpha: 0.12) : AppColors.white,
+          borderRadius: BorderRadius.circular(kRadius),
+          boxShadow: kCardShadow,
+          border: isSelected ? Border.all(color: AppColors.turquoise, width: 2) : null,
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(kRadius),
+            onTap: onTap,
+            child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 22,
+                    backgroundColor: isSelected
+                        ? AppColors.turquoise
+                        : AppColors.lightBackground,
+                    child: Icon(
+                      urgency.icon,
+                      color: isSelected ? AppColors.white : AppColors.navy,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          urgency.label,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.navy,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          urgency.description,
+                          style: TextStyle(fontSize: 13, color: AppColors.muted),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (isSelected)
+                    const Icon(Icons.check_circle, color: AppColors.turquoise),
+                ],
+              ),
             ),
-          ),
-          child: Row(
-            children: [
-              CircleAvatar(
-                radius: 22,
-                backgroundColor: isSelected
-                    ? AppColors.turquoise
-                    : AppColors.lightBackground,
-                child: Icon(
-                  urgency.icon,
-                  color: isSelected ? AppColors.white : AppColors.navy,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      urgency.label,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.navy,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      urgency.description,
-                      style: TextStyle(fontSize: 13, color: AppColors.navy.withValues(alpha: 0.6)),
-                    ),
-                  ],
-                ),
-              ),
-              if (isSelected)
-                const Icon(Icons.check_circle, color: AppColors.turquoise),
-            ],
           ),
         ),
       ),

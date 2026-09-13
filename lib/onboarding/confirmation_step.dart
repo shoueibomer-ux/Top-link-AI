@@ -26,7 +26,7 @@ class ConfirmationStep extends StatelessWidget {
           "We found providers ready to help you in your area",
           textAlign: TextAlign.center,
           style: TextStyle(
-            fontSize: 22,
+            fontSize: 24,
             fontWeight: FontWeight.bold,
             color: AppColors.navy,
           ),
@@ -35,7 +35,7 @@ class ConfirmationStep extends StatelessWidget {
         Text(
           'Top-rated $categoryLabel pros near you are ready to take your request.',
           textAlign: TextAlign.center,
-          style: TextStyle(fontSize: 14, color: AppColors.navy.withValues(alpha: 0.6)),
+          style: TextStyle(fontSize: 14, color: AppColors.muted),
         ),
       ],
     );

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../api/match_result.dart';
 import '../app_colors.dart';
+import '../app_styles.dart';
 import '../onboarding/onboarding_screen.dart';
 import '../onboarding/service_category.dart';
 import '../onboarding/urgency_step.dart';
@@ -33,7 +34,7 @@ class HomeScreen extends StatelessWidget {
             const Text(
               "You're all set!",
               style: TextStyle(
-                fontSize: 24,
+                fontSize: 26,
                 fontWeight: FontWeight.bold,
                 color: AppColors.navy,
               ),
@@ -41,9 +42,9 @@ class HomeScreen extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               "We're matching you with top ${category.label.toLowerCase()} providers in your area.",
-              style: TextStyle(fontSize: 14, color: AppColors.navy.withValues(alpha: 0.6)),
+              style: TextStyle(fontSize: 14, color: AppColors.muted),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 28),
             _RequestSummaryCard(category: category, urgency: urgency),
             const SizedBox(height: 32),
             const Text(
@@ -54,13 +55,13 @@ class HomeScreen extends StatelessWidget {
                 color: AppColors.navy,
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 14),
             if (matches.isEmpty)
               const _EmptyProvidersNotice()
             else
               for (final match in matches) ...[
                 _ProviderCard(match: match),
-                const SizedBox(height: 12),
+                const SizedBox(height: 14),
               ],
             const SizedBox(height: 12),
             Center(
@@ -92,11 +93,11 @@ class _RequestSummaryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
         color: AppColors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE1E8EF)),
+        borderRadius: BorderRadius.circular(kRadius),
+        boxShadow: kCardShadow,
       ),
       child: Row(
         children: [
@@ -114,14 +115,14 @@ class _RequestSummaryCard extends StatelessWidget {
                     color: AppColors.navy,
                   ),
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: 3),
                 Row(
                   children: [
-                    Icon(urgency.icon, size: 14, color: AppColors.navy.withValues(alpha: 0.6)),
+                    Icon(urgency.icon, size: 14, color: AppColors.muted),
                     const SizedBox(width: 4),
                     Text(
                       urgency.label,
-                      style: TextStyle(fontSize: 13, color: AppColors.navy.withValues(alpha: 0.6)),
+                      style: TextStyle(fontSize: 13, color: AppColors.muted),
                     ),
                   ],
                 ),
@@ -155,15 +156,15 @@ class _EmptyProvidersNotice extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
         color: AppColors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE1E8EF)),
+        borderRadius: BorderRadius.circular(kRadius),
+        boxShadow: kCardShadow,
       ),
       child: Text(
         "No providers found nearby yet — we'll notify you as soon as one is available.",
-        style: TextStyle(fontSize: 14, color: AppColors.navy.withValues(alpha: 0.6)),
+        style: TextStyle(fontSize: 14, color: AppColors.muted),
       ),
     );
   }
@@ -178,11 +179,11 @@ class _ProviderCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final profile = match.profile;
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: AppColors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE1E8EF)),
+        borderRadius: BorderRadius.circular(kRadius),
+        boxShadow: kCardShadow,
       ),
       child: Row(
         children: [
@@ -218,7 +219,7 @@ class _ProviderCard extends StatelessWidget {
                     const SizedBox(width: 4),
                     Text(
                       '${profile.rating} · ${match.distanceKm} km away',
-                      style: TextStyle(fontSize: 13, color: AppColors.navy.withValues(alpha: 0.6)),
+                      style: TextStyle(fontSize: 13, color: AppColors.muted),
                     ),
                   ],
                 ),

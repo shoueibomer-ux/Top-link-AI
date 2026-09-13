@@ -1,9 +1,18 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:toplinkai_app/main.dart';
 
 void main() {
   testWidgets('Onboarding flow walks through all 4 steps', (WidgetTester tester) async {
+    // The default test surface (800x600) is far shorter than any real phone
+    // screen; use a realistic device size so layout assertions reflect what
+    // actually ships instead of an artificially cramped canvas.
+    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
     await tester.pumpWidget(const TopLinkApp());
 
     // Step 1: category selection — Continue disabled until a category is picked.
