@@ -23,6 +23,13 @@ String _defaultBaseUrl() {
   return 'http://$host:8000/api';
 }
 
+// Shared secret required by the backend (see matching.permissions.HasApiKey).
+// Must match the backend's API_KEY. The default here is a dev-only value —
+// a real deployment overrides it at build time with
+// --dart-define=API_KEY=<the production key>, so the real secret never sits
+// in source control.
+const _apiKey = String.fromEnvironment('API_KEY', defaultValue: 'dev-local-shared-key');
+
 class ApiClient {
   ApiClient({String? baseUrl}) : baseUrl = baseUrl ?? _defaultBaseUrl();
 
@@ -32,6 +39,11 @@ class ApiClient {
   static const demoLat = 53.5444;
   static const demoLng = -113.4909;
 
+  static const _headers = {
+    'Content-Type': 'application/json',
+    'X-API-Key': _apiKey,
+  };
+
   Future<int> createAnonymousProfile({
     required String description,
     required double lat,
@@ -39,7 +51,7 @@ class ApiClient {
   }) async {
     final response = await http.post(
       Uri.parse('$baseUrl/profiles/'),
-      headers: {'Content-Type': 'application/json'},
+      headers: _headers,
       body: jsonEncode({
         'name': 'App User',
         'role': 'individual',
@@ -67,7 +79,7 @@ class ApiClient {
   }) async {
     final response = await http.post(
       Uri.parse('$baseUrl/match/'),
-      headers: {'Content-Type': 'application/json'},
+      headers: _headers,
       body: jsonEncode({
         'requester': requesterId,
         'request_text': requestText,

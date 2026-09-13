@@ -1,20 +1,40 @@
 import os
 from pathlib import Path
 
+from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 load_dotenv(BASE_DIR / ".env")
 
-SECRET_KEY = os.environ.get(
-    "DJANGO_SECRET_KEY",
-    "dev-only-secret-key-do-not-use-in-production",
-)
+DEBUG = os.environ.get("DJANGO_DEBUG", "False") == "True"
 
-DEBUG = True
 
-ALLOWED_HOSTS = ["*"]
+def _env(name, dev_default=None):
+    """Read a required setting from the environment.
+
+    Falls back to `dev_default` only when DEBUG is on, so local development
+    keeps working without a fully-populated .env, while a production
+    deployment (DEBUG=False) fails fast at startup instead of silently
+    running with a known placeholder secret.
+    """
+    value = os.environ.get(name)
+    if value:
+        return value
+    if DEBUG:
+        return dev_default
+    raise ImproperlyConfigured(f"{name} must be set in the environment when DEBUG=False.")
+
+
+SECRET_KEY = _env("DJANGO_SECRET_KEY", "dev-only-secret-key-do-not-use-in-production")
+
+# Shared secret required on every API request (see matching.permissions.HasApiKey).
+# The app has no user accounts, so this isn't per-user auth — it's a gate that
+# keeps the open internet off the Claude-backed endpoints.
+API_KEY = _env("API_KEY", "dev-local-shared-key")
+
+ALLOWED_HOSTS = [h.strip() for h in os.environ.get("DJANGO_ALLOWED_HOSTS", "").split(",") if h.strip()]
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -61,11 +81,11 @@ WSGI_APPLICATION = "config.wsgi.application"
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
-        "NAME": os.environ.get("DB_NAME", "toplinkai"),
-        "USER": os.environ.get("DB_USER", "postgres"),
-        "PASSWORD": os.environ.get("DB_PASSWORD", "postgres"),
-        "HOST": os.environ.get("DB_HOST", "localhost"),
-        "PORT": os.environ.get("DB_PORT", "5432"),
+        "NAME": _env("DB_NAME", "toplinkai"),
+        "USER": _env("DB_USER", "postgres"),
+        "PASSWORD": _env("DB_PASSWORD", "postgres"),
+        "HOST": _env("DB_HOST", "localhost"),
+        "PORT": _env("DB_PORT", "5432"),
     }
 }
 
@@ -85,5 +105,27 @@ STATIC_URL = "static/"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-# Dev-only: Flutter web (served from a different port) needs to call this API.
-CORS_ALLOW_ALL_ORIGINS = True
+REST_FRAMEWORK = {
+    # Fail-safe default: any view (including ones added later) requires the
+    # shared API key unless it explicitly opts out.
+    "DEFAULT_PERMISSION_CLASSES": ["matching.permissions.HasApiKey"],
+}
+
+# CORS is a browser-only mechanism — it does not restrict the native mobile
+# app (Android/iOS HTTP clients ignore it entirely). It matters for two
+# things: local development against the Flutter *web* build, and stopping
+# an arbitrary website from making browser-driven requests to this API on a
+# victim's behalf. Allow everything only in dev; require an explicit,
+# comma-separated allowlist in production.
+CORS_ALLOW_ALL_ORIGINS = DEBUG
+if not DEBUG:
+    CORS_ALLOWED_ORIGINS = [
+        o.strip() for o in os.environ.get("CORS_ALLOWED_ORIGINS", "").split(",") if o.strip()
+    ]
+
+# django-cors-headers' default allow-list doesn't include our custom auth
+# header, so a browser client's preflight would otherwise fail and the
+# actual request would never be sent.
+from corsheaders.defaults import default_headers  # noqa: E402
+
+CORS_ALLOW_HEADERS = [*default_headers, "x-api-key"]

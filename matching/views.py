@@ -1,3 +1,5 @@
+from django.utils.decorators import method_decorator
+from django_ratelimit.decorators import ratelimit
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -12,11 +14,19 @@ from .matching_engine import (
     find_matches, ai_categorize,
 )
 
+# Stricter than the general API default (60/min) because both views below
+# call the paid Claude API via ai_categorize().
+_AI_ENDPOINT_RATE = "10/m"
 
+
+@method_decorator(ratelimit(key="ip", rate=_AI_ENDPOINT_RATE, method="POST", block=False), name="post")
 class ProfileCreateView(APIView):
     """POST /api/profiles/  — description is required; categories are assigned automatically."""
 
     def post(self, request):
+        if getattr(request, "limited", False):
+            return Response({"detail": "Rate limit exceeded. Try again later."}, status=429)
+
         serializer = ProfileCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         profile = serializer.save()
@@ -28,10 +38,14 @@ class ProfileCreateView(APIView):
         return Response(ProfileCreateSerializer(profile).data, status=status.HTTP_201_CREATED)
 
 
+@method_decorator(ratelimit(key="ip", rate=_AI_ENDPOINT_RATE, method="POST", block=False), name="post")
 class MatchView(APIView):
     """POST /api/match/  — request_text is required; returns ranked matches with transparent scores."""
 
     def post(self, request):
+        if getattr(request, "limited", False):
+            return Response({"detail": "Rate limit exceeded. Try again later."}, status=429)
+
         serializer = MatchRequestCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         match_request = serializer.save()
