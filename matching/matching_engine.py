@@ -10,10 +10,19 @@ Drop it into Django as a service module (called from a DRF view) later —
 no changes needed to the scoring logic itself.
 """
 
+import logging
+import os
 from dataclasses import dataclass, field
 from datetime import datetime
 from math import radians, sin, cos, sqrt, atan2
 from typing import List, Optional
+
+try:
+    import anthropic
+except ImportError:
+    anthropic = None
+
+logger = logging.getLogger(__name__)
 
 
 # ---------- Data model ----------
@@ -150,11 +159,11 @@ if __name__ == "__main__":
 
 
 # ---------- AI categorization layer ----------
-# In production, replace `ai_categorize()` with a real call: send the free-text
-# description to an LLM (or a fine-tuned classifier) with the fixed taxonomy list
-# in the prompt, ask it to return the matching category ids. This stub uses
-# keyword matching only to prove the pipeline shape — swap the implementation,
-# not the interface, when you wire in the real model.
+# ai_categorize() classifies free text into this module's fixed category
+# taxonomy using the Claude API. If the call fails for any reason (missing
+# API key, network error, timeout, unrecognized response), it falls back to
+# keyword matching rather than raising — callers can always rely on getting
+# a (possibly empty) set of category slugs back.
 
 CATEGORY_TAXONOMY = {
     "plumbing": ["plumber", "plumbing", "pipe", "leak", "faucet", "drain", "sink", "toilet", "water heater"],
@@ -168,15 +177,78 @@ CATEGORY_TAXONOMY = {
     "glass-mirrors": ["glass", "mirror", "window", "glazing", "shower door"],
 }
 
+# The category names shown to the AI classifier, mapped to this module's
+# internal slugs (the same slugs used by CATEGORY_TAXONOMY, Category rows,
+# and match scoring everywhere else).
+CATEGORY_DISPLAY_NAMES = {
+    "plumbing": "Plumbing",
+    "electrical": "Electrical",
+    "carpentry": "Carpentry",
+    "hvac": "HVAC (heating/cooling)",
+    "painting": "Painting",
+    "construction-finishing": "Construction/finishing",
+    "drywall-decor": "Drywall and decor installation",
+    "metalwork-aluminum": "Metalwork/aluminum work",
+    "glass-mirrors": "Glass and mirrors",
+}
+_DISPLAY_NAME_TO_SLUG = {name: slug for slug, name in CATEGORY_DISPLAY_NAMES.items()}
+_CLAUDE_MODEL = "claude-sonnet-4-6"
 
-def ai_categorize(text: str) -> set:
-    """Stand-in for an LLM/classifier call. Same input/output shape as production."""
+
+def _keyword_categorize(text: str) -> set:
+    """Keyword-matching classifier — the fallback when the AI call fails."""
     text_lower = text.lower()
     matched = set()
     for category, keywords in CATEGORY_TAXONOMY.items():
         if any(kw in text_lower for kw in keywords):
             matched.add(category)
     return matched
+
+
+def _ai_categorize_llm(text: str) -> set:
+    """Classify `text` into exactly one of the 9 fixed categories via Claude.
+
+    Raises on any failure (no API key, network/timeout error, unrecognized
+    reply) so `ai_categorize` can fall back to keyword matching.
+    """
+    if anthropic is None:
+        raise RuntimeError("anthropic package is not installed")
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        raise RuntimeError("ANTHROPIC_API_KEY is not set")
+
+    category_list = "\n".join(f"- {name}" for name in CATEGORY_DISPLAY_NAMES.values())
+    client = anthropic.Anthropic(api_key=api_key)
+    response = client.with_options(timeout=10.0).messages.create(
+        model=_CLAUDE_MODEL,
+        max_tokens=20,
+        system=(
+            "You classify home-service requests into exactly one category. "
+            "Reply with ONLY the category name, copied exactly as written "
+            "below — no punctuation, no explanation, nothing else.\n\n"
+            f"{category_list}"
+        ),
+        messages=[{"role": "user", "content": text}],
+    )
+
+    reply = "".join(block.text for block in response.content if block.type == "text").strip()
+    slug = _DISPLAY_NAME_TO_SLUG.get(reply)
+    if slug is None:
+        raise ValueError(f"unrecognized category from model: {reply!r}")
+    return {slug}
+
+
+def ai_categorize(text: str) -> set:
+    """Classify free text into the fixed category taxonomy.
+
+    Uses the Claude API when available; falls back to keyword matching on
+    any failure so this function never raises.
+    """
+    try:
+        return _ai_categorize_llm(text)
+    except Exception:
+        logger.warning("ai_categorize: Claude API call failed, falling back to keyword matching", exc_info=True)
+        return _keyword_categorize(text)
 
 
 if __name__ == "__main__":
