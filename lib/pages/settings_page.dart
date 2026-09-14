@@ -7,14 +7,32 @@ import '../widgets/app_drawer.dart';
 
 const _appVersion = '1.0.0';
 
-class SettingsPage extends StatefulWidget {
+class SettingsPage extends StatelessWidget {
   const SettingsPage({super.key});
 
   @override
-  State<SettingsPage> createState() => _SettingsPageState();
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.lightBackground,
+      appBar: AppBar(title: const Text('Settings')),
+      drawer: const AppDrawer(),
+      body: const SafeArea(child: SettingsBody()),
+    );
+  }
 }
 
-class _SettingsPageState extends State<SettingsPage> {
+/// The settings content on its own, so it can be embedded either inside the
+/// standalone [SettingsPage] (reached from the drawer) or directly as a tab
+/// body (the home screen's bottom-nav Profile tab), without duplicating the
+/// notifications/language/logout logic in two places.
+class SettingsBody extends StatefulWidget {
+  const SettingsBody({super.key});
+
+  @override
+  State<SettingsBody> createState() => _SettingsBodyState();
+}
+
+class _SettingsBodyState extends State<SettingsBody> {
   bool _notificationsEnabled = true;
   String _language = 'English';
 
@@ -73,79 +91,72 @@ class _SettingsPageState extends State<SettingsPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.lightBackground,
-      appBar: AppBar(title: const Text('Settings')),
-      drawer: const AppDrawer(),
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.symmetric(vertical: 12),
+    return ListView(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      children: [
+        const _SectionHeader('Account'),
+        _SettingsCard(
           children: [
-            const _SectionHeader('Account'),
-            _SettingsCard(
-              children: [
-                _SettingsTile(
-                  icon: Icons.person_outline,
-                  title: 'Account',
-                  subtitle: 'Edit profile and email',
-                  onTap: () => _showComingSoon('Account editing'),
-                ),
-              ],
+            _SettingsTile(
+              icon: Icons.person_outline,
+              title: 'Account',
+              subtitle: 'Edit profile and email',
+              onTap: () => _showComingSoon('Account editing'),
             ),
-            const _SectionHeader('Preferences'),
-            _SettingsCard(
-              children: [
-                _SettingsSwitchTile(
-                  icon: Icons.notifications_outlined,
-                  title: 'Notifications',
-                  value: _notificationsEnabled,
-                  onChanged: (value) => setState(() => _notificationsEnabled = value),
-                ),
-                _SettingsTile(
-                  icon: Icons.language_outlined,
-                  title: 'Language',
-                  trailingText: _language,
-                  onTap: _pickLanguage,
-                ),
-              ],
-            ),
-            const _SectionHeader('Legal'),
-            _SettingsCard(
-              children: [
-                _SettingsTile(
-                  icon: Icons.privacy_tip_outlined,
-                  title: 'Privacy Policy',
-                  onTap: () => _showComingSoon('Privacy Policy'),
-                ),
-                _SettingsTile(
-                  icon: Icons.description_outlined,
-                  title: 'Terms of Service',
-                  onTap: () => _showComingSoon('Terms of Service'),
-                ),
-              ],
-            ),
-            const _SectionHeader('Session'),
-            _SettingsCard(
-              children: [
-                _SettingsTile(
-                  icon: Icons.logout,
-                  title: 'Log out',
-                  onTap: _logOut,
-                  showChevron: false,
-                ),
-              ],
-            ),
-            const SizedBox(height: 28),
-            Center(
-              child: Text(
-                'App version $_appVersion',
-                style: TextStyle(fontSize: 13, color: AppColors.navy.withValues(alpha: 0.5)),
-              ),
-            ),
-            const SizedBox(height: 16),
           ],
         ),
-      ),
+        const _SectionHeader('Preferences'),
+        _SettingsCard(
+          children: [
+            _SettingsSwitchTile(
+              icon: Icons.notifications_outlined,
+              title: 'Notifications',
+              value: _notificationsEnabled,
+              onChanged: (value) => setState(() => _notificationsEnabled = value),
+            ),
+            _SettingsTile(
+              icon: Icons.language_outlined,
+              title: 'Language',
+              trailingText: _language,
+              onTap: _pickLanguage,
+            ),
+          ],
+        ),
+        const _SectionHeader('Legal'),
+        _SettingsCard(
+          children: [
+            _SettingsTile(
+              icon: Icons.privacy_tip_outlined,
+              title: 'Privacy Policy',
+              onTap: () => _showComingSoon('Privacy Policy'),
+            ),
+            _SettingsTile(
+              icon: Icons.description_outlined,
+              title: 'Terms of Service',
+              onTap: () => _showComingSoon('Terms of Service'),
+            ),
+          ],
+        ),
+        const _SectionHeader('Session'),
+        _SettingsCard(
+          children: [
+            _SettingsTile(
+              icon: Icons.logout,
+              title: 'Log out',
+              onTap: _logOut,
+              showChevron: false,
+            ),
+          ],
+        ),
+        const SizedBox(height: 28),
+        Center(
+          child: Text(
+            'App version $_appVersion',
+            style: TextStyle(fontSize: 13, color: AppColors.navy.withValues(alpha: 0.5)),
+          ),
+        ),
+        const SizedBox(height: 16),
+      ],
     );
   }
 }

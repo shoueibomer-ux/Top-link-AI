@@ -25,16 +25,30 @@ class _CategoryDetailPageState extends State<CategoryDetailPage> {
   final _apiClient = ApiClient();
   late final Future<List<MatchResult>> _providersFuture;
 
+  // Populated once the future resolves — kept mutable (separate from the
+  // FutureBuilder's own snapshot) so "not interested" can remove a card
+  // from view via setState without re-fetching.
+  List<MatchResult>? _providers;
+
   @override
   void initState() {
     super.initState();
     // Uses the same demo location the location step prefills — the real
     // location isn't chosen yet at this point in onboarding.
-    _providersFuture = _apiClient.getProvidersForCategory(
-      category: widget.category.slug,
-      lat: ApiClient.demoLat,
-      lng: ApiClient.demoLng,
-    );
+    _providersFuture = _apiClient
+        .getProvidersForCategory(
+          category: widget.category.slug,
+          lat: ApiClient.demoLat,
+          lng: ApiClient.demoLng,
+        )
+        .then((providers) {
+      if (mounted) setState(() => _providers = providers);
+      return providers;
+    });
+  }
+
+  void _dismiss(MatchResult match) {
+    setState(() => _providers?.remove(match));
   }
 
   @override
@@ -77,7 +91,7 @@ class _CategoryDetailPageState extends State<CategoryDetailPage> {
                           text: 'Could not load providers right now. Pull up this category again later to see who is available.',
                         );
                       }
-                      final providers = snapshot.data!;
+                      final providers = _providers!;
                       if (providers.isEmpty) {
                         return const _MessageCard(
                           text: "No providers found nearby yet — we'll notify you as soon as one is available.",
@@ -86,7 +100,7 @@ class _CategoryDetailPageState extends State<CategoryDetailPage> {
                       return Column(
                         children: [
                           for (final match in providers) ...[
-                            ProviderCard(match: match),
+                            ProviderCard(match: match, onDismiss: () => _dismiss(match)),
                             const SizedBox(height: 14),
                           ],
                         ],
