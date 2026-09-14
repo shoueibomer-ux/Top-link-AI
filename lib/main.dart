@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'app_colors.dart';
-import 'onboarding/onboarding_screen.dart';
+import 'subscription/app_entry_point.dart';
 
 void main() {
   runApp(const TopLinkApp());
@@ -28,7 +28,7 @@ class TopLinkApp extends StatelessWidget {
           foregroundColor: AppColors.white,
         ),
       ),
-      home: const OnboardingScreen(),
+      home: const AppEntryPoint(),
     );
   }
 }

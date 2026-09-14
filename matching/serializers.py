@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Profile, MatchRequest, Category
+from .models import Profile, MatchRequest, Category, Subscription
 
 
 class CategorySerializer(serializers.ModelSerializer):
@@ -35,3 +35,16 @@ class MatchResultSerializer(serializers.Serializer):
     profile = ProfileResultSerializer()
     score = serializers.FloatField()
     breakdown = serializers.DictField()
+
+
+class SubscriptionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Subscription
+        fields = ["device_id", "status", "start_date", "expiry_date"]
+
+
+class SubscriptionActivateSerializer(serializers.Serializer):
+    device_id = serializers.CharField(max_length=64)
+    status = serializers.ChoiceField(choices=["trial", "active", "inactive"])
+    start_date = serializers.DateTimeField()
+    expiry_date = serializers.DateTimeField()

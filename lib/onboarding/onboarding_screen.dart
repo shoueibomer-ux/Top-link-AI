@@ -121,8 +121,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     child: switch (_step) {
                       0 => CategoryStep(
                           selected: _selectedCategory,
-                          onSelect: (category) =>
-                              setState(() => _selectedCategory = category),
+                          onSelect: (category) {
+                            // Selection now happens from the category detail
+                            // page's "Select this category" button, so it
+                            // also advances straight to the urgency step
+                            // rather than requiring a separate Next tap.
+                            setState(() => _selectedCategory = category);
+                            _onContinue();
+                          },
                         ),
                       1 => UrgencyStep(
                           selected: _selectedUrgency,

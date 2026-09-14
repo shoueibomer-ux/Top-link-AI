@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import 'match_result.dart';
+import 'subscription_status.dart';
 
 class ApiException implements Exception {
   ApiException(this.message);
@@ -96,5 +97,62 @@ class ApiClient {
     return results
         .map((r) => MatchResult.fromJson(r as Map<String, dynamic>))
         .toList();
+  }
+
+  /// Providers for a single category, without going through AI classification
+  /// or creating a profile/match-request row — used by the onboarding
+  /// category detail page to preview providers before urgency/location are
+  /// even chosen (see matching.views.CategoryProvidersView).
+  Future<List<MatchResult>> getProvidersForCategory({
+    required String category,
+    required double lat,
+    required double lng,
+  }) async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/providers/?category=$category&lat=$lat&lng=$lng'),
+      headers: _headers,
+    );
+    if (response.statusCode != 200) {
+      throw ApiException('Could not load providers (${response.statusCode}).');
+    }
+    final results = jsonDecode(response.body) as List<dynamic>;
+    return results
+        .map((r) => MatchResult.fromJson(r as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<SubscriptionStatus> getSubscriptionStatus(String deviceId) async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/subscription/?device_id=$deviceId'),
+      headers: _headers,
+    );
+    if (response.statusCode != 200) {
+      throw ApiException('Could not fetch subscription status (${response.statusCode}).');
+    }
+    return SubscriptionStatus.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
+  /// TEMPORARY: records a subscription without real App Store/Play Store
+  /// receipt verification — see matching.views.SubscriptionActivateView.
+  Future<SubscriptionStatus> activateSubscription({
+    required String deviceId,
+    required String status,
+    required DateTime startDate,
+    required DateTime expiryDate,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/subscription/activate/'),
+      headers: _headers,
+      body: jsonEncode({
+        'device_id': deviceId,
+        'status': status,
+        'start_date': startDate.toIso8601String(),
+        'expiry_date': expiryDate.toIso8601String(),
+      }),
+    );
+    if (response.statusCode != 200) {
+      throw ApiException('Could not activate subscription (${response.statusCode}).');
+    }
+    return SubscriptionStatus.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
   }
 }

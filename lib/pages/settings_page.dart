@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../app_colors.dart';
 import '../app_styles.dart';
-import '../onboarding/onboarding_screen.dart';
+import '../subscription/app_entry_point.dart';
 import '../widgets/app_drawer.dart';
 
 const _appVersion = '1.0.0';
@@ -63,8 +63,10 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   void _logOut() {
+    // Route back through the paywall gate (not straight to onboarding) so
+    // subscription status is re-checked rather than assumed.
     Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const OnboardingScreen()),
+      MaterialPageRoute(builder: (_) => const AppEntryPoint()),
       (route) => false,
     );
   }
