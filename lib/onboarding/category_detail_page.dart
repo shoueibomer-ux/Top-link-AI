@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 
 import '../api/api_client.dart';
-import '../api/match_result.dart';
+import '../api/real_provider.dart';
 import '../app_colors.dart';
 import '../app_styles.dart';
+import '../subscription/device_id.dart';
 import '../widgets/pressable.dart';
-import '../widgets/provider_card.dart';
+import '../widgets/real_provider_card.dart';
 import 'service_category.dart';
 
 /// Full-page category preview, pushed when a category card is tapped on the
@@ -23,32 +24,34 @@ class CategoryDetailPage extends StatefulWidget {
 
 class _CategoryDetailPageState extends State<CategoryDetailPage> {
   final _apiClient = ApiClient();
-  late final Future<List<MatchResult>> _providersFuture;
+  late final Future<List<RealProvider>> _providersFuture;
 
   // Populated once the future resolves — kept mutable (separate from the
   // FutureBuilder's own snapshot) so "not interested" can remove a card
   // from view via setState without re-fetching.
-  List<MatchResult>? _providers;
+  List<RealProvider>? _providers;
 
   @override
   void initState() {
     super.initState();
-    // Uses the same demo location the location step prefills — the real
-    // location isn't chosen yet at this point in onboarding.
-    _providersFuture = _apiClient
-        .getProvidersForCategory(
-          category: widget.category.slug,
-          lat: ApiClient.demoLat,
-          lng: ApiClient.demoLng,
-        )
-        .then((providers) {
-      if (mounted) setState(() => _providers = providers);
-      return providers;
-    });
+    _providersFuture = _load();
   }
 
-  void _dismiss(MatchResult match) {
-    setState(() => _providers?.remove(match));
+  Future<List<RealProvider>> _load() async {
+    final deviceId = await getDeviceId();
+    // Uses the same demo city the location step's demo coordinates fall
+    // in — the real location isn't chosen yet at this point in onboarding.
+    final result = await _apiClient.searchRealProviders(
+      category: widget.category.slug,
+      city: ApiClient.demoCity,
+      deviceId: deviceId,
+    );
+    if (mounted) setState(() => _providers = result.providers);
+    return result.providers;
+  }
+
+  void _dismiss(RealProvider provider) {
+    setState(() => _providers?.remove(provider));
   }
 
   @override
@@ -75,7 +78,7 @@ class _CategoryDetailPageState extends State<CategoryDetailPage> {
                     ),
                   ),
                   const SizedBox(height: 14),
-                  FutureBuilder<List<MatchResult>>(
+                  FutureBuilder<List<RealProvider>>(
                     future: _providersFuture,
                     builder: (context, snapshot) {
                       if (snapshot.connectionState != ConnectionState.done) {
@@ -99,8 +102,8 @@ class _CategoryDetailPageState extends State<CategoryDetailPage> {
                       }
                       return Column(
                         children: [
-                          for (final match in providers) ...[
-                            ProviderCard(match: match, onDismiss: () => _dismiss(match)),
+                          for (final provider in providers) ...[
+                            RealProviderCard(provider: provider, onDismiss: () => _dismiss(provider)),
                             const SizedBox(height: 14),
                           ],
                         ],

@@ -41,10 +41,10 @@ CATEGORY_QUERIES = {
     "carpentry": "carpenter",
     "hvac": "HVAC contractor",
     "painting": "painting contractor",
-    "construction_finishing": "general contractor",
-    "drywall_decor": "drywall contractor",
-    "metalwork_aluminum": "metal fabrication welding shop",
-    "glass_mirrors": "glass and mirror shop",
+    "construction-finishing": "general contractor",
+    "drywall-decor": "drywall contractor",
+    "metalwork-aluminum": "metal fabrication welding shop",
+    "glass-mirrors": "glass and mirror shop",
 }
 
 CITIES = ["Edmonton", "Calgary", "Fort McMurray", "Red Deer"]

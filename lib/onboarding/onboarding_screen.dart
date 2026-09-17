@@ -4,6 +4,7 @@ import '../api/api_client.dart';
 import '../app_colors.dart';
 import '../app_styles.dart';
 import '../home/home_screen.dart';
+import '../subscription/device_id.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/app_logo.dart';
 import '../widgets/pressable.dart';
@@ -55,18 +56,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     setState(() => _isSubmitting = true);
 
     try {
-      final requestText =
-          'Looking for a ${category.label} provider. Urgency: ${urgency.label}.';
-      final requesterId = await _apiClient.createAnonymousProfile(
-        description: requestText,
-        lat: _lat,
-        lng: _lng,
-      );
-      final matches = await _apiClient.requestMatch(
-        requesterId: requesterId,
-        requestText: requestText,
-        lat: _lat,
-        lng: _lng,
+      final deviceId = await getDeviceId();
+      final result = await _apiClient.searchRealProviders(
+        category: category.slug,
+        city: ApiClient.demoCity,
+        deviceId: deviceId,
       );
 
       if (!mounted) return;
@@ -75,7 +69,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           builder: (_) => HomeScreen(
             category: category,
             urgency: urgency,
-            matches: matches,
+            providers: result.providers,
           ),
         ),
       );
@@ -83,7 +77,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       if (!mounted) return;
       setState(() => _isSubmitting = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not reach the matching service: $e')),
+        SnackBar(content: Text('Could not reach the provider search service: $e')),
       );
     }
   }

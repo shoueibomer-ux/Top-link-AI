@@ -1,10 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:toplinkai_app/onboarding/onboarding_screen.dart';
 
 void main() {
   testWidgets('Onboarding flow walks through all 4 steps', (WidgetTester tester) async {
+    // The category detail page now fetches a device id (shared_preferences)
+    // before searching providers — without this, SharedPreferences.getInstance()
+    // has no plugin implementation to talk to under flutter test and never
+    // resolves, so pumpAndSettle times out waiting on the loading spinner.
+    SharedPreferences.setMockInitialValues({});
+
     // The default test surface (800x600) is far shorter than any real phone
     // screen; use a realistic device size so layout assertions reflect what
     // actually ships instead of an artificially cramped canvas.

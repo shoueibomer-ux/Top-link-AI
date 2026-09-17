@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../api/match_result.dart';
+import '../api/real_provider.dart';
 import '../app_colors.dart';
 import '../app_styles.dart';
 import '../onboarding/onboarding_screen.dart';
@@ -9,19 +9,19 @@ import '../onboarding/urgency_step.dart';
 import '../pages/settings_page.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/app_logo.dart';
-import '../widgets/provider_card.dart';
+import '../widgets/real_provider_card.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({
     super.key,
     required this.category,
     required this.urgency,
-    required this.matches,
+    required this.providers,
   });
 
   final ServiceCategory category;
   final Urgency urgency;
-  final List<MatchResult> matches;
+  final List<RealProvider> providers;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -32,10 +32,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // Local, mutable copy so "not interested" can remove a card from view
   // without needing a backend round-trip.
-  late final List<MatchResult> _matches = List.of(widget.matches);
+  late final List<RealProvider> _providers = List.of(widget.providers);
 
-  void _dismiss(MatchResult match) {
-    setState(() => _matches.remove(match));
+  void _dismiss(RealProvider provider) {
+    setState(() => _providers.remove(provider));
   }
 
   @override
@@ -59,7 +59,7 @@ class _HomeScreenState extends State<HomeScreen> {
           _ => _HomeTab(
               category: widget.category,
               urgency: widget.urgency,
-              matches: _matches,
+              providers: _providers,
               onDismiss: _dismiss,
             ),
         },
@@ -119,14 +119,14 @@ class _HomeTab extends StatelessWidget {
   const _HomeTab({
     required this.category,
     required this.urgency,
-    required this.matches,
+    required this.providers,
     required this.onDismiss,
   });
 
   final ServiceCategory category;
   final Urgency urgency;
-  final List<MatchResult> matches;
-  final ValueChanged<MatchResult> onDismiss;
+  final List<RealProvider> providers;
+  final ValueChanged<RealProvider> onDismiss;
 
   @override
   Widget build(BuildContext context) {
@@ -158,11 +158,11 @@ class _HomeTab extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 14),
-        if (matches.isEmpty)
+        if (providers.isEmpty)
           const _EmptyProvidersNotice()
         else
-          for (final match in matches) ...[
-            ProviderCard(match: match, onDismiss: () => onDismiss(match)),
+          for (final provider in providers) ...[
+            RealProviderCard(provider: provider, onDismiss: () => onDismiss(provider)),
             const SizedBox(height: 14),
           ],
         const SizedBox(height: 12),

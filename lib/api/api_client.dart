@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
-import 'match_result.dart';
+import 'real_provider.dart';
 import 'subscription_status.dart';
 
 class ApiException implements Exception {
@@ -36,89 +36,42 @@ class ApiClient {
 
   final String baseUrl;
 
-  // Demo location (Edmonton) used to prefill the location step.
+  // Demo location (Edmonton) used to prefill the location step. provider_search
+  // only covers a fixed set of Alberta cities (see provider_search.services.CITIES),
+  // so demoCity pins searches to the one matching the demo coordinates rather
+  // than deriving a city from lat/lng.
   static const demoLat = 53.5444;
   static const demoLng = -113.4909;
+  static const demoCity = 'Edmonton';
 
   static const _headers = {
     'Content-Type': 'application/json',
     'X-API-Key': _apiKey,
   };
 
-  Future<int> createAnonymousProfile({
-    required String description,
-    required double lat,
-    required double lng,
-  }) async {
-    final response = await http.post(
-      Uri.parse('$baseUrl/profiles/'),
-      headers: _headers,
-      body: jsonEncode({
-        'name': 'App User',
-        'role': 'individual',
-        'description': description,
-        'lat': lat,
-        'lng': lng,
-        // This profile represents a requester, not a service provider, so it
-        // must never turn up as a candidate in someone else's match results.
-        'available': false,
-      }),
-    );
-
-    if (response.statusCode != 201) {
-      throw ApiException('Could not create profile (${response.statusCode}).');
-    }
-    return (jsonDecode(response.body) as Map<String, dynamic>)['id'] as int;
-  }
-
-  Future<List<MatchResult>> requestMatch({
-    required int requesterId,
-    required String requestText,
-    required double lat,
-    required double lng,
-    double maxDistanceKm = 25,
-  }) async {
-    final response = await http.post(
-      Uri.parse('$baseUrl/match/'),
-      headers: _headers,
-      body: jsonEncode({
-        'requester': requesterId,
-        'request_text': requestText,
-        'lat': lat,
-        'lng': lng,
-        'max_distance_km': maxDistanceKm,
-      }),
-    );
-
-    if (response.statusCode != 200) {
-      throw ApiException('Matching failed (${response.statusCode}).');
-    }
-    final results = jsonDecode(response.body) as List<dynamic>;
-    return results
-        .map((r) => MatchResult.fromJson(r as Map<String, dynamic>))
-        .toList();
-  }
-
-  /// Providers for a single category, without going through AI classification
-  /// or creating a profile/match-request row — used by the onboarding
-  /// category detail page to preview providers before urgency/location are
-  /// even chosen (see matching.views.CategoryProvidersView).
-  Future<List<MatchResult>> getProvidersForCategory({
+  /// Real providers for a category/city via Google Places (see
+  /// provider_search.views.ProviderSearchView) — gated by the same
+  /// device-based Subscription used everywhere else. Subscribed devices get
+  /// full contact details; unsubscribed devices get a masked preview
+  /// (RealProvider.hasFullDetails is false and result.subscriptionRequired
+  /// is true), which in practice should only happen if a subscription
+  /// lapses between the paywall check and this call, since AppEntryPoint
+  /// already gates the rest of the app behind an active subscription.
+  Future<ProviderSearchResult> searchRealProviders({
     required String category,
-    required double lat,
-    required double lng,
+    required String city,
+    required String deviceId,
   }) async {
-    final response = await http.get(
-      Uri.parse('$baseUrl/providers/?category=$category&lat=$lat&lng=$lng'),
-      headers: _headers,
-    );
+    final uri = Uri.parse('$baseUrl/providers/search/').replace(queryParameters: {
+      'category': category,
+      'city': city,
+      'device_id': deviceId,
+    });
+    final response = await http.get(uri, headers: _headers);
     if (response.statusCode != 200) {
-      throw ApiException('Could not load providers (${response.statusCode}).');
+      throw ApiException('Could not search providers (${response.statusCode}).');
     }
-    final results = jsonDecode(response.body) as List<dynamic>;
-    return results
-        .map((r) => MatchResult.fromJson(r as Map<String, dynamic>))
-        .toList();
+    return ProviderSearchResult.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
   }
 
   Future<SubscriptionStatus> getSubscriptionStatus(String deviceId) async {

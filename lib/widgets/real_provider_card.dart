@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 
-import '../api/match_result.dart';
+import '../api/real_provider.dart';
 import '../app_colors.dart';
 import '../app_styles.dart';
 
-class ProviderCard extends StatefulWidget {
-  const ProviderCard({super.key, required this.match, this.onDismiss});
+class RealProviderCard extends StatefulWidget {
+  const RealProviderCard({super.key, required this.provider, this.onDismiss});
 
-  final MatchResult match;
+  final RealProvider provider;
 
   // Called when the user marks this provider "not interested" — the parent
   // is responsible for removing it from whatever list it's rendering from.
@@ -15,16 +15,16 @@ class ProviderCard extends StatefulWidget {
   final VoidCallback? onDismiss;
 
   @override
-  State<ProviderCard> createState() => _ProviderCardState();
+  State<RealProviderCard> createState() => _RealProviderCardState();
 }
 
-class _ProviderCardState extends State<ProviderCard> {
+class _RealProviderCardState extends State<RealProviderCard> {
   // Bookmarking is local-only for now — nothing backs it on the server yet.
   bool _isSaved = false;
 
   @override
   Widget build(BuildContext context) {
-    final profile = widget.match.profile;
+    final provider = widget.provider;
     return Container(
       padding: const EdgeInsets.fromLTRB(18, 10, 12, 18),
       decoration: BoxDecoration(
@@ -56,18 +56,12 @@ class _ProviderCardState extends State<ProviderCard> {
           Padding(
             padding: const EdgeInsets.only(right: 6),
             child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 CircleAvatar(
                   radius: 24,
                   backgroundColor: AppColors.turquoise.withValues(alpha: 0.12),
-                  child: Text(
-                    '${widget.match.score.round()}%',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.turquoise,
-                    ),
-                  ),
+                  child: const Icon(Icons.storefront, color: AppColors.turquoise),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
@@ -75,28 +69,62 @@ class _ProviderCardState extends State<ProviderCard> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        profile.name,
+                        provider.name,
                         style: const TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w600,
                           color: AppColors.navy,
                         ),
                       ),
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          const Icon(Icons.star, size: 14, color: Colors.amber),
-                          const SizedBox(width: 4),
-                          Text(
-                            '${profile.rating} · ${widget.match.distanceKm} km away',
-                            style: TextStyle(fontSize: 13, color: AppColors.muted),
-                          ),
-                        ],
-                      ),
+                      if (provider.rating != null) ...[
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            const Icon(Icons.star, size: 14, color: Colors.amber),
+                            const SizedBox(width: 4),
+                            Text(
+                              '${provider.rating} (${provider.ratingCount ?? 0} reviews)',
+                              style: TextStyle(fontSize: 13, color: AppColors.muted),
+                            ),
+                          ],
+                        ),
+                      ],
+                      if (provider.phone.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            Icon(Icons.phone_outlined, size: 14, color: AppColors.muted),
+                            const SizedBox(width: 4),
+                            Text(provider.phone, style: TextStyle(fontSize: 13, color: AppColors.muted)),
+                          ],
+                        ),
+                      ],
+                      if (provider.address != null) ...[
+                        const SizedBox(height: 4),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(Icons.location_on_outlined, size: 14, color: AppColors.muted),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                provider.address!,
+                                style: TextStyle(fontSize: 13, color: AppColors.muted),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                      if (!provider.hasFullDetails) ...[
+                        const SizedBox(height: 6),
+                        const Text(
+                          'Subscribe to see full contact details',
+                          style: TextStyle(fontSize: 12, fontStyle: FontStyle.italic, color: AppColors.turquoise),
+                        ),
+                      ],
                     ],
                   ),
                 ),
-                const Icon(Icons.chevron_right, color: AppColors.navy),
               ],
             ),
           ),
