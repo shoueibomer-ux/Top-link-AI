@@ -46,6 +46,7 @@ INSTALLED_APPS = [
     "rest_framework",
     "corsheaders",
     "matching",
+    "provider_search",
 ]
 
 MIDDLEWARE = [
@@ -104,6 +105,20 @@ USE_TZ = True
 STATIC_URL = "static/"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# Redis-backed cache — provider_search relies on this surviving process
+# restarts (Google Places results are cached for 35 days; Django's default
+# LocMemCache would lose that on every deploy/restart). Falls back to a
+# local Redis instance for development.
+CACHES = {
+    "default": {
+        "BACKEND": "django_redis.cache.RedisCache",
+        "LOCATION": os.environ.get("REDIS_URL", "redis://127.0.0.1:6379/1"),
+        "OPTIONS": {
+            "CLIENT_CLASS": "django_redis.client.DefaultClient",
+        },
+    }
+}
 
 REST_FRAMEWORK = {
     # Fail-safe default: any view (including ones added later) requires the
