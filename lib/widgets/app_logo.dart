@@ -15,7 +15,7 @@ import '../app_colors.dart';
 /// back to the compact icon-only state.
 ///
 /// Icon and wordmark are two separate assets (toplinkai_icon.png /
-/// toplinkai_wordmark.png, both cropped from the original combined
+/// toplinkai_wordmark_title.png, both cropped from the original combined
 /// toplinkai_logo_full.png) laid out as sibling Row children — not, as in an
 /// earlier version, two overlapping crops of one shared image. That
 /// combined-image approach made the icon-to-text gap a fixed, tiny sliver
@@ -33,8 +33,8 @@ import '../app_colors.dart';
 /// the app's AppBarTheme — and the drawer header); the fourth usage
 /// (paywall_screen.dart) sits on a light body background and passes
 /// AppColors.navy instead. Recoloring alone wasn't enough to fix legibility:
-/// toplinkai_wordmark.png's glyphs (especially the "AI-Powered Service
-/// Matching" tagline) were baked with partial alpha (measured ~55-70% for
+/// toplinkai_wordmark_title.png's glyphs (originally also the "AI-Powered Service
+/// Matching" tagline, now real Text at 65% opacity) were baked with partial alpha (measured ~55-70% for
 /// the title, as low as ~50% at its most solid rows for the tagline) —
 /// BlendMode.srcIn replaces color but keeps the source alpha, so recoloring
 /// alone still rendered as faded. The asset's alpha channel was boosted (3x,
@@ -54,18 +54,22 @@ class AppLogo extends StatefulWidget {
 }
 
 class _AppLogoState extends State<AppLogo> with SingleTickerProviderStateMixin {
-  static const _pillPadding = EdgeInsets.symmetric(horizontal: 5, vertical: 4);
+  static const _pillPadding = EdgeInsets.all(4);
+  static const _pillRadius = 12.0;
+
+  static const _tagline = 'AI-Powered Service Matching';
+  static const _taglineOpacity = 0.65;
 
   // Fixed, not proportional to widget.height — the request was for
   // consistent spacing between the two call sites (AppBar height 32,
   // drawer header height 40), which a fixed gap gives directly.
   static const _wordmarkGap = 10.0;
 
-  // The original combined asset's own ratio (icon 141px tall, wordmark
-  // 47px tall out of the same 656x175 canvas, ~0.33) rendered the wordmark
-  // too small to read at the header's actual on-screen size — bumped up
-  // for legibility rather than preserved verbatim.
-  static const _wordmarkHeightRatio = 0.6;
+  // Title image height and tagline font size, as fractions of `height`.
+  // Together (plus the gap between them) they roughly match the icon pill's
+  // height so the icon + two-line wordmark read as one balanced lockup.
+  static const _titleHeightRatio = 0.62;
+  static const _taglineFontRatio = 0.31;
 
   late final AnimationController _controller;
   late final Animation<double> _reveal; // 0 = compact icon, 1 = full wordmark
@@ -105,8 +109,8 @@ class _AppLogoState extends State<AppLogo> with SingleTickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     const iconAsset = 'assets/images/toplinkai_icon.png';
-    const wordmarkAsset = 'assets/images/toplinkai_wordmark.png';
-    final wordmarkHeight = widget.height * _wordmarkHeightRatio;
+    const titleAsset = 'assets/images/toplinkai_wordmark_title.png';
+    final titleHeight = widget.height * _titleHeightRatio;
 
     return Row(
       mainAxisSize: MainAxisSize.min,
@@ -119,7 +123,7 @@ class _AppLogoState extends State<AppLogo> with SingleTickerProviderStateMixin {
           padding: _pillPadding,
           decoration: BoxDecoration(
             color: AppColors.white,
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(_pillRadius),
           ),
           child: Image.asset(iconAsset, height: widget.height, fit: BoxFit.contain),
         ),
@@ -140,9 +144,26 @@ class _AppLogoState extends State<AppLogo> with SingleTickerProviderStateMixin {
           ),
           child: Padding(
             padding: const EdgeInsets.only(left: _wordmarkGap),
-            child: ColorFiltered(
-              colorFilter: ColorFilter.mode(widget.wordmarkColor, BlendMode.srcIn),
-              child: Image.asset(wordmarkAsset, height: wordmarkHeight, fit: BoxFit.contain),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                ColorFiltered(
+                  colorFilter: ColorFilter.mode(widget.wordmarkColor, BlendMode.srcIn),
+                  child: Image.asset(titleAsset, height: titleHeight, fit: BoxFit.contain),
+                ),
+                SizedBox(height: widget.height * 0.08),
+                Text(
+                  _tagline,
+                  maxLines: 1,
+                  softWrap: false,
+                  style: TextStyle(
+                    fontSize: widget.height * _taglineFontRatio,
+                    fontWeight: FontWeight.w500,
+                    color: widget.wordmarkColor.withValues(alpha: _taglineOpacity),
+                  ),
+                ),
+              ],
             ),
           ),
         ),

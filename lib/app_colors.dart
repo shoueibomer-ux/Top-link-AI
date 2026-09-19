@@ -10,4 +10,10 @@ class AppColors {
 
   /// Secondary/caption text — a muted, slightly gray tint of navy.
   static Color get muted => navy.withValues(alpha: 0.6);
+
+  /// Design-language tokens for the visual restyle pass — screens adopt
+  /// these one at a time, so `muted` above stays until its last caller moves.
+  static const mutedText = Color(0xFF5B6B7A);
+  static const cardBorder = Color(0xFFEDF1F5);
+  static const pillInactive = Color(0xFFE6ECF1);
 }

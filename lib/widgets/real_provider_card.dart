@@ -26,12 +26,8 @@ class _RealProviderCardState extends State<RealProviderCard> {
   Widget build(BuildContext context) {
     final provider = widget.provider;
     return Container(
-      padding: const EdgeInsets.fromLTRB(18, 10, 12, 18),
-      decoration: BoxDecoration(
-        color: AppColors.white,
-        borderRadius: BorderRadius.circular(kRadius),
-        boxShadow: kCardShadow,
-      ),
+      padding: const EdgeInsets.fromLTRB(20, 10, 14, 20),
+      decoration: cardDecoration(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -40,14 +36,14 @@ class _RealProviderCardState extends State<RealProviderCard> {
             children: [
               _CardIconButton(
                 icon: _isSaved ? Icons.bookmark : Icons.bookmark_border,
-                color: _isSaved ? AppColors.turquoise : AppColors.muted,
+                color: _isSaved ? AppColors.turquoise : AppColors.mutedText,
                 tooltip: _isSaved ? 'Saved' : 'Save provider',
                 onTap: () => setState(() => _isSaved = !_isSaved),
               ),
               const SizedBox(width: 4),
               _CardIconButton(
                 icon: Icons.thumb_down_outlined,
-                color: AppColors.muted,
+                color: AppColors.mutedText,
                 tooltip: 'Not interested',
                 onTap: widget.onDismiss,
               ),
@@ -75,8 +71,8 @@ class _RealProviderCardState extends State<RealProviderCard> {
                             child: Text(
                               provider.name,
                               style: const TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w600,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
                                 color: AppColors.navy,
                               ),
                             ),
@@ -93,7 +89,7 @@ class _RealProviderCardState extends State<RealProviderCard> {
                             const SizedBox(width: 4),
                             Text(
                               '${provider.rating} (${provider.ratingCount ?? 0} reviews)',
-                              style: TextStyle(fontSize: 13, color: AppColors.muted),
+                              style: TextStyle(fontSize: 13, color: AppColors.mutedText),
                             ),
                           ],
                         ),
@@ -102,9 +98,9 @@ class _RealProviderCardState extends State<RealProviderCard> {
                         const SizedBox(height: 4),
                         Row(
                           children: [
-                            Icon(Icons.phone_outlined, size: 14, color: AppColors.muted),
+                            Icon(Icons.phone_outlined, size: 14, color: AppColors.mutedText),
                             const SizedBox(width: 4),
-                            Text(provider.phone, style: TextStyle(fontSize: 13, color: AppColors.muted)),
+                            Text(provider.phone, style: TextStyle(fontSize: 13, color: AppColors.mutedText)),
                           ],
                         ),
                       ],
@@ -113,12 +109,12 @@ class _RealProviderCardState extends State<RealProviderCard> {
                         Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Icon(Icons.location_on_outlined, size: 14, color: AppColors.muted),
+                            Icon(Icons.location_on_outlined, size: 14, color: AppColors.mutedText),
                             const SizedBox(width: 4),
                             Expanded(
                               child: Text(
                                 provider.address!,
-                                style: TextStyle(fontSize: 13, color: AppColors.muted),
+                                style: TextStyle(fontSize: 13, color: AppColors.mutedText),
                               ),
                             ),
                           ],
@@ -141,13 +137,13 @@ class _RealProviderCardState extends State<RealProviderCard> {
                         const SizedBox(height: 4),
                         Row(
                           children: [
-                            Icon(Icons.people_outline, size: 14, color: AppColors.muted),
+                            Icon(Icons.people_outline, size: 14, color: AppColors.mutedText),
                             const SizedBox(width: 4),
                             Expanded(
                               child: Text(
                                 '${provider.recentContactCount} ${provider.recentContactCount == 1 ? 'person has' : 'people have'} '
                                 'contacted this provider this week',
-                                style: TextStyle(fontSize: 12, color: AppColors.muted),
+                                style: TextStyle(fontSize: 12, color: AppColors.mutedText),
                               ),
                             ),
                           ],
@@ -179,7 +175,7 @@ class _AvailabilityBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = isAvailableNow ? AppColors.turquoise : AppColors.muted;
+    final color = isAvailableNow ? AppColors.turquoise : AppColors.mutedText;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(20)),

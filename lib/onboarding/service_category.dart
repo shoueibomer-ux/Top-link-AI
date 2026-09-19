@@ -163,11 +163,16 @@ Future<void> loadCatalogFromApi([ApiClient? client]) {
 Future<void> _loadCatalog(ApiClient client) async {
   try {
     final groups = await client.getCatalog();
-    if (groups.isEmpty) return;
+    if (groups.isEmpty) {
+      _catalogLoadFuture = null;
+      return;
+    }
     serviceCategoryGroups = groups;
     serviceCategories = [for (final group in groups) ...group.services];
   } catch (_) {
-    // Keep the static fallback — see loadCatalogFromApi's docstring.
+    // Keep the static fallback, and clear the cached future so the next
+    // caller retries instead of being stuck with a failure forever.
+    _catalogLoadFuture = null;
   }
 }
 
