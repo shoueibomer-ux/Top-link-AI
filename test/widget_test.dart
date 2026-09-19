@@ -26,12 +26,15 @@ void main() {
     // This test is about the onboarding step flow itself, not the gate.
     await tester.pumpWidget(const MaterialApp(home: OnboardingScreen()));
 
-    // Step 1: category selection — tapping a card opens its detail page,
-    // which fetches providers over the network. TestWidgetsFlutterBinding
-    // fakes the HttpClient and resolves every request immediately with a 400,
-    // so the fetch settles before pumpAndSettle's timeout regardless of
-    // whether a real backend is running.
+    // Step 1: category selection is now a two-level drill-down (Phase 1B).
+    // The dynamic catalog fetch also gets the fake 400 from
+    // TestWidgetsFlutterBinding, so CategoryStep falls back to the static
+    // category list wrapped as a single "All categories" group — tap that,
+    // then the leaf category, whose detail page fetches providers the same
+    // fake-400 way as before.
     expect(find.text('What do you need help with?'), findsOneWidget);
+    await tester.tap(find.text('All categories'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Plumbing'));
     await tester.pumpAndSettle();
     expect(find.text('Select this category'), findsOneWidget);

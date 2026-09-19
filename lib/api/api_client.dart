@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
+import '../onboarding/service_category.dart';
 import 'app_notification.dart';
 import 'auth_models.dart';
 import 'chat_refine_result.dart';
@@ -337,6 +338,38 @@ class ApiClient {
       throw ApiException(_firstErrorMessage(response.body) ?? 'Could not save your business profile.');
     }
     return ProviderBusinessProfile.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
+  /// See catalog.views.CategoryListView — the admin-managed
+  /// category -> services tree behind the dynamic categories page (Phase
+  /// 1B). Returns the parsed groups directly; callers that just need the
+  /// flat, cached list should go through `loadCatalogFromApi` in
+  /// onboarding/service_category.dart instead of calling this repeatedly.
+  Future<List<ServiceCategoryGroup>> getCatalog() async {
+    final response = await http.get(Uri.parse('$baseUrl/catalog/categories/'), headers: _headers);
+    if (response.statusCode != 200) {
+      throw ApiException('Could not load categories (${response.statusCode}).');
+    }
+    final categories = jsonDecode(response.body) as List<dynamic>;
+    return categories.map((c) {
+      final json = c as Map<String, dynamic>;
+      final services = (json['services'] as List<dynamic>).map((s) {
+        final serviceJson = s as Map<String, dynamic>;
+        return ServiceCategory(
+          label: serviceJson['name'] as String? ?? '',
+          icon: iconForName(serviceJson['icon_name'] as String? ?? ''),
+          whatWeCover: serviceJson['what_we_cover'] as String? ?? '',
+          workerNoun: serviceJson['worker_noun'] as String? ?? '',
+          slug: serviceJson['slug'] as String? ?? '',
+        );
+      }).toList();
+      return ServiceCategoryGroup(
+        label: json['name'] as String? ?? '',
+        icon: iconForName(json['icon_name'] as String? ?? ''),
+        slug: json['slug'] as String? ?? '',
+        services: services,
+      );
+    }).toList();
   }
 
   // DRF validation errors come back as {"field": ["message"], ...} or

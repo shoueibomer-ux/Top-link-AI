@@ -49,6 +49,7 @@ INSTALLED_APPS = [
     "provider_search",
     "notifications",
     "accounts",
+    "catalog",
 ]
 
 MIDDLEWARE = [

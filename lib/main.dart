@@ -1,9 +1,15 @@
 import 'package:flutter/material.dart';
 
 import 'app_colors.dart';
+import 'onboarding/service_category.dart';
 import 'subscription/app_entry_point.dart';
 
 void main() {
+  // Fire-and-forget: populates the dynamic category/service catalog as
+  // early as possible so the category picker, provider profile, and
+  // notification/history lookups all see it without each needing their own
+  // loading state. Leaves the static fallback in place until this resolves.
+  loadCatalogFromApi();
   runApp(const TopLinkApp());
 }
 

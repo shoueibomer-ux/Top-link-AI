@@ -15,6 +15,7 @@ from provider_search.views import (
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/accounts/", include("accounts.urls")),
+    path("api/catalog/", include("catalog.urls")),
     path("api/", include("matching.urls")),
     path("api/providers/search/", ProviderSearchView.as_view(), name="provider-search"),
     path("api/providers/known/", KnownProvidersView.as_view(), name="providers-known"),

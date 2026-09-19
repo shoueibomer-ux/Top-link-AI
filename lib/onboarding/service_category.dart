@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../api/api_client.dart';
+
 class ServiceCategory {
   const ServiceCategory({
     required this.label,
@@ -34,6 +36,9 @@ class ServiceCategory {
 
 /// Looks up a category by its backend slug (e.g. from a notification's
 /// `category` field) — null if the slug doesn't match any known category.
+/// Searches whatever `serviceCategories` currently holds — the static
+/// fallback list until `loadCatalogFromApi` has resolved, the full
+/// admin-managed catalog afterward.
 ServiceCategory? findCategoryBySlug(String slug) {
   for (final category in serviceCategories) {
     if (category.slug == slug) return category;
@@ -41,7 +46,136 @@ ServiceCategory? findCategoryBySlug(String slug) {
   return null;
 }
 
-const serviceCategories = [
+/// A top-level grouping of services (e.g. "Home Services") shown on the
+/// categories page — see catalog.Category on the backend. Mirrors
+/// ServiceCategory's shape so a group's `icon`/`label` render the same way.
+class ServiceCategoryGroup {
+  const ServiceCategoryGroup({
+    required this.label,
+    required this.icon,
+    required this.slug,
+    required this.services,
+  });
+
+  final String label;
+  final IconData icon;
+  final String slug;
+  final List<ServiceCategory> services;
+}
+
+/// Maps a backend `icon_name` (see catalog.Category/Service.icon_name) to a
+/// concrete IconData. Falls back to a generic icon for any name added later
+/// that this list doesn't yet know about, so a new admin-added
+/// category/service never crashes the app — it just renders a plain icon
+/// until this map is updated.
+IconData iconForName(String name) {
+  switch (name) {
+    case 'construction':
+      return Icons.construction;
+    case 'home':
+      return Icons.home;
+    case 'directions_car':
+      return Icons.directions_car;
+    case 'business_center':
+      return Icons.business_center;
+    case 'celebration':
+      return Icons.celebration;
+    case 'person':
+      return Icons.person;
+    case 'plumbing':
+      return Icons.plumbing;
+    case 'electrical_services':
+      return Icons.electrical_services;
+    case 'ac_unit':
+      return Icons.ac_unit;
+    case 'carpenter':
+      return Icons.carpenter;
+    case 'format_paint':
+      return Icons.format_paint;
+    case 'handyman':
+      return Icons.handyman;
+    case 'home_repair_service':
+      return Icons.home_repair_service;
+    case 'precision_manufacturing':
+      return Icons.precision_manufacturing;
+    case 'window':
+      return Icons.window;
+    case 'cleaning_services':
+      return Icons.cleaning_services;
+    case 'local_shipping':
+      return Icons.local_shipping;
+    case 'chair':
+      return Icons.chair;
+    case 'build':
+      return Icons.build;
+    case 'car_repair':
+      return Icons.car_repair;
+    case 'local_car_wash':
+      return Icons.local_car_wash;
+    case 'build_circle':
+      return Icons.build_circle;
+    case 'calculate':
+      return Icons.calculate;
+    case 'campaign':
+      return Icons.campaign;
+    case 'language':
+      return Icons.language;
+    case 'computer':
+      return Icons.computer;
+    case 'camera_alt':
+      return Icons.camera_alt;
+    case 'event':
+      return Icons.event;
+    case 'speaker':
+      return Icons.speaker;
+    case 'content_cut':
+      return Icons.content_cut;
+    case 'spa':
+      return Icons.spa;
+    case 'fitness_center':
+      return Icons.fitness_center;
+    case 'school':
+      return Icons.school;
+    default:
+      return Icons.build;
+  }
+}
+
+/// Groups fetched from GET /api/catalog/categories/ — empty until
+/// `loadCatalogFromApi` resolves at least once. The customer-facing
+/// categories page (CategoryStep) reads this for the group-first
+/// drill-down UI; everything else keeps reading the flat `serviceCategories`
+/// list below, which `loadCatalogFromApi` also populates from the same call.
+List<ServiceCategoryGroup> serviceCategoryGroups = [];
+
+Future<void>? _catalogLoadFuture;
+
+/// Fetches the admin-managed category/service tree and, on success, expands
+/// `serviceCategories`/`serviceCategoryGroups` to match it. Safe to call
+/// from multiple widgets — only the first call actually hits the network;
+/// later callers await the same in-flight/completed future. Leaves the
+/// static fallback list in place on any failure (offline, server down),
+/// so nothing that already depends on `serviceCategories` regresses.
+Future<void> loadCatalogFromApi([ApiClient? client]) {
+  return _catalogLoadFuture ??= _loadCatalog(client ?? ApiClient());
+}
+
+Future<void> _loadCatalog(ApiClient client) async {
+  try {
+    final groups = await client.getCatalog();
+    if (groups.isEmpty) return;
+    serviceCategoryGroups = groups;
+    serviceCategories = [for (final group in groups) ...group.services];
+  } catch (_) {
+    // Keep the static fallback — see loadCatalogFromApi's docstring.
+  }
+}
+
+/// The pre-Phase-1B static list of 9 trade categories — used to seed
+/// `serviceCategories` immediately (so the app has something to render
+/// before the first network round trip) and as the permanent fallback if
+/// `loadCatalogFromApi` never succeeds.
+const _fallbackServiceCategories = [
   ServiceCategory(
     label: 'Plumbing',
     icon: Icons.plumbing,
@@ -131,3 +265,9 @@ const serviceCategories = [
     slug: 'glass-mirrors',
   ),
 ];
+
+/// The flat list every existing screen reads (category grids, the provider
+/// profile's service picker, notification/history lookups). Starts as the
+/// static fallback and is replaced wholesale once `loadCatalogFromApi`
+/// resolves. Mutable (not const) so that replacement can happen in place.
+List<ServiceCategory> serviceCategories = List.of(_fallbackServiceCategories);

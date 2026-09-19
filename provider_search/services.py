@@ -37,18 +37,43 @@ _FIELD_MASK = ",".join([
 CACHE_TTL_SECONDS = 35 * 24 * 60 * 60  # 35 days
 
 # Service categories this app supports — keys match the slugs used
-# elsewhere (see matching.matching_engine.CATEGORY_TAXONOMY), values are the
-# English search phrase sent to Places.
+# elsewhere (see matching.matching_engine.CATEGORY_TAXONOMY and, as of Phase
+# 1B, catalog.Service.slug — this dict is seeded from the same
+# google_places_query values as the catalog migration, kept as its own copy
+# so an admin editing a Service's query phrase later doesn't silently change
+# Places search behavior without a code review). Values are the English
+# search phrase sent to Places.
 CATEGORY_QUERIES = {
     "plumbing": "plumber",
     "electrical": "electrician",
     "carpentry": "carpenter",
     "hvac": "HVAC contractor",
     "painting": "painting contractor",
+    "general-maintenance": "handyman service",
     "construction-finishing": "general contractor",
     "drywall-decor": "drywall contractor",
     "metalwork-aluminum": "metal fabrication welding shop",
     "glass-mirrors": "glass and mirror shop",
+    "cleaning-services": "house cleaning service",
+    "moving-services": "moving company",
+    "furniture-assembly": "furniture assembly service",
+    "home-repair": "home repair service",
+    "mechanic-services": "auto mechanic",
+    "car-wash": "car wash",
+    "tire-repair": "tire shop",
+    "towing-services": "towing service",
+    "accounting-services": "accounting firm",
+    "marketing-services": "marketing agency",
+    "website-design": "web design agency",
+    "it-services": "IT services company",
+    "photography": "photographer",
+    "event-decoration": "event decorator",
+    "event-planning": "event planner",
+    "sound-lighting": "event sound and lighting rental",
+    "barber-services": "barber shop",
+    "beauty-services": "beauty salon",
+    "personal-training": "personal trainer",
+    "tutoring": "tutoring service",
 }
 
 CITIES = ["Edmonton", "Calgary", "Fort McMurray", "Red Deer"]
