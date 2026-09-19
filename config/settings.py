@@ -47,6 +47,8 @@ INSTALLED_APPS = [
     "corsheaders",
     "matching",
     "provider_search",
+    "notifications",
+    "accounts",
 ]
 
 MIDDLEWARE = [
@@ -122,8 +124,32 @@ CACHES = {
 
 REST_FRAMEWORK = {
     # Fail-safe default: any view (including ones added later) requires the
-    # shared API key unless it explicitly opts out.
+    # shared API key unless it explicitly opts out. This is unchanged by
+    # adding JWT below — auth and permission are separate DRF concerns, so
+    # every existing (anonymous, device_id/place_id-keyed) endpoint keeps
+    # requiring only the API key, exactly as before.
     "DEFAULT_PERMISSION_CLASSES": ["matching.permissions.HasApiKey"],
+    # Populates request.user from a Bearer token when one is present, for
+    # the new accounts app's authenticated views (see accounts.views).
+    # Session/Basic auth (DRF's own defaults) were never actually relied on
+    # by anything in this API, so replacing them here is not a regression.
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
+    ],
+}
+
+from datetime import timedelta  # noqa: E402
+
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=30),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=14),
+    "ROTATE_REFRESH_TOKENS": True,
+    "AUTH_HEADER_TYPES": ("Bearer",),
+    # Signs tokens with the same SECRET_KEY as everything else Django signs
+    # (sessions, password reset tokens) — no separate secret to manage, and
+    # never hard-coded (SECRET_KEY itself comes from the environment, see
+    # `_env()` above).
+    "SIGNING_KEY": SECRET_KEY,
 }
 
 # CORS is a browser-only mechanism — it does not restrict the native mobile

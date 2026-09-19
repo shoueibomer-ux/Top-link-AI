@@ -1,0 +1,75 @@
+/// A client "request" — one device's engagement with one real provider —
+/// returned by GET /api/provider-matches/ (provider_search.views.ProviderMatchListView).
+/// Backed by the same ProviderMatch row Django uses for unlock tracking; the
+/// `status` field is what turns it into a request/booking pipeline.
+class ProviderMatchRecord {
+  const ProviderMatchRecord({
+    required this.id,
+    required this.category,
+    required this.city,
+    required this.providerName,
+    required this.providerPhone,
+    required this.providerAddress,
+    required this.providerWebsite,
+    required this.problemDescription,
+    required this.status,
+    required this.firstUnlockedAt,
+    required this.lastViewedAt,
+  });
+
+  factory ProviderMatchRecord.fromJson(Map<String, dynamic> json) {
+    return ProviderMatchRecord(
+      id: json['id'] as int,
+      category: json['category'] as String? ?? '',
+      city: json['city'] as String? ?? '',
+      providerName: json['provider_name'] as String? ?? '',
+      providerPhone: json['provider_phone'] as String? ?? '',
+      providerAddress: json['provider_address'] as String? ?? '',
+      providerWebsite: json['provider_website'] as String? ?? '',
+      problemDescription: json['problem_description'] as String? ?? '',
+      status: json['status'] as String? ?? ProviderMatchStatus.matched,
+      firstUnlockedAt: DateTime.parse(json['first_unlocked_at'] as String),
+      lastViewedAt: DateTime.parse(json['last_viewed_at'] as String),
+    );
+  }
+
+  final int id;
+  final String category;
+  final String city;
+  final String providerName;
+  final String providerPhone;
+  final String providerAddress;
+  final String providerWebsite;
+  // Only non-empty when this match came from the "Ask AI" chat flow — blank
+  // for matches found via the fixed category-tap onboarding flow.
+  final String problemDescription;
+  final String status;
+  final DateTime firstUnlockedAt;
+  final DateTime lastViewedAt;
+}
+
+/// Mirrors provider_search.models.ProviderMatch.STATUS_CHOICES.
+class ProviderMatchStatus {
+  static const searching = 'searching';
+  static const matched = 'matched';
+  static const contacted = 'contacted';
+  static const booked = 'booked';
+  static const inProgress = 'in_progress';
+  static const completed = 'completed';
+  static const cancelled = 'cancelled';
+  static const archived = 'archived';
+
+  static const all = [searching, matched, contacted, booked, inProgress, completed, cancelled, archived];
+
+  static String label(String status) => switch (status) {
+        searching => 'Searching',
+        matched => 'Matched',
+        contacted => 'Contacted',
+        booked => 'Booked',
+        inProgress => 'In Progress',
+        completed => 'Completed',
+        cancelled => 'Cancelled',
+        archived => 'Archived',
+        _ => status,
+      };
+}

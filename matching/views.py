@@ -14,6 +14,7 @@ from .matching_engine import (
     Profile as EngineProfile, MatchRequest as EngineMatchRequest,
     find_matches, ai_categorize,
 )
+from notifications.services import notify
 
 # Stricter than the general API default (60/min) because both views below
 # call the paid Claude API via ai_categorize().
@@ -166,7 +167,7 @@ class SubscriptionActivateView(APIView):
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
 
-        subscription, _ = Subscription.objects.update_or_create(
+        subscription, created = Subscription.objects.update_or_create(
             device_id=data["device_id"],
             defaults={
                 "status": data["status"],
@@ -174,4 +175,10 @@ class SubscriptionActivateView(APIView):
                 "expiry_date": data["expiry_date"],
             },
         )
+        if created:
+            notify(
+                data["device_id"],
+                "Welcome to Top Link AI",
+                "Your subscription is active. Start browsing real, verified providers near you.",
+            )
         return Response(SubscriptionSerializer(subscription).data, status=status.HTTP_200_OK)

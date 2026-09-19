@@ -103,7 +103,10 @@ class _PaywallScreenState extends State<PaywallScreen> {
           child: Column(
             children: [
               const SizedBox(height: 12),
-              const AppLogo(height: 36),
+              // This screen's body is AppColors.lightBackground, not the
+              // navy the wordmark's default white color assumes — see
+              // AppLogo's class doc.
+              const AppLogo(height: 36, wordmarkColor: AppColors.navy),
               const Spacer(),
               const Icon(Icons.workspace_premium, size: 64, color: AppColors.turquoise),
               const SizedBox(height: 24),

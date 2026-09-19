@@ -5,11 +5,15 @@ Places API calls cost money per request, and this data (business listings)
 doesn't change fast enough to justify looking it up on every search.
 """
 
+import hashlib
 import logging
 import os
+from datetime import timedelta
 
 import requests
 from django.core.cache import cache
+from django.db.models import Count
+from django.utils import timezone
 
 logger = logging.getLogger(__name__)
 
@@ -107,3 +111,56 @@ def search_providers(category: str, city: str, max_results: int = 10, force_refr
 
     cache.set(cache_key, results, CACHE_TTL_SECONDS)
     return results[:max_results]
+
+
+RECENT_ENGAGEMENT_WINDOW = timedelta(days=7)
+
+
+def recent_contact_counts(place_ids: list[str]) -> dict[str, int]:
+    """Social proof: for each place_id, how many distinct devices have set
+    their ProviderMatch status to "contacted" or further within the last
+    week. Imported here (not at module level) to avoid a circular import —
+    provider_search.models doesn't import this module, but keeping the
+    import local mirrors how chat_service.py reaches into matching.matching_engine.
+    """
+    from .models import ProviderMatch
+
+    if not place_ids:
+        return {}
+    cutoff = timezone.now() - RECENT_ENGAGEMENT_WINDOW
+    rows = (
+        ProviderMatch.objects.filter(
+            place_id__in=place_ids,
+            status__in=[ProviderMatch.STATUS_CONTACTED, ProviderMatch.STATUS_COMPLETED],
+            last_viewed_at__gte=cutoff,
+        )
+        .values("place_id")
+        .annotate(count=Count("device_id", distinct=True))
+    )
+    return {row["place_id"]: row["count"] for row in rows}
+
+
+def estimated_response_minutes(place_id: str) -> int:
+    """Placeholder "usually responds within N min" estimate, shown only
+    after a client unlocks a provider's contact info. There's no real
+    messaging/response-time tracking in this app yet, so this derives a
+    stable-per-provider value (5-55 min) from a hash of place_id rather than
+    inventing fake historical data that looks like it came from real
+    measurements — same value every time for the same provider, but not
+    based on anything real. Replace with a real calculation once actual
+    contact/response events are tracked.
+    """
+    digest = hashlib.md5(place_id.encode()).hexdigest()
+    return 5 + (int(digest[:8], 16) % 51)
+
+
+def availability_map(place_ids: list[str]) -> dict[str, bool]:
+    """This platform's own available-now/busy override per place_id (see
+    ProviderAvailability). A place_id with no row is treated as available.
+    """
+    from .models import ProviderAvailability
+
+    if not place_ids:
+        return {}
+    rows = ProviderAvailability.objects.filter(place_id__in=place_ids).values("place_id", "is_available_now")
+    return {row["place_id"]: row["is_available_now"] for row in rows}

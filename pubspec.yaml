@@ -65,6 +65,8 @@ flutter:
 
   assets:
     - assets/images/toplinkai_logo_full.png
+    - assets/images/toplinkai_icon.png
+    - assets/images/toplinkai_wordmark.png
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

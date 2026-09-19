@@ -68,13 +68,22 @@ class _RealProviderCardState extends State<RealProviderCard> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        provider.name,
-                        style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.navy,
-                        ),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              provider.name,
+                              style: const TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.navy,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          _AvailabilityBadge(isAvailableNow: provider.isAvailableNow),
+                        ],
                       ),
                       if (provider.rating != null) ...[
                         const SizedBox(height: 4),
@@ -115,6 +124,35 @@ class _RealProviderCardState extends State<RealProviderCard> {
                           ],
                         ),
                       ],
+                      if (provider.estimatedResponseMinutes != null) ...[
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            Icon(Icons.bolt, size: 14, color: AppColors.turquoise),
+                            const SizedBox(width: 4),
+                            Text(
+                              'Usually responds within ~${provider.estimatedResponseMinutes} min',
+                              style: const TextStyle(fontSize: 12, color: AppColors.turquoise, fontWeight: FontWeight.w600),
+                            ),
+                          ],
+                        ),
+                      ],
+                      if (provider.recentContactCount > 0) ...[
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            Icon(Icons.people_outline, size: 14, color: AppColors.muted),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                '${provider.recentContactCount} ${provider.recentContactCount == 1 ? 'person has' : 'people have'} '
+                                'contacted this provider this week',
+                                style: TextStyle(fontSize: 12, color: AppColors.muted),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                       if (!provider.hasFullDetails) ...[
                         const SizedBox(height: 6),
                         const Text(
@@ -127,6 +165,36 @@ class _RealProviderCardState extends State<RealProviderCard> {
                 ),
               ],
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AvailabilityBadge extends StatelessWidget {
+  const _AvailabilityBadge({required this.isAvailableNow});
+
+  final bool isAvailableNow;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = isAvailableNow ? AppColors.turquoise : AppColors.muted;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(20)),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 5),
+          Text(
+            isAvailableNow ? 'Available now' : 'Busy',
+            style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: color),
           ),
         ],
       ),

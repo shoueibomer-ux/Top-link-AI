@@ -32,6 +32,15 @@ class ServiceCategory {
       "before reaching out.";
 }
 
+/// Looks up a category by its backend slug (e.g. from a notification's
+/// `category` field) — null if the slug doesn't match any known category.
+ServiceCategory? findCategoryBySlug(String slug) {
+  for (final category in serviceCategories) {
+    if (category.slug == slug) return category;
+  }
+  return null;
+}
+
 const serviceCategories = [
   ServiceCategory(
     label: 'Plumbing',
