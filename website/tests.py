@@ -20,7 +20,7 @@ class PageTests(TestCase):
     def test_home_has_required_copy_and_buttons(self):
         html = self.client.get("/").content.decode()
         self.assertIn(
-            "Top-Link connects customers with trusted local service providers including "
+            "Top-Link AI connects customers with trusted local service providers including "
             "electricians, plumbers, cleaners, contractors, and other professionals.",
             html,
         )
@@ -47,7 +47,7 @@ class PageTests(TestCase):
                 self.assertIn(page["description"], html)
                 self.assertIn('rel="canonical"', html)
                 self.assertIn("application/ld+json", html)
-                self.assertIn("How Top-Link works", html)
+                self.assertIn("How Top-Link AI works", html)
                 self.assertIn("Request this service", html)
                 self.assertLessEqual(len(page["title"]), 60)
                 self.assertLessEqual(len(page["description"]), 160)

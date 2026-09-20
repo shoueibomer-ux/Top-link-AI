@@ -1,19 +1,19 @@
 """Copy and metadata for the dedicated Edmonton SEO landing pages.
 
 One dict entry per page; a single template (service_page.html) renders all
-of them. Copy sticks to what Top-Link actually does today — no invented
+of them. Copy sticks to what Top-Link AI actually does today — no invented
 provider names, ratings, reviews, prices, or verification claims.
 """
 
 SEO_PAGES = {
     "electrician-edmonton": {
-        "title": "Find an Electrician in Edmonton | Top-Link",
-        "description": "Need an electrician in Edmonton? Top-Link matches you with local electrical providers for wiring, panel upgrades, lighting and repairs.",
+        "title": "Find an Electrician in Edmonton | Top-Link AI",
+        "description": "Need an electrician in Edmonton? Top-Link AI matches you with local electrical providers for wiring, panel upgrades, lighting and repairs.",
         "h1": "Find a trusted electrician in Edmonton",
         "keyword": "electrician",
         "service_slug": "electrical",
         "breadcrumb": "Electrician",
-        "intro": "From a dead outlet to a full panel upgrade, Top-Link helps Edmonton homeowners and businesses find local electrical providers, compare their public ratings, and connect through the app.",
+        "intro": "From a dead outlet to a full panel upgrade, Top-Link AI helps Edmonton homeowners and businesses find local electrical providers, compare their public ratings, and connect through the app.",
         "covers": [
             "Wiring and rewiring",
             "Outlet, switch and lighting installation",
@@ -28,20 +28,20 @@ SEO_PAGES = {
             "You are buying or selling and want a safety check",
         ],
         "faqs": [
-            ("How do I find an electrician in Edmonton with Top-Link?",
+            ("How do I find an electrician in Edmonton with Top-Link AI?",
              "Choose Electrical Services in the app, tell us how urgent the job is and where you are, and we show local providers with their public ratings and availability."),
             ("Can I get an electrician the same day?",
              "Providers show whether they are available now. Choose the 'today' urgency and we prioritise providers who are."),
         ],
     },
     "plumber-edmonton": {
-        "title": "Find a Plumber in Edmonton | Top-Link",
-        "description": "Looking for a plumber in Edmonton? Top-Link connects you with local plumbing providers for leaks, drains, water heaters and emergencies.",
+        "title": "Find a Plumber in Edmonton | Top-Link AI",
+        "description": "Looking for a plumber in Edmonton? Top-Link AI connects you with local plumbing providers for leaks, drains, water heaters and emergencies.",
         "h1": "Find a trusted plumber in Edmonton",
         "keyword": "plumber",
         "service_slug": "plumbing",
         "breadcrumb": "Plumber",
-        "intro": "Leaks and clogs don't wait. Top-Link helps you find Edmonton plumbing providers quickly, see their public ratings, and reach out through the app.",
+        "intro": "Leaks and clogs don't wait. Top-Link AI helps you find Edmonton plumbing providers quickly, see their public ratings, and reach out through the app.",
         "covers": [
             "Leaky pipes and fixtures",
             "Clogged drains and toilets",
@@ -56,20 +56,20 @@ SEO_PAGES = {
             "You are renovating a kitchen or bathroom",
         ],
         "faqs": [
-            ("How do I find a plumber in Edmonton with Top-Link?",
+            ("How do I find a plumber in Edmonton with Top-Link AI?",
              "Choose Plumbing in the app, set your urgency and location, and we show local providers with their public ratings and availability."),
             ("What if it's an emergency?",
              "Pick the 'today' urgency. Providers who mark themselves available now are shown first."),
         ],
     },
     "cleaning-service-edmonton": {
-        "title": "Cleaning Services in Edmonton | Top-Link",
-        "description": "Find house and office cleaning services in Edmonton. Top-Link connects you with local cleaners for regular, deep and move-out cleaning.",
+        "title": "Cleaning Services in Edmonton | Top-Link AI",
+        "description": "Find house and office cleaning services in Edmonton. Top-Link AI connects you with local cleaners for regular, deep and move-out cleaning.",
         "h1": "Find a cleaning service in Edmonton",
         "keyword": "cleaning service",
         "service_slug": "cleaning-services",
         "breadcrumb": "Cleaning Service",
-        "intro": "Whether you want a one-time deep clean or a regular schedule, Top-Link helps you find Edmonton cleaning services, compare public ratings, and connect through the app.",
+        "intro": "Whether you want a one-time deep clean or a regular schedule, Top-Link AI helps you find Edmonton cleaning services, compare public ratings, and connect through the app.",
         "covers": [
             "Regular home and office cleaning",
             "Deep cleaning",
@@ -83,20 +83,20 @@ SEO_PAGES = {
             "The office needs regular upkeep",
         ],
         "faqs": [
-            ("How do I find a cleaner in Edmonton with Top-Link?",
+            ("How do I find a cleaner in Edmonton with Top-Link AI?",
              "Choose Cleaning Services in the app, tell us when you need it and where, and we show local cleaners with their public ratings."),
             ("Can I compare cleaners before I get in touch?",
              "Yes. Each provider shows its public rating, review count and availability before you reach out."),
         ],
     },
     "contractor-edmonton": {
-        "title": "Find a General Contractor in Edmonton | Top-Link",
-        "description": "Need a contractor in Edmonton? Top-Link connects you with local general contractors for renovations, remodels and finishing work.",
+        "title": "Find a General Contractor in Edmonton | Top-Link AI",
+        "description": "Need a contractor in Edmonton? Top-Link AI connects you with local general contractors for renovations, remodels and finishing work.",
         "h1": "Find a general contractor in Edmonton",
         "keyword": "general contractor",
         "service_slug": "construction-finishing",
         "breadcrumb": "Contractor",
-        "intro": "Big projects need the right team. Top-Link helps you find Edmonton general contractors, compare their public ratings, and start the conversation in the app.",
+        "intro": "Big projects need the right team. Top-Link AI helps you find Edmonton general contractors, compare their public ratings, and start the conversation in the app.",
         "covers": [
             "Full renovations and remodels",
             "General contracting",
@@ -109,15 +109,15 @@ SEO_PAGES = {
             "You want a quote for finishing work",
         ],
         "faqs": [
-            ("How do I find a contractor in Edmonton with Top-Link?",
+            ("How do I find a contractor in Edmonton with Top-Link AI?",
              "Choose Construction/Finishing (or a specific project like Kitchen Renovation) in the app, describe the job, and we show local providers."),
             ("Can I describe my project first?",
-             "Yes. You can describe the job in your own words and Top-Link classifies it and finds matching providers."),
+             "Yes. You can describe the job in your own words and Top-Link AI classifies it and finds matching providers."),
         ],
     },
     "home-improvement-edmonton": {
-        "title": "Home Improvement Services in Edmonton | Top-Link",
-        "description": "Home improvement in Edmonton made easy. Find local painters, flooring, roofing, carpentry and renovation pros through Top-Link.",
+        "title": "Home Improvement Services in Edmonton | Top-Link AI",
+        "description": "Home improvement in Edmonton made easy. Find local painters, flooring, roofing, carpentry and renovation pros through Top-Link AI.",
         "h1": "Home improvement services in Edmonton",
         "keyword": "home improvement",
         "service_slug": None,
@@ -126,7 +126,7 @@ SEO_PAGES = {
             "kitchen-renovation", "bathroom-renovation", "home-repair",
         ],
         "breadcrumb": "Home Improvement",
-        "intro": "Refresh a room, replace a roof, or remodel a whole kitchen. Top-Link brings Edmonton's home improvement providers together in one place, so you can compare public ratings and connect through the app.",
+        "intro": "Refresh a room, replace a roof, or remodel a whole kitchen. Top-Link AI brings Edmonton's home improvement providers together in one place, so you can compare public ratings and connect through the app.",
         "covers": [
             "Interior and exterior painting",
             "Flooring installation and refinishing",
@@ -142,9 +142,9 @@ SEO_PAGES = {
         ],
         "faqs": [
             ("I'm not sure which trade I need. Where do I start?",
-             "Describe the problem in your own words in the app. Top-Link works out the service you need and shows matching providers."),
+             "Describe the problem in your own words in the app. Top-Link AI works out the service you need and shows matching providers."),
             ("Do you cover more than Edmonton?",
-             "Top-Link currently covers Edmonton, Calgary, Fort McMurray and Red Deer."),
+             "Top-Link AI currently covers Edmonton, Calgary, Fort McMurray and Red Deer."),
         ],
     },
 }

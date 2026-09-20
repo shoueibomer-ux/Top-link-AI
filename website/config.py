@@ -3,7 +3,7 @@ might want to change without touching templates lives here or in env vars."""
 
 import os
 
-SITE_NAME = "Top-Link"
+SITE_NAME = "Top-Link AI"
 TAGLINE = "AI-Powered Service Matching"
 CITY = "Edmonton"
 REGION = "Alberta"

@@ -2,11 +2,11 @@
 
 JOURNEY_STEPS = [
     ("Search", "You look for a local service on Google."),
-    ("Top-Link", "You land on the Top-Link website."),
+    ("Top-Link AI", "You land on the Top-Link AI website."),
     ("Choose", "Pick the service category you need."),
     ("Select", "Compare providers and pick the right one."),
     ("Request", "Send your service request."),
-    ("Connect", "Continue the conversation in the Top-Link app."),
+    ("Connect", "Continue the conversation in the Top-Link AI app."),
 ]
 
 HOW_IT_WORKS = [
@@ -19,7 +19,7 @@ HOW_IT_WORKS = [
 # (title, description, coming_soon)
 PROVIDER_FEATURES = [
     ("Register as a provider",
-     "Create a business account in the Top-Link app as an individual or a business.", False),
+     "Create a business account in the Top-Link AI app as an individual or a business.", False),
     ("Create your business profile",
      "Add your business name, description, city, service area, team size, languages, equipment and certifications.", False),
     ("Add your services and categories",

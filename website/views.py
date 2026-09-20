@@ -28,38 +28,38 @@ def _meta(title: str, description: str, robots: str = "index,follow") -> dict:
 def home(request):
     seo_links = [(slug, page["breadcrumb"]) for slug, page in SEO_PAGES.items()]
     meta = _meta(
-        "Top-Link | Trusted Local Service Providers",
-        "Top-Link connects customers with trusted local service providers including electricians, plumbers, cleaners, contractors, and other professionals.",
+        "Top-Link AI | Trusted Local Service Providers",
+        "Top-Link AI connects customers with trusted local service providers including electricians, plumbers, cleaners, contractors, and other professionals.",
     )
     return render(request, "website/home.html", {**_COMMON, **meta, "seo_links": seo_links})
 
 
 def sectors(request):
     meta = _meta(
-        "All Services and Sectors | Top-Link",
-        "Browse every Top-Link service: home services, construction and renovation, automotive, business, outdoor, moving and delivery, events and personal services.",
+        "All Services and Sectors | Top-Link AI",
+        "Browse every Top-Link AI service: home services, construction and renovation, automotive, business, outdoor, moving and delivery, events and personal services.",
     )
     return render(request, "website/sectors.html", {**_COMMON, **meta})
 
 
 def providers(request):
     meta = _meta(
-        "Join Top-Link as a Service Provider",
-        "Register your business on Top-Link, list your services and categories, and reach local customers. Manage your provider profile from the app.",
+        "Join Top-Link AI as a Service Provider",
+        "Register your business on Top-Link AI, list your services and categories, and reach local customers. Manage your provider profile from the app.",
     )
     return render(request, "website/providers.html", {**_COMMON, **meta, "provider_features": PROVIDER_FEATURES})
 
 
 def how_it_works(request):
     meta = _meta(
-        "How Top-Link Works | From Search to Service",
-        "See how Top-Link takes you from a Google search to a local provider: choose a service, compare providers, request the job and connect through the app.",
+        "How Top-Link AI Works | From Search to Service",
+        "See how Top-Link AI takes you from a Google search to a local provider: choose a service, compare providers, request the job and connect through the app.",
     )
     return render(request, "website/how_it_works.html", {**_COMMON, **meta})
 
 
 def get_app(request):
-    meta = _meta("Get the Top-Link App", "Get the Top-Link app to request services and manage your provider profile.", "noindex,follow")
+    meta = _meta("Get the Top-Link AI App", "Get the Top-Link AI app to request services and manage your provider profile.", "noindex,follow")
     return render(request, "website/get_app.html", {**meta, "as_provider": request.GET.get("as") == "provider"})
 
 
@@ -118,8 +118,8 @@ def service_detail(request, slug):
     # noindex until each service has unique copy; the 5 dedicated pages are
     # the SEO targets, and thin generated pages shouldn't dilute them.
     meta = _meta(
-        f"{service.name} in {config.CITY} | Top-Link",
-        (service.what_we_cover or f"Find {service.name} providers in {config.CITY} with Top-Link.")[:155],
+        f"{service.name} in {config.CITY} | Top-Link AI",
+        (service.what_we_cover or f"Find {service.name} providers in {config.CITY} with Top-Link AI.")[:155],
         "noindex,follow",
     )
     return render(request, "website/service_detail.html", {**_COMMON, **meta, "service": service})
