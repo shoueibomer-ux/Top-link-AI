@@ -1,0 +1,5 @@
+<ol class="journey">
+  {% for name, text in journey_steps %}
+  <li><span class="journey-num">{{ forloop.counter }}</span><strong>{{ name }}</strong><span>{{ text }}</span></li>
+  {% endfor %}
+</ol>

@@ -1,0 +1,21 @@
+{% extends "website/base.html" %}
+{% block content %}
+<section class="hero hero-sm"><div class="wrap hero-inner">
+  <nav class="crumbs" aria-label="Breadcrumb"><a href="{% url 'website:sectors' %}">Services</a> / <span>{{ service.category.name }}</span></nav>
+  <h1>{{ service.name }} in {{ site.city }}</h1>
+  <p class="lead">{{ service.what_we_cover }}</p>
+  <div class="btn-row">
+    <a class="btn btn-primary btn-lg" href="{{ site.app_url }}?service={{ service.slug }}">Request this service</a>
+    <a class="btn btn-ghost-light btn-lg" href="{% url 'website:sectors' %}">All services</a>
+  </div>
+</div></section>
+<section class="section"><div class="wrap">
+  <h2>How Top-Link works</h2>
+  {% include "website/partials/how_it_works.html" %}
+</div></section>
+<section class="section alt"><div class="wrap">
+  <h2>How we help you find trusted providers</h2>
+  {% include "website/partials/trust.html" %}
+</div></section>
+{% include "website/partials/cta_band.html" %}
+{% endblock %}

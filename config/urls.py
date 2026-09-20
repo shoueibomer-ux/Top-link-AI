@@ -26,4 +26,6 @@ urlpatterns = [
     path("api/chat/refine/", ChatRefineView.as_view(), name="chat-refine"),
     path("api/notifications/", NotificationListView.as_view(), name="notification-list"),
     path("api/notifications/mark-read/", NotificationMarkReadView.as_view(), name="notification-mark-read"),
+    # Marketing website — keep last so admin/ and api/ always take precedence.
+    path("", include("website.urls")),
 ]

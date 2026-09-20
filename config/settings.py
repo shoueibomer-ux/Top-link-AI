@@ -50,6 +50,7 @@ INSTALLED_APPS = [
     "notifications",
     "accounts",
     "catalog",
+    "website",
 ]
 
 MIDDLEWARE = [

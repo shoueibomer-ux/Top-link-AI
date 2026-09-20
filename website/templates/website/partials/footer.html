@@ -1,0 +1,29 @@
+<footer class="site-footer">
+  <div class="wrap footer-grid">
+    <div>
+      <p class="footer-brand">Top-Link</p>
+      <p class="muted-on-dark">{{ site.tagline }}. Connecting customers with trusted local service providers.</p>
+    </div>
+    <div>
+      <p class="footer-h">Popular in {{ site.city }}</p>
+      <ul>
+        <li><a href="/electrician-edmonton/">Electrician</a></li>
+        <li><a href="/plumber-edmonton/">Plumber</a></li>
+        <li><a href="/cleaning-service-edmonton/">Cleaning service</a></li>
+        <li><a href="/contractor-edmonton/">Contractor</a></li>
+        <li><a href="/home-improvement-edmonton/">Home improvement</a></li>
+      </ul>
+    </div>
+    <div>
+      <p class="footer-h">Top-Link</p>
+      <ul>
+        <li><a href="{% url 'website:sectors' %}">All services</a></li>
+        <li><a href="{% url 'website:how-it-works' %}">How it works</a></li>
+        <li><a href="{% url 'website:providers' %}">For providers</a></li>
+        <li><a href="{{ site.app_url }}">Get the app</a></li>
+        {% if site.contact_email %}<li><a href="mailto:{{ site.contact_email }}">{{ site.contact_email }}</a></li>{% endif %}
+      </ul>
+    </div>
+  </div>
+  <div class="wrap footer-base"><small>&copy; Top-Link. Serving Edmonton, Calgary, Fort McMurray and Red Deer.</small></div>
+</footer>

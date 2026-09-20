@@ -74,6 +74,20 @@ CATEGORY_QUERIES = {
     "beauty-services": "beauty salon",
     "personal-training": "personal trainer",
     "tutoring": "tutoring service",
+    "flooring": "flooring contractor",
+    "roofing": "roofing contractor",
+    "concrete-work": "concrete contractor",
+    "kitchen-renovation": "kitchen renovation contractor",
+    "bathroom-renovation": "bathroom renovation contractor",
+    "delivery-services": "courier delivery service",
+    "storage-services": "self storage",
+    "legal-services": "law firm",
+    "catering": "catering service",
+    "security-services": "security guard company",
+    "lawn-care": "lawn care service",
+    "snow-removal": "snow removal service",
+    "tree-services": "tree service",
+    "landscaping": "landscaping company",
 }
 
 CITIES = ["Edmonton", "Calgary", "Fort McMurray", "Red Deer"]

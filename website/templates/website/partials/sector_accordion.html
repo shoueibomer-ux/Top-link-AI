@@ -1,0 +1,11 @@
+<div class="accordion">
+  {% for sector in sectors %}
+  <details id="{{ sector.slug }}" class="sector"{% if open_first and forloop.first %} open{% endif %}>
+    <summary><span>{{ sector.name }}</span><small>{{ sector.items|length }} services</small></summary>
+    <p class="sector-blurb">{{ sector.blurb }}</p>
+    <ul class="chips">
+      {% for item in sector.items %}<li><a href="{{ item.url }}">{{ item.label }}</a></li>{% endfor %}
+    </ul>
+  </details>
+  {% endfor %}
+</div>

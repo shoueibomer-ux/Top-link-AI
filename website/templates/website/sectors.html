@@ -1,0 +1,11 @@
+{% extends "website/base.html" %}
+{% block content %}
+<section class="page-head"><div class="wrap">
+  <h1>All services</h1>
+  <p class="lead-dark">Choose a sector, then the service you need.</p>
+</div></section>
+<section class="section"><div class="wrap">
+  {% include "website/partials/sector_accordion.html" with open_first=False %}
+</div></section>
+{% include "website/partials/cta_band.html" %}
+{% endblock %}

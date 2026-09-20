@@ -1,0 +1,5 @@
+<ol class="steps">
+  {% for title, text in how_it_works %}
+  <li><span class="step-num">{{ forloop.counter }}</span><h3>{{ title }}</h3><p>{{ text }}</p></li>
+  {% endfor %}
+</ol>

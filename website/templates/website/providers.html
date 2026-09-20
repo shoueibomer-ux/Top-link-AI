@@ -1,0 +1,26 @@
+{% extends "website/base.html" %}
+{% block content %}
+<section class="hero hero-sm"><div class="wrap hero-inner">
+  <p class="eyebrow">For businesses and professionals</p>
+  <h1>Join Top-Link as a provider</h1>
+  <p class="lead">Reach customers who are looking for exactly what you do. Set up your business profile once and manage it from the app.</p>
+  <div class="btn-row"><a class="btn btn-primary btn-lg" href="{{ site.provider_url }}">Join as a Provider</a></div>
+</div></section>
+<section class="section"><div class="wrap">
+  <h2>What you can do</h2>
+  <ul class="feature-list">
+    {% for title, text, soon in provider_features %}
+    <li class="card">
+      <h3>{{ title }}{% if soon %} <span class="tag">Rolling out</span>{% endif %}</h3>
+      <p>{{ text }}</p>
+    </li>
+    {% endfor %}
+  </ul>
+</div></section>
+<section class="section alt"><div class="wrap">
+  <h2>Services you can offer</h2>
+  <p class="section-lead">You pick from the same catalog customers browse.</p>
+  {% include "website/partials/sector_accordion.html" with open_first=False %}
+</div></section>
+{% include "website/partials/cta_band.html" with heading="Ready to list your business?" text="Create your provider account in the Top-Link app." %}
+{% endblock %}

@@ -81,6 +81,20 @@ _CATEGORY_DISPLAY_NAMES = {
     "beauty-services": "Beauty services",
     "personal-training": "Personal training",
     "tutoring": "Tutoring",
+    "flooring": "Flooring",
+    "roofing": "Roofing",
+    "concrete-work": "Concrete work",
+    "kitchen-renovation": "Kitchen renovation",
+    "bathroom-renovation": "Bathroom renovation",
+    "delivery-services": "Delivery services",
+    "storage-services": "Storage services",
+    "legal-services": "Legal services",
+    "catering": "Catering",
+    "security-services": "Security services",
+    "lawn-care": "Lawn care",
+    "snow-removal": "Snow removal",
+    "tree-services": "Tree services",
+    "landscaping": "Landscaping",
 }
 _DISPLAY_NAME_TO_SLUG = {name: slug for slug, name in _CATEGORY_DISPLAY_NAMES.items()}
 
