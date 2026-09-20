@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../app_colors.dart';
 
-/// The full Top Link AI logo (icon + wordmark). The icon sits on a light
+/// The full Top-Link AI logo (icon + wordmark). The icon sits on a light
 /// pill backdrop (for contrast against the navy app bar / drawer header);
 /// the wordmark, when it peeks out, is drawn with no background of its own —
 /// directly over whatever's behind it.
