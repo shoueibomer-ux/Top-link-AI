@@ -67,6 +67,7 @@ SECTOR_ICONS = {
     "outdoor-services": "trees",
     "moving-delivery": "truck",
     "events-personal": "party-popper",
+    "personal-services": "user-round",
 }
 
 # Home-improvement SEO page has no single service; it gets the sector icon.

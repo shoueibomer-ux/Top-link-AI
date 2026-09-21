@@ -93,8 +93,8 @@ class TaxonomyIntegrityTests(TestCase):
         self.assertEqual(Service.objects.count(), 44)
 
     def test_sector_structure(self):
-        self.assertEqual(Sector.objects.count(), 7)
-        self.assertEqual(SectorItem.objects.count(), 36)
+        self.assertEqual(Sector.objects.count(), 8)
+        self.assertEqual(SectorItem.objects.count(), 47)
 
     def test_every_item_resolves_to_an_active_backend_service(self):
         for item in SectorItem.objects.select_related("service"):
@@ -152,14 +152,14 @@ class VisualIdentityTests(TestCase):
 
     def test_every_service_page_shows_its_icon_next_to_the_h1(self):
         for service in Service.objects.all():
-            html = self.client.get(f"/services/{service.slug}/").content.decode()
+            html = self.client.get(f"/services/{service.slug}/", follow=True).content.decode()
             self.assertIn('class="title-row"', html, service.slug)
             self.assertRegex(html, r'icon-tile-hero">\s*<svg', service.slug)
 
-    def test_home_has_hero_art_and_seven_sector_cards(self):
+    def test_home_has_hero_art_and_a_card_per_sector(self):
         html = self.client.get("/").content.decode()
         self.assertIn('class="hero-art"', html)
-        self.assertEqual(html.count('class="sector-card"'), 7)
+        self.assertEqual(html.count('class="sector-card"'), Sector.objects.count())
 
     def test_steps_use_distinct_icons(self):
         from .content.pages import HOW_IT_WORKS, JOURNEY_STEPS
@@ -216,5 +216,42 @@ class LinkIntegrityTests(TestCase):
         expected |= {f"/{slug}/" for slug in SEO_PAGES}
         expected |= {item_url for item_url in (
             selectors.service_url(i.service.slug) for i in SectorItem.objects.select_related("service"))}
+        from .linkcheck import orphan_services
+
+        self.assertEqual(orphan_services(result["pages"]), [], "service pages nothing links to")
         self.assertEqual(expected - reached, set(), "pages that should be reachable from the site were not")
         self.assertEqual(result["broken"], [], result["broken"])
+
+
+class OrphanFixTests(TestCase):
+    def test_previously_orphaned_services_sit_in_the_intended_sectors(self):
+        expected = {
+            "metalwork-aluminum": "construction-renovation",
+            "glass-mirrors": "construction-renovation",
+            "tire-repair": "automotive-services",
+            "event-decoration": "events-personal",
+            "sound-lighting": "events-personal",
+            "barber-services": "personal-services",
+            "beauty-services": "personal-services",
+            "personal-training": "personal-services",
+            "tutoring": "personal-services",
+            "carpentry": "construction-renovation",
+            "home-repair": "home-services",
+        }
+        for service_slug, sector_slug in expected.items():
+            self.assertTrue(
+                SectorItem.objects.filter(service__slug=service_slug, sector__slug=sector_slug).exists(),
+                service_slug,
+            )
+
+    def test_every_backend_service_is_on_the_website_sector_menu_or_has_an_seo_page(self):
+        from .content.seo_pages import SEO_PAGE_BY_SERVICE
+
+        listed = set(SectorItem.objects.values_list("service__slug", flat=True))
+        for slug in Service.objects.values_list("slug", flat=True):
+            self.assertTrue(slug in listed or slug in SEO_PAGE_BY_SERVICE, slug)
+
+    def test_service_with_seo_page_redirects_instead_of_duplicating(self):
+        response = self.client.get("/services/electrical/")
+        self.assertEqual(response.status_code, 301)
+        self.assertEqual(response["Location"], "/electrician-edmonton/")

@@ -89,3 +89,21 @@ def crawl(client, start="/"):
         "external_skipped": external,
         "broken": sorted(set(broken)),
     }
+
+
+def orphan_services(reached_pages):
+    """Active catalog services whose page is not reachable from site navigation.
+
+    A service's page is where selectors.service_url() sends visitors: its
+    dedicated SEO page if it has one, otherwise /services/<slug>/.
+    """
+    from catalog.models import Service
+
+    from . import selectors
+
+    reached = set(reached_pages)
+    return [
+        s.slug
+        for s in Service.objects.filter(is_active=True).order_by("slug")
+        if selectors.service_url(s.slug) not in reached
+    ]

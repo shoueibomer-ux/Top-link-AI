@@ -2,7 +2,7 @@ import json
 from xml.sax.saxutils import escape
 
 from django.http import Http404, HttpResponse, JsonResponse
-from django.shortcuts import render
+from django.shortcuts import redirect, render
 from django.views.decorators.http import require_GET
 
 from . import config, selectors
@@ -15,7 +15,7 @@ from .content.pages import (
     PROVIDER_FEATURES,
     TRUST_POINTS,
 )
-from .content.seo_pages import SEO_PAGES
+from .content.seo_pages import SEO_PAGE_BY_SERVICE, SEO_PAGES
 
 _COMMON = {
     "journey_steps": JOURNEY_STEPS,
@@ -121,6 +121,10 @@ def seo_page(request, slug):
 
 
 def service_detail(request, slug):
+    # A service with a dedicated SEO page lives there; the generic page would
+    # be a near-duplicate, so send visitors (and crawlers) to the real one.
+    if slug in SEO_PAGE_BY_SERVICE:
+        return redirect(f"/{SEO_PAGE_BY_SERVICE[slug]}/", permanent=True)
     service = selectors.get_service(slug)
     if service is None:
         raise Http404

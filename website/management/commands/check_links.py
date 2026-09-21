@@ -2,7 +2,7 @@ from django.core.management.base import BaseCommand, CommandError
 from django.test import Client
 from django.test.utils import setup_test_environment
 
-from website.linkcheck import crawl
+from website.linkcheck import crawl, orphan_services
 
 
 class Command(BaseCommand):
@@ -14,6 +14,12 @@ class Command(BaseCommand):
         self.stdout.write(f"pages crawled:        {len(result['pages'])}")
         self.stdout.write(f"internal links checked: {result['links_checked']}")
         self.stdout.write(f"external links skipped: {result['external_skipped']}")
+        orphans = orphan_services(result["pages"])
+        self.stdout.write(f"orphan service pages:   {len(orphans)}")
+        for slug in orphans:
+            self.stderr.write(f"ORPHAN  {slug}  (its page is not linked from anywhere)")
+        if orphans:
+            raise CommandError(f"{len(orphans)} orphan service page(s)")
         if result["broken"]:
             for source, url, why in result["broken"]:
                 self.stderr.write(f"BROKEN  {source}  ->  {url}   [{why}]")
