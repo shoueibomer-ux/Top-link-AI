@@ -13,7 +13,8 @@
   <meta property="og:description" content="{{ meta.description|default:'Connect with trusted local service providers.' }}">
   <meta property="og:url" content="{{ request.scheme }}://{{ request.get_host }}{{ request.path }}">
   <meta name="theme-color" content="#0B1F3A">
-  <link rel="icon" href="{% static 'website/images/favicon.svg' %}" type="image/svg+xml">
+  <link rel="icon" type="image/png" sizes="32x32" href="{% static 'website/images/favicon-32.png' %}">
+  <link rel="icon" type="image/png" sizes="48x48" href="{% static 'website/images/favicon-48.png' %}">
   <link rel="stylesheet" href="{% static 'website/css/site.css' %}">
   {% block head %}{% endblock %}
 </head>

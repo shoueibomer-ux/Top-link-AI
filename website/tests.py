@@ -63,6 +63,16 @@ class PageTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'content="noindex,follow"')
 
+    def test_logo_image_is_used_in_header_and_footer_and_files_exist(self):
+        from django.contrib.staticfiles import finders
+
+        html = self.client.get("/").content.decode()
+        self.assertEqual(html.count("website/images/logo-roundel.png"), 2)  # header + footer
+        self.assertNotIn(">TA<", html)
+        for name in ("logo-roundel.png", "favicon-32.png", "favicon-48.png"):
+            self.assertIsNotNone(finders.find(f"website/images/{name}"), name)
+            self.assertIn(name.split(".")[0], html) if name.startswith("favicon") else None
+
     def test_unknown_service_404(self):
         self.assertEqual(self.client.get("/services/does-not-exist/").status_code, 404)
 
