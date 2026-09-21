@@ -29,3 +29,6 @@ urlpatterns = [
     # Marketing website — keep last so admin/ and api/ always take precedence.
     path("", include("website.urls")),
 ]
+
+# Branded 404 for the website; unmatched /api/ paths still get JSON.
+handler404 = "website.views.not_found"

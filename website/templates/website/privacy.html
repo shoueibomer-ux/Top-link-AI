@@ -1,0 +1,31 @@
+{% extends "website/base.html" %}
+{% block content %}
+<section class="page-head"><div class="wrap">
+  <h1>Privacy policy</h1>
+  <p class="lead-dark">What Top-Link AI collects and why.</p>
+</div></section>
+<section class="section"><div class="wrap narrow prose">
+  <p class="draft-note"><strong>Draft.</strong> This is a placeholder that describes what the app and website do today. It has not been reviewed by a lawyer and will be replaced by a final policy before public launch.</p>
+
+  <h2>The website</h2>
+  <p>This website has no accounts or forms, and at the time of writing it does not use analytics or advertising cookies. Like any web server, ours may keep standard technical logs (such as IP address and pages requested).</p>
+
+  <h2>The Top-Link AI app</h2>
+  <ul class="ticks">
+    <li><strong>Device identifier.</strong> A random ID generated on your device keeps your requests, saved providers, notifications and subscription status together without needing an account.</li>
+    <li><strong>Your requests.</strong> The service you choose, your city, how urgent it is, and anything you type when describing a job, including chat messages.</li>
+    <li><strong>Location.</strong> If you allow it, the app uses your device location to help choose your city for search.</li>
+    <li><strong>Provider accounts.</strong> If you register as a provider: your email, a password (stored hashed, never in plain text), your name, and the business profile details you enter (business name, description, city, phone, services, and similar).</li>
+  </ul>
+
+  <h2>Who else handles data</h2>
+  <ul class="ticks">
+    <li><strong>Google.</strong> We use Google's Places service to find local business listings; public listing details such as name, phone, address and ratings come from there.</li>
+    <li><strong>Anthropic.</strong> The text you type to describe a job may be sent to Anthropic's Claude AI to work out which service you need.</li>
+    <li><strong>App stores.</strong> Paid subscriptions, once enabled, are processed by Apple or Google. We do not receive your card details.</li>
+  </ul>
+
+  <h2>Your choices</h2>
+  <p>Details on how long data is kept, and how to ask us to access or delete it, will be added in the final policy. Until then, contact us using the details on the <a href="{% url 'website:contact' %}">contact page</a>.</p>
+</div></section>
+{% endblock %}

@@ -1,0 +1,23 @@
+{% extends "website/base.html" %}
+{% load website_tags %}
+{% block content %}
+<section class="page-head"><div class="wrap">
+  <p class="eyebrow">Error 404</p>
+  <h1>We couldn't find that page</h1>
+  <p class="lead-dark">The link may be out of date, or the page may have moved.</p>
+</div></section>
+<section class="section"><div class="wrap narrow">
+  <div class="btn-row" style="margin-top:0">
+    <a class="btn btn-primary" href="{% url 'website:home' %}">Go to the home page</a>
+    <a class="btn btn-secondary" href="{% url 'website:sectors' %}">Browse all services</a>
+  </div>
+  <h2 style="margin-top:2.5rem">Popular in {{ site.city }}</h2>
+  <ul class="chips chips-lg">
+    <li><a href="/electrician-edmonton/">{% icon "zap" "chip-icon" %}Electrician</a></li>
+    <li><a href="/plumber-edmonton/">{% icon "droplets" "chip-icon" %}Plumber</a></li>
+    <li><a href="/cleaning-service-edmonton/">{% icon "spray-can" "chip-icon" %}Cleaning service</a></li>
+    <li><a href="/contractor-edmonton/">{% icon "hard-hat" "chip-icon" %}Contractor</a></li>
+    <li><a href="/home-improvement-edmonton/">{% icon "house" "chip-icon" %}Home improvement</a></li>
+  </ul>
+</div></section>
+{% endblock %}

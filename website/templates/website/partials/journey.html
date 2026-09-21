@@ -1,5 +1,11 @@
+{% load website_tags %}
 <ol class="journey">
-  {% for name, text in journey_steps %}
-  <li><span class="journey-num">{{ forloop.counter }}</span><strong>{{ name }}</strong><span>{{ text }}</span></li>
+  {% for name, text, ic in journey_steps %}
+  <li>
+    <span class="icon-tile">{% icon ic %}</span>
+    <span class="step-tag">Step {{ forloop.counter }}</span>
+    <strong>{{ name }}</strong>
+    <span class="step-text">{{ text }}</span>
+  </li>
   {% endfor %}
 </ol>

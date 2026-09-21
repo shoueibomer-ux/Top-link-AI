@@ -1,16 +1,21 @@
 {% extends "website/base.html" %}
+{% load website_tags %}
 {% block content %}
-<section class="hero hero-sm"><div class="wrap hero-inner">
-  <p class="eyebrow">For businesses and professionals</p>
-  <h1>Join Top-Link AI as a provider</h1>
-  <p class="lead">Reach customers who are looking for exactly what you do. Set up your business profile once and manage it from the app.</p>
-  <div class="btn-row"><a class="btn btn-primary btn-lg" href="{{ site.provider_url }}">Join as a Provider</a></div>
+<section class="hero hero-sm"><div class="wrap hero-grid">
+  <div class="hero-inner">
+    <p class="eyebrow">For businesses and professionals</p>
+    <h1>Join Top-Link AI as a provider</h1>
+    <p class="lead">Reach customers who are looking for exactly what you do. Set up your business profile once and manage it from the app.</p>
+    <div class="btn-row"><a class="btn btn-primary btn-lg" href="{{ site.provider_url }}">Join as a Provider</a></div>
+  </div>
+  {% include "website/partials/hero_art.html" with icons=hero_icons %}
 </div></section>
 <section class="section"><div class="wrap">
   <h2>What you can do</h2>
   <ul class="feature-list">
-    {% for title, text, soon in provider_features %}
+    {% for title, text, soon, ic in provider_features %}
     <li class="card">
+      <span class="icon-tile">{% icon ic %}</span>
       <h3>{{ title }}{% if soon %} <span class="tag">Rolling out</span>{% endif %}</h3>
       <p>{{ text }}</p>
     </li>

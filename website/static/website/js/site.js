@@ -33,3 +33,14 @@
     });
   }
 })();
+
+// Open the sector accordion that a #hash link points at (e.g. /sectors/#outdoor-services).
+(function () {
+  function openFromHash() {
+    var id = location.hash.slice(1);
+    var el = id && document.getElementById(id);
+    if (el && el.tagName === 'DETAILS') { el.open = true; el.scrollIntoView(); }
+  }
+  openFromHash();
+  window.addEventListener('hashchange', openFromHash);
+})();

@@ -1,9 +1,16 @@
 {% extends "website/base.html" %}
+{% load website_tags %}
 {% block head %}{% for block in jsonld %}<script type="application/ld+json">{{ block|safe }}</script>{% endfor %}{% endblock %}
 {% block content %}
 <section class="hero hero-sm"><div class="wrap hero-inner">
   <nav class="crumbs" aria-label="Breadcrumb"><a href="{% url 'website:home' %}">Home</a> / <span>{{ page.breadcrumb }}</span></nav>
-  <h1>{{ page.h1 }}</h1>
+  <div class="title-row">
+    <span class="icon-tile icon-tile-hero">{% if page.service_slug %}{% service_icon page.service_slug %}{% else %}{% icon page_icon %}{% endif %}</span>
+    <div>
+      <span class="cat-chip">{{ site.city }}</span>
+      <h1>{{ page.h1 }}</h1>
+    </div>
+  </div>
   <p class="lead">{{ page.intro }}</p>
   <div class="btn-row">
     <a class="btn btn-primary btn-lg" href="{{ site.app_url }}{% if page.service_slug %}?service={{ page.service_slug }}{% endif %}">Request this service</a>
@@ -25,7 +32,7 @@
 {% if related %}
 <section class="section alt"><div class="wrap">
   <h2>Related services</h2>
-  <ul class="chips chips-lg">{% for s in related %}<li><a href="/services/{{ s.slug }}/">{{ s.name }}</a></li>{% endfor %}</ul>
+  <ul class="chips chips-lg">{% for s in related %}<li><a href="/services/{{ s.slug }}/">{% service_icon s.slug "chip-icon" %}{{ s.name }}</a></li>{% endfor %}</ul>
 </div></section>
 {% endif %}
 

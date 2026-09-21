@@ -1,5 +1,6 @@
+{% load website_tags %}
 <ul class="trust-grid">
-  {% for title, text in trust_points %}
-  <li class="card"><h3>{{ title }}</h3><p>{{ text }}</p></li>
+  {% for title, text, ic in trust_points %}
+  <li class="card"><span class="icon-tile">{% icon ic %}</span><h3>{{ title }}</h3><p>{{ text }}</p></li>
   {% endfor %}
 </ul>

@@ -21,6 +21,14 @@
         <li><a href="{% url 'website:how-it-works' %}">How it works</a></li>
         <li><a href="{% url 'website:providers' %}">For providers</a></li>
         <li><a href="{{ site.app_url }}">Get the app</a></li>
+      </ul>
+    </div>
+    <div>
+      <p class="footer-h">Company</p>
+      <ul>
+        <li><a href="{% url 'website:contact' %}">Contact</a></li>
+        <li><a href="{% url 'website:privacy' %}">Privacy policy</a></li>
+        <li><a href="{% url 'website:terms' %}">Terms of service</a></li>
         {% if site.contact_email %}<li><a href="mailto:{{ site.contact_email }}">{{ site.contact_email }}</a></li>{% endif %}
       </ul>
     </div>
