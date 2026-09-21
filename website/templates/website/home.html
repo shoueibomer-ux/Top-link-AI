@@ -1,0 +1,62 @@
+{% extends "website/base.html" %}
+{% load website_tags %}
+{% block content %}
+<section class="hero">
+  <div class="wrap hero-grid">
+    <div class="hero-inner">
+      <p class="eyebrow">Trusted local service providers</p>
+      <h1>Find the right local pro, fast.</h1>
+      <p class="lead">Top-Link AI connects customers with trusted local service providers including electricians, plumbers, cleaners, contractors, and other professionals.</p>
+      <div class="btn-row">
+        <a class="btn btn-primary btn-lg" href="{% url 'website:sectors' %}">Find a Service</a>
+        <a class="btn btn-ghost-light btn-lg" href="{% url 'website:providers' %}">Join as a Provider</a>
+      </div>
+    </div>
+    {% include "website/partials/hero_art.html" with icons=hero_icons %}
+  </div>
+</section>
+
+<section class="section">
+  <div class="wrap">
+    <h2>Browse by sector</h2>
+    <p class="section-lead">{{ sectors|length }} sectors, one place. Pick a sector to see its services.</p>
+    {% include "website/partials/sector_grid.html" %}
+  </div>
+</section>
+
+<section class="section alt">
+  <div class="wrap">
+    <h2>From search to service</h2>
+    <p class="section-lead">The Top-Link AI customer journey.</p>
+    {% include "website/partials/journey.html" %}
+  </div>
+</section>
+
+<section class="section">
+  <div class="wrap">
+    <h2>How Top-Link AI works</h2>
+    {% include "website/partials/how_it_works.html" %}
+  </div>
+</section>
+
+<section class="section alt">
+  <div class="wrap">
+    <h2>Popular in {{ site.city }}</h2>
+    <ul class="chips chips-lg">
+      {% for slug, label in seo_links %}<li><a href="/{{ slug }}/">{% icon "map-pin" "chip-icon" %}{{ label }} in {{ site.city }}</a></li>{% endfor %}
+    </ul>
+  </div>
+</section>
+
+<section class="section">
+  <div class="wrap split">
+    <div>
+      <h2>Grow your business with Top-Link AI</h2>
+      <p>Create a business profile, list the services you offer, and get in front of local customers.</p>
+      <a class="btn btn-secondary" href="{% url 'website:providers' %}">Learn more for providers</a>
+    </div>
+    <div class="card"><span class="icon-tile">{% icon "users" %}</span><h3>Built for local pros</h3><p>Individuals and businesses alike: add your services, service area and availability once, and manage it from the app.</p></div>
+  </div>
+</section>
+{% include "website/partials/cta_band.html" %}
+{% endblock %}

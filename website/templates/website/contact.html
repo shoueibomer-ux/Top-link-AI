@@ -1,0 +1,26 @@
+{% extends "website/base.html" %}
+{% load website_tags %}
+{% block content %}
+<section class="page-head"><div class="wrap">
+  <h1>Contact Top-Link AI</h1>
+  <p class="lead-dark">Questions about the app, your provider profile, or working with us.</p>
+</div></section>
+<section class="section"><div class="wrap two-col">
+  <div class="card">
+    <span class="icon-tile">{% icon "mail" %}</span>
+    <h2>Email</h2>
+    {% if site.contact_email %}
+    <p><a href="mailto:{{ site.contact_email }}">{{ site.contact_email }}</a></p>
+    <p class="muted-text">We aim to reply within a few business days.</p>
+    {% else %}
+    <p>Our contact address is being set up. Please check back soon.</p>
+    {% endif %}
+  </div>
+  <div class="card">
+    <span class="icon-tile">{% icon "map-pin" %}</span>
+    <h2>Where we work</h2>
+    <p>Top-Link AI serves customers and providers in Edmonton, Calgary, Fort McMurray and Red Deer, Alberta.</p>
+    <p><a class="btn btn-secondary" href="{% url 'website:get-app' %}">Get the app</a></p>
+  </div>
+</div></section>
+{% endblock %}

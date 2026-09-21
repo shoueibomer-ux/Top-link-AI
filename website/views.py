@@ -1,0 +1,185 @@
+import json
+from xml.sax.saxutils import escape
+
+from django.http import Http404, HttpResponse, JsonResponse
+from django.shortcuts import redirect, render
+from django.views.decorators.http import require_GET
+
+from . import config, selectors
+from .content.icons import SEO_PAGE_ICONS
+from .content.pages import (
+    HERO_CLUSTER_HOME,
+    HERO_CLUSTER_PROVIDERS,
+    HOW_IT_WORKS,
+    JOURNEY_STEPS,
+    PROVIDER_FEATURES,
+    TRUST_POINTS,
+)
+from .content.seo_pages import SEO_PAGE_BY_SERVICE, SEO_PAGES
+
+_COMMON = {
+    "journey_steps": JOURNEY_STEPS,
+    "how_it_works": HOW_IT_WORKS,
+    "trust_points": TRUST_POINTS,
+}
+
+
+def _jsonld(data: dict) -> str:
+    # "</" is escaped so the payload can never close its own <script> tag.
+    return json.dumps(data).replace("</", "<\\/")
+
+
+def _meta(title: str, description: str, robots: str = "index,follow") -> dict:
+    return {"meta": {"title": title, "description": description, "robots": robots}}
+
+
+def home(request):
+    seo_links = [(slug, page["breadcrumb"]) for slug, page in SEO_PAGES.items()]
+    meta = _meta(
+        "Top-Link AI | Trusted Local Service Providers",
+        "Top-Link AI connects customers with trusted local service providers including electricians, plumbers, cleaners, contractors, and other professionals.",
+    )
+    return render(request, "website/home.html", {**_COMMON, **meta, "seo_links": seo_links, "hero_icons": HERO_CLUSTER_HOME})
+
+
+def sectors(request):
+    meta = _meta(
+        "All Services and Sectors | Top-Link AI",
+        "Browse every Top-Link AI service: home services, construction and renovation, automotive, business, outdoor, moving and delivery, events and personal services.",
+    )
+    return render(request, "website/sectors.html", {**_COMMON, **meta})
+
+
+def providers(request):
+    meta = _meta(
+        "Join Top-Link AI as a Service Provider",
+        "Register your business on Top-Link AI, list your services and categories, and reach local customers. Manage your provider profile from the app.",
+    )
+    return render(request, "website/providers.html", {**_COMMON, **meta, "provider_features": PROVIDER_FEATURES, "hero_icons": HERO_CLUSTER_PROVIDERS})
+
+
+def how_it_works(request):
+    meta = _meta(
+        "How Top-Link AI Works | From Search to Service",
+        "See how Top-Link AI takes you from a Google search to a local provider: choose a service, compare providers, request the job and connect through the app.",
+    )
+    return render(request, "website/how_it_works.html", {**_COMMON, **meta})
+
+
+def get_app(request):
+    meta = _meta("Get the Top-Link AI App", "Get the Top-Link AI app to request services and manage your provider profile.", "noindex,follow")
+    return render(request, "website/get_app.html", {**meta, "as_provider": request.GET.get("as") == "provider"})
+
+
+def seo_page(request, slug):
+    page = SEO_PAGES.get(slug)
+    if page is None:
+        raise Http404
+    related_slugs = page.get("related_service_slugs", [])
+    related = [s for s in (selectors.get_service(x) for x in related_slugs) if s]
+    url = request.build_absolute_uri()
+    jsonld = [
+        {
+            "@context": "https://schema.org",
+            "@type": "Service",
+            "name": f"{page['keyword'].title()} in {config.CITY}",
+            "serviceType": page["keyword"],
+            "areaServed": {"@type": "City", "name": config.CITY},
+            "provider": {"@type": "Organization", "name": config.SITE_NAME},
+            "description": page["description"],
+            "url": url,
+        },
+        {
+            "@context": "https://schema.org",
+            "@type": "FAQPage",
+            "mainEntity": [
+                {"@type": "Question", "name": q, "acceptedAnswer": {"@type": "Answer", "text": a}}
+                for q, a in page["faqs"]
+            ],
+        },
+        {
+            "@context": "https://schema.org",
+            "@type": "BreadcrumbList",
+            "itemListElement": [
+                {"@type": "ListItem", "position": 1, "name": "Home", "item": request.build_absolute_uri("/")},
+                {"@type": "ListItem", "position": 2, "name": page["breadcrumb"], "item": url},
+            ],
+        },
+    ]
+    return render(
+        request,
+        "website/service_page.html",
+        {
+            **_COMMON,
+            **_meta(page["title"], page["description"]),
+            "page": page,
+            "page_icon": SEO_PAGE_ICONS.get(slug),
+            "related": related,
+            "jsonld": [_jsonld(x) for x in jsonld],
+        },
+    )
+
+
+def service_detail(request, slug):
+    # A service with a dedicated SEO page lives there; the generic page would
+    # be a near-duplicate, so send visitors (and crawlers) to the real one.
+    if slug in SEO_PAGE_BY_SERVICE:
+        return redirect(f"/{SEO_PAGE_BY_SERVICE[slug]}/", permanent=True)
+    service = selectors.get_service(slug)
+    if service is None:
+        raise Http404
+    # noindex until each service has unique copy; the 5 dedicated pages are
+    # the SEO targets, and thin generated pages shouldn't dilute them.
+    meta = _meta(
+        f"{service.name} in {config.CITY} | Top-Link AI",
+        (service.what_we_cover or f"Find {service.name} providers in {config.CITY} with Top-Link AI.")[:155],
+        "noindex,follow",
+    )
+    return render(request, "website/service_detail.html", {**_COMMON, **meta, "service": service})
+
+
+def contact(request):
+    meta = _meta("Contact Top-Link AI", "Get in touch with Top-Link AI about the app, your provider profile, or working with us.")
+    return render(request, "website/contact.html", meta)
+
+
+def privacy(request):
+    meta = _meta("Privacy Policy (Draft) | Top-Link AI", "Draft privacy policy describing what Top-Link AI collects and why.", "noindex,follow")
+    return render(request, "website/privacy.html", meta)
+
+
+def terms(request):
+    meta = _meta("Terms of Service (Draft) | Top-Link AI", "Draft terms of service for Top-Link AI.", "noindex,follow")
+    return render(request, "website/terms.html", meta)
+
+
+def not_found(request, exception=None):
+    """Site-wide 404 (wired up as handler404 in config/urls.py). Unmatched /api/
+    paths get JSON so API clients never receive the website's HTML page."""
+    if request.path.startswith("/api/"):
+        return JsonResponse({"detail": "Not found."}, status=404)
+    meta = _meta("Page not found | Top-Link AI", "The page you were looking for could not be found.", "noindex,follow")
+    return render(request, "404.html", meta, status=404)
+
+
+@require_GET
+def robots_txt(request):
+    lines = [
+        "User-agent: *",
+        "Allow: /",
+        "Disallow: /admin/",
+        "Disallow: /api/",
+        f"Sitemap: {request.build_absolute_uri('/sitemap.xml')}",
+        "",
+    ]
+    return HttpResponse("\n".join(lines), content_type="text/plain")
+
+
+@require_GET
+def sitemap_xml(request):
+    paths = ["/", "/sectors/", "/providers/", "/how-it-works/", "/contact/"] + [f"/{slug}/" for slug in SEO_PAGES]
+    urls = "".join(
+        f"<url><loc>{escape(request.build_absolute_uri(p))}</loc></url>" for p in paths
+    )
+    xml = f'<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">{urls}</urlset>'
+    return HttpResponse(xml, content_type="application/xml")

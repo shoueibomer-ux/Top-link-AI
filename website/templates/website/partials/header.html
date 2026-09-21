@@ -1,0 +1,32 @@
+{% load static %}
+<header class="site-header">
+  <div class="wrap header-row">
+    <a class="brand" href="{% url 'website:home' %}" aria-label="Top-Link AI home">
+      <span class="brand-mark"><img src="{% static 'website/images/logo-roundel.png' %}" alt="" width="36" height="36"></span>
+      <span class="brand-text"><strong>Top-Link AI</strong><small>{{ site.tagline }}</small></span>
+    </a>
+    <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="site-nav" data-nav-toggle>
+      <span class="sr">Menu</span><span class="bars" aria-hidden="true"></span>
+    </button>
+    <nav id="site-nav" class="site-nav" aria-label="Main">
+      <div class="nav-item">
+        <button type="button" class="nav-link menu-btn" aria-expanded="false" aria-controls="services-menu" data-menu-toggle>Services <span aria-hidden="true">▾</span></button>
+        <div id="services-menu" class="mega" hidden>
+          <div class="mega-grid">
+            {% for sector in sectors %}
+            <div class="mega-col">
+              <h3><a href="{% url 'website:sectors' %}#{{ sector.slug }}">{{ sector.name }}</a></h3>
+              <ul>
+                {% for item in sector.items %}<li><a href="{{ item.url }}">{{ item.label }}</a></li>{% endfor %}
+              </ul>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+      <a class="nav-link" href="{% url 'website:how-it-works' %}">How it works</a>
+      <a class="nav-link" href="{% url 'website:providers' %}">For providers</a>
+      <a class="btn btn-primary btn-sm" href="{{ site.app_url }}">Get the app</a>
+    </nav>
+  </div>
+</header>

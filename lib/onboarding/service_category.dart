@@ -136,6 +136,36 @@ IconData iconForName(String name) {
       return Icons.fitness_center;
     case 'school':
       return Icons.school;
+    case 'layers':
+      return Icons.layers;
+    case 'roofing':
+      return Icons.roofing;
+    case 'foundation':
+      return Icons.foundation;
+    case 'kitchen':
+      return Icons.kitchen;
+    case 'bathtub':
+      return Icons.bathtub;
+    case 'delivery_dining':
+      return Icons.delivery_dining;
+    case 'warehouse':
+      return Icons.warehouse;
+    case 'gavel':
+      return Icons.gavel;
+    case 'restaurant':
+      return Icons.restaurant;
+    case 'security':
+      return Icons.security;
+    case 'park':
+      return Icons.park;
+    case 'grass':
+      return Icons.grass;
+    case 'snowing':
+      return Icons.snowing;
+    case 'forest':
+      return Icons.forest;
+    case 'yard':
+      return Icons.yard;
     default:
       return Icons.build;
   }

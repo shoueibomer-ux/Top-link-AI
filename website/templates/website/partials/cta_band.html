@@ -1,0 +1,10 @@
+<section class="cta-band">
+  <div class="wrap">
+    <h2>{{ heading|default:"Ready to find the right provider?" }}</h2>
+    <p>{{ text|default:"Choose a service, compare local providers, and connect through the Top-Link AI app." }}</p>
+    <div class="btn-row">
+      <a class="btn btn-primary" href="{% url 'website:sectors' %}">Find a Service</a>
+      <a class="btn btn-ghost-light" href="{% url 'website:providers' %}">Join as a Provider</a>
+    </div>
+  </div>
+</section>

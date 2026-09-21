@@ -196,6 +196,20 @@ CATEGORY_TAXONOMY = {
     "beauty-services": ["beauty", "makeup", "hair stylist", "salon", "nails", "skincare"],
     "personal-training": ["personal trainer", "fitness training", "workout coach", "nutrition coach"],
     "tutoring": ["tutor", "tutoring", "test prep", "homework help"],
+    "flooring": ["flooring", "hardwood floor", "laminate", "vinyl plank", "tile floor", "carpet install"],
+    "roofing": ["roof", "roofing", "shingle", "eavestrough", "roof leak"],
+    "concrete-work": ["concrete", "driveway", "sidewalk", "foundation", "cement", "slab"],
+    "kitchen-renovation": ["kitchen renovation", "kitchen remodel", "kitchen cabinets", "countertop", "backsplash"],
+    "bathroom-renovation": ["bathroom renovation", "bathroom remodel", "shower install", "bathtub", "vanity"],
+    "delivery-services": ["delivery", "courier", "deliver a package", "same-day delivery"],
+    "storage-services": ["storage", "storage unit", "self storage", "store my"],
+    "legal-services": ["lawyer", "legal", "attorney", "paralegal", "contract review", "notary"],
+    "catering": ["catering", "caterer", "buffet", "event food"],
+    "security-services": ["security guard", "security services", "bouncer", "alarm system", "surveillance"],
+    "lawn-care": ["lawn", "mowing", "lawn mower", "weed control", "aeration"],
+    "snow-removal": ["snow removal", "snow plow", "shovel snow", "ice removal", "plowing"],
+    "tree-services": ["tree removal", "tree trimming", "arborist", "stump", "tree service"],
+    "landscaping": ["landscaping", "landscaper", "garden design", "sod", "retaining wall"],
 }
 
 # The category names shown to the AI classifier, mapped to this module's
@@ -232,6 +246,20 @@ CATEGORY_DISPLAY_NAMES = {
     "beauty-services": "Beauty services",
     "personal-training": "Personal training",
     "tutoring": "Tutoring",
+    "flooring": "Flooring",
+    "roofing": "Roofing",
+    "concrete-work": "Concrete work",
+    "kitchen-renovation": "Kitchen renovation",
+    "bathroom-renovation": "Bathroom renovation",
+    "delivery-services": "Delivery services",
+    "storage-services": "Storage services",
+    "legal-services": "Legal services",
+    "catering": "Catering",
+    "security-services": "Security services",
+    "lawn-care": "Lawn care",
+    "snow-removal": "Snow removal",
+    "tree-services": "Tree services",
+    "landscaping": "Landscaping",
 }
 _DISPLAY_NAME_TO_SLUG = {name: slug for slug, name in CATEGORY_DISPLAY_NAMES.items()}
 _CLAUDE_MODEL = "claude-sonnet-4-6"

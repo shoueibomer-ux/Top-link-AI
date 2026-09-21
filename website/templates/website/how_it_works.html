@@ -1,0 +1,17 @@
+{% extends "website/base.html" %}
+{% block content %}
+<section class="page-head"><div class="wrap">
+  <h1>How Top-Link AI works</h1>
+  <p class="lead-dark">From search to service in a few steps.</p>
+</div></section>
+<section class="section"><div class="wrap">{% include "website/partials/how_it_works.html" %}</div></section>
+<section class="section alt"><div class="wrap">
+  <h2>The customer journey</h2>
+  {% include "website/partials/journey.html" %}
+</div></section>
+<section class="section"><div class="wrap">
+  <h2>How we help you choose</h2>
+  {% include "website/partials/trust.html" %}
+</div></section>
+{% include "website/partials/cta_band.html" %}
+{% endblock %}

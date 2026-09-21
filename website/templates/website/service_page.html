@@ -1,0 +1,56 @@
+{% extends "website/base.html" %}
+{% load website_tags %}
+{% block head %}{% for block in jsonld %}<script type="application/ld+json">{{ block|safe }}</script>{% endfor %}{% endblock %}
+{% block content %}
+<section class="hero hero-sm"><div class="wrap hero-inner">
+  <nav class="crumbs" aria-label="Breadcrumb"><a href="{% url 'website:home' %}">Home</a> / <span>{{ page.breadcrumb }}</span></nav>
+  <div class="title-row">
+    <span class="icon-tile icon-tile-hero">{% if page.service_slug %}{% service_icon page.service_slug %}{% else %}{% icon page_icon %}{% endif %}</span>
+    <div>
+      <span class="cat-chip">{{ site.city }}</span>
+      <h1>{{ page.h1 }}</h1>
+    </div>
+  </div>
+  <p class="lead">{{ page.intro }}</p>
+  <div class="btn-row">
+    <a class="btn btn-primary btn-lg" href="{{ site.app_url }}{% if page.service_slug %}?service={{ page.service_slug }}{% endif %}">Request this service</a>
+    <a class="btn btn-ghost-light btn-lg" href="{% url 'website:sectors' %}">Browse all services</a>
+  </div>
+</div></section>
+
+<section class="section"><div class="wrap two-col">
+  <div>
+    <h2>What's covered</h2>
+    <ul class="ticks">{% for c in page.covers %}<li>{{ c }}</li>{% endfor %}</ul>
+  </div>
+  <div>
+    <h2>When to get in touch</h2>
+    <ul class="ticks">{% for w in page.when %}<li>{{ w }}</li>{% endfor %}</ul>
+  </div>
+</div></section>
+
+{% if related %}
+<section class="section alt"><div class="wrap">
+  <h2>Related services</h2>
+  <ul class="chips chips-lg">{% for s in related %}<li><a href="/services/{{ s.slug }}/">{% service_icon s.slug "chip-icon" %}{{ s.name }}</a></li>{% endfor %}</ul>
+</div></section>
+{% endif %}
+
+<section class="section"><div class="wrap">
+  <h2>How Top-Link AI works</h2>
+  {% include "website/partials/how_it_works.html" %}
+</div></section>
+
+<section class="section alt"><div class="wrap">
+  <h2>How we help you find trusted providers in {{ site.city }}</h2>
+  {% include "website/partials/trust.html" %}
+</div></section>
+
+<section class="section"><div class="wrap narrow">
+  <h2>Frequently asked questions</h2>
+  {% for q, a in page.faqs %}
+  <details class="faq"><summary>{{ q }}</summary><p>{{ a }}</p></details>
+  {% endfor %}
+</div></section>
+{% include "website/partials/cta_band.html" with heading="Find your provider in Edmonton" text="Request the service in the Top-Link AI app and connect with local providers." %}
+{% endblock %}

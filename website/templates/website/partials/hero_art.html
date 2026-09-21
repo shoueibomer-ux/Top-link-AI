@@ -1,0 +1,4 @@
+{% load website_tags %}
+<div class="hero-art" aria-hidden="true">
+  {% for ic in icons %}<span class="art-tile art-{{ forloop.counter }}">{% icon ic %}</span>{% endfor %}
+</div>

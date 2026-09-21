@@ -1,0 +1,13 @@
+{% load website_tags %}
+<ul class="sector-grid">
+  {% for sector in sectors %}
+  <li>
+    <a class="sector-card" href="{% url 'website:sectors' %}#{{ sector.slug }}">
+      <span class="icon-tile icon-tile-lg">{% sector_icon sector.slug %}</span>
+      <h3>{{ sector.name }}</h3>
+      <p>{{ sector.blurb }}</p>
+      <span class="sector-count">{{ sector.items|length }} services {% icon "arrow-right" "arrow" %}</span>
+    </a>
+  </li>
+  {% endfor %}
+</ul>

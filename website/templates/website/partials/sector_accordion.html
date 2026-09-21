@@ -1,0 +1,16 @@
+{% load website_tags %}
+<div class="accordion">
+  {% for sector in sectors %}
+  <details id="{{ sector.slug }}" class="sector"{% if open_first and forloop.first %} open{% endif %}>
+    <summary>
+      <span class="icon-tile">{% sector_icon sector.slug %}</span>
+      <span class="sector-name">{{ sector.name }}</span>
+      <small>{{ sector.items|length }} services</small>
+    </summary>
+    <p class="sector-blurb">{{ sector.blurb }}</p>
+    <ul class="chips">
+      {% for item in sector.items %}<li><a href="{{ item.url }}">{% service_icon item.service_slug "chip-icon" %}{{ item.label }}</a></li>{% endfor %}
+    </ul>
+  </details>
+  {% endfor %}
+</div>

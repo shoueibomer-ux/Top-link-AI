@@ -19,7 +19,7 @@ class TopLinkApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Top Link AI',
+      title: 'Top-Link AI',
       theme: ThemeData(
         useMaterial3: true,
         scaffoldBackgroundColor: AppColors.lightBackground,

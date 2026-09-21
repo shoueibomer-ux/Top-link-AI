@@ -45,7 +45,7 @@ class AboutUsPage extends StatelessWidget {
                 boxShadow: kCardShadow,
               ),
               child: const Text(
-                'Top Link AI connects clients with trusted local service '
+                'Top-Link AI connects clients with trusted local service '
                 'providers using AI-powered matching. We started in Edmonton, '
                 'Alberta, with a simple goal: make it fast and easy to find '
                 'the right professional for any job — starting with skilled '

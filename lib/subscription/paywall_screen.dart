@@ -111,7 +111,7 @@ class _PaywallScreenState extends State<PaywallScreen> {
               const Icon(Icons.workspace_premium, size: 64, color: AppColors.turquoise),
               const SizedBox(height: 24),
               const Text(
-                'Unlock Top Link AI',
+                'Unlock Top-Link AI',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: AppColors.navy),
               ),
