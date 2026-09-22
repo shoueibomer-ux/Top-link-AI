@@ -149,7 +149,7 @@ class _HomeTab extends StatelessWidget {
           const _EmptyProvidersNotice()
         else
           for (final provider in providers) ...[
-            RealProviderCard(provider: provider, onDismiss: () => onDismiss(provider)),
+            RealProviderCard(provider: provider, category: category.slug, onDismiss: () => onDismiss(provider)),
             const SizedBox(height: 14),
           ],
         const SizedBox(height: 12),

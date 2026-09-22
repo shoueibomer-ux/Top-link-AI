@@ -2,11 +2,14 @@ from django.db import models
 
 
 class ProviderMatch(models.Model):
-    """A real (Google Places) provider a subscribed device has unlocked full
-    contact details for. Also doubles as this app's client "request" record
-    for the status pipeline (see STATUS_CHOICES) — there's no separate
-    booking model, so each device+provider pairing found through search IS
-    the request/booking unit.
+    """The client's request/connection record for one real (Google Places)
+    provider — created ONLY when a device actually unlocks that provider's
+    full contact details (see provider_search.views.ProviderUnlockView), not
+    merely because the provider showed up in a search result. A provider
+    appearing in `search_providers()` results is ephemeral (see
+    ServiceRequest.status / STATUS_FOUND) until a client explicitly unlocks
+    it, at which point this row is created and the client's device gains
+    permanent access to the real phone/address/website for that provider.
 
     NOTE: identifies "the client" by `device_id`, not a FK to Django's User
     model — this app has no login/signup system, so there's no User row to
@@ -17,22 +20,32 @@ class ProviderMatch(models.Model):
     """
 
     STATUS_SEARCHING = "searching"
-    STATUS_MATCHED = "matched"
+    STATUS_FOUND = "found"
+    STATUS_REQUESTED = "requested"
+    STATUS_RESPONDED = "responded"
     STATUS_CONTACTED = "contacted"
     STATUS_BOOKED = "booked"
     STATUS_IN_PROGRESS = "in_progress"
     STATUS_COMPLETED = "completed"
     STATUS_CANCELLED = "cancelled"
     STATUS_ARCHIVED = "archived"
+    # Retired: rows created before the unlock-gated flow default to this.
+    # Kept only so old data and ProviderMatchStatusView can still read/set
+    # it if ever needed — no longer offered as a fresh default or (in the
+    # Flutter app) as a manual status choice.
+    STATUS_MATCHED = "matched"
     STATUS_CHOICES = [
         (STATUS_SEARCHING, "Searching"),
-        (STATUS_MATCHED, "Matched"),
+        (STATUS_FOUND, "Found"),
+        (STATUS_REQUESTED, "Requested"),
+        (STATUS_RESPONDED, "Responded"),
         (STATUS_CONTACTED, "Contacted"),
         (STATUS_BOOKED, "Booked"),
         (STATUS_IN_PROGRESS, "In Progress"),
         (STATUS_COMPLETED, "Completed"),
         (STATUS_CANCELLED, "Cancelled"),
         (STATUS_ARCHIVED, "Archived"),
+        (STATUS_MATCHED, "Matched (legacy)"),
     ]
 
     device_id = models.CharField(max_length=64)
@@ -49,16 +62,28 @@ class ProviderMatch(models.Model):
     provider_phone = models.CharField(max_length=50, blank=True)
     provider_address = models.CharField(max_length=500, blank=True)
     provider_website = models.URLField(max_length=500, blank=True)
+    # How this unlock was paid for — "subscription" (device had an active
+    # Subscription at unlock time, no charge) or "paid" (one-off $4.99,
+    # trusted from the client same as SubscriptionActivateView — there's no
+    # real payment processor wired up for this yet either). Blank on rows
+    # created before this field existed.
+    UNLOCK_METHOD_SUBSCRIPTION = "subscription"
+    UNLOCK_METHOD_PAID = "paid"
+    UNLOCK_METHOD_CHOICES = [
+        (UNLOCK_METHOD_SUBSCRIPTION, "Subscription"),
+        (UNLOCK_METHOD_PAID, "Paid ($4.99)"),
+    ]
+    unlock_method = models.CharField(max_length=20, choices=UNLOCK_METHOD_CHOICES, blank=True)
     # The free-text problem description that led to this match, when it
     # came from the chat flow (see ChatRefineView) — blank for matches found
     # via the fixed category-tap onboarding flow, since there's no free text
     # to capture there. Never backfilled/fabricated for older rows.
     problem_description = models.TextField(blank=True)
-    # A row only ever gets created once search has already found a real
-    # provider for this device, so "matched" (not "searching") is the
-    # correct default — "searching" exists as a status the client can be
-    # moved back to, not one rows start in.
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_MATCHED)
+    # A row only ever gets created by an explicit unlock (see this model's
+    # docstring), so "requested" — a real request was just sent — is the
+    # correct default, never "searching"/"found" (those describe a provider
+    # that doesn't have a row here yet) and never "matched" (retired).
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_REQUESTED)
     first_unlocked_at = models.DateTimeField(auto_now_add=True)
     last_viewed_at = models.DateTimeField(auto_now=True)
 

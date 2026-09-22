@@ -199,7 +199,7 @@ class _MessageBubble extends StatelessWidget {
             if (result != null && result.providers.isNotEmpty) ...[
               const SizedBox(height: 12),
               for (final provider in result.providers) ...[
-                RealProviderCard(provider: provider),
+                RealProviderCard(provider: provider, category: result.category!),
                 const SizedBox(height: 10),
               ],
             ],

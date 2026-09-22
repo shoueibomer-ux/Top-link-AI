@@ -7,7 +7,7 @@ class ChatRefineResult {
     required this.category,
     required this.urgency,
     required this.notes,
-    required this.subscriptionRequired,
+    required this.isSubscribed,
     required this.providers,
   });
 
@@ -19,7 +19,7 @@ class ChatRefineResult {
       category: json['category'] as String?,
       urgency: json['urgency'] as String? ?? 'exploring',
       notes: json['notes'] as String? ?? '',
-      subscriptionRequired: json['subscription_required'] as bool? ?? false,
+      isSubscribed: json['is_subscribed'] as bool? ?? false,
       providers: providers,
     );
   }
@@ -29,6 +29,7 @@ class ChatRefineResult {
   final String? category;
   final String urgency;
   final String notes;
-  final bool subscriptionRequired;
+  // See ProviderSearchResult.isSubscribed — a hint only, not a gate.
+  final bool isSubscribed;
   final List<RealProvider> providers;
 }

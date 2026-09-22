@@ -103,7 +103,11 @@ class _CategoryDetailPageState extends State<CategoryDetailPage> {
                       return Column(
                         children: [
                           for (final provider in providers) ...[
-                            RealProviderCard(provider: provider, onDismiss: () => _dismiss(provider)),
+                            RealProviderCard(
+                              provider: provider,
+                              category: widget.category.slug,
+                              onDismiss: () => _dismiss(provider),
+                            ),
                             const SizedBox(height: 14),
                           ],
                         ],

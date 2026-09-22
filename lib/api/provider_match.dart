@@ -27,7 +27,7 @@ class ProviderMatchRecord {
       providerAddress: json['provider_address'] as String? ?? '',
       providerWebsite: json['provider_website'] as String? ?? '',
       problemDescription: json['problem_description'] as String? ?? '',
-      status: json['status'] as String? ?? ProviderMatchStatus.matched,
+      status: json['status'] as String? ?? ProviderMatchStatus.requested,
       firstUnlockedAt: DateTime.parse(json['first_unlocked_at'] as String),
       lastViewedAt: DateTime.parse(json['last_viewed_at'] as String),
     );
@@ -48,10 +48,15 @@ class ProviderMatchRecord {
   final DateTime lastViewedAt;
 }
 
-/// Mirrors provider_search.models.ProviderMatch.STATUS_CHOICES.
+/// Mirrors provider_search.models.ProviderMatch.STATUS_CHOICES — minus
+/// "searching"/"found" (those describe a provider search hasn't produced an
+/// unlocked entry for yet, so a ProviderMatch row can never actually hold
+/// them — see ProviderMatch's docstring) and "matched" (retired: rows are
+/// no longer auto-created on search, so nothing is ever created in that
+/// state anymore; still handled by [label]'s fallback if old data has it).
 class ProviderMatchStatus {
-  static const searching = 'searching';
-  static const matched = 'matched';
+  static const requested = 'requested';
+  static const responded = 'responded';
   static const contacted = 'contacted';
   static const booked = 'booked';
   static const inProgress = 'in_progress';
@@ -59,17 +64,18 @@ class ProviderMatchStatus {
   static const cancelled = 'cancelled';
   static const archived = 'archived';
 
-  static const all = [searching, matched, contacted, booked, inProgress, completed, cancelled, archived];
+  static const all = [requested, responded, contacted, booked, inProgress, completed, cancelled, archived];
 
   static String label(String status) => switch (status) {
-        searching => 'Searching',
-        matched => 'Matched',
+        requested => 'Requested',
+        responded => 'Responded',
         contacted => 'Contacted',
         booked => 'Booked',
         inProgress => 'In Progress',
         completed => 'Completed',
         cancelled => 'Cancelled',
         archived => 'Archived',
+        'matched' => 'Matched', // legacy rows only — never a fresh default
         _ => status,
       };
 }

@@ -6,10 +6,10 @@ from .models import ProviderAvailability, ProviderMatch, ProviderOnboarding, Ser
 @admin.register(ProviderMatch)
 class ProviderMatchAdmin(admin.ModelAdmin):
     list_display = (
-        "id", "device_id", "provider_name", "category", "city", "status",
+        "id", "device_id", "provider_name", "category", "city", "status", "unlock_method",
         "service_request", "first_unlocked_at", "last_viewed_at",
     )
-    list_filter = ("category", "city", "status")
+    list_filter = ("category", "city", "status", "unlock_method")
     search_fields = ("device_id", "provider_name", "place_id")
     date_hierarchy = "first_unlocked_at"
 

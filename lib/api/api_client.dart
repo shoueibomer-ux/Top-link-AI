@@ -21,6 +21,15 @@ class ApiException implements Exception {
   String toString() => message;
 }
 
+/// Thrown by [ApiClient.unlockProvider] when the backend responds 402 —
+/// this device isn't subscribed and didn't set `paid: true`. The UI uses
+/// this to offer "pay $4.99 or subscribe" rather than a generic error.
+class PaymentRequiredException extends ApiException {
+  PaymentRequiredException(super.message, {required this.priceUsd});
+
+  final String priceUsd;
+}
+
 // The Android emulator can't reach the host machine via "localhost" — that
 // resolves to the emulator itself. 10.0.2.2 is its alias for the host.
 String _defaultBaseUrl() {
@@ -65,13 +74,11 @@ class ApiClient {
       };
 
   /// Real providers for a category/city via Google Places (see
-  /// provider_search.views.ProviderSearchView) — gated by the same
-  /// device-based Subscription used everywhere else. Subscribed devices get
-  /// full contact details; unsubscribed devices get a masked preview
-  /// (RealProvider.hasFullDetails is false and result.subscriptionRequired
-  /// is true), which in practice should only happen if a subscription
-  /// lapses between the paywall check and this call, since AppEntryPoint
-  /// already gates the rest of the app behind an active subscription.
+  /// provider_search.views.ProviderSearchView). Every result is masked
+  /// (RealProvider.isUnlocked is false, phone is a masked string, address/
+  /// website/mapsUrl are null) unless this device already unlocked that
+  /// specific provider — see [unlockProvider]. `result.isSubscribed` is
+  /// only a hint for that unlock prompt's copy, not a gate on this call.
   Future<ProviderSearchResult> searchRealProviders({
     required String category,
     required String city,
@@ -87,6 +94,50 @@ class ApiClient {
       throw ApiException('Could not search providers (${response.statusCode}).');
     }
     return ProviderSearchResult.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
+  /// See provider_search.views.ProviderUnlockView — the only way a real
+  /// phone/address/website is ever revealed, and the only way a "Your
+  /// requests" entry is created. Free (no `paid` flag needed) if this
+  /// device has an active subscription; otherwise pass `paid: true` only
+  /// after the client has actually gone through the $4.99 purchase flow
+  /// (see ProviderUnlockDialog) — calling this with `paid: true` unprompted
+  /// would just be lying to the backend about having paid, so callers must
+  /// not do that.
+  ///
+  /// Throws [PaymentRequiredException] (never a raw 402 status check by
+  /// callers) when neither condition holds, so the UI can offer "pay $4.99
+  /// or subscribe" instead of a generic error.
+  Future<RealProvider> unlockProvider({
+    required String deviceId,
+    required String placeId,
+    required String category,
+    required String city,
+    bool paid = false,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/providers/unlock/'),
+      headers: _headers,
+      body: jsonEncode({
+        'device_id': deviceId,
+        'place_id': placeId,
+        'category': category,
+        'city': city,
+        if (paid) 'paid': true,
+      }),
+    );
+    if (response.statusCode == 402) {
+      final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+      throw PaymentRequiredException(
+        decoded['detail'] as String? ?? 'Subscribe or pay to unlock this provider.',
+        priceUsd: decoded['price_usd'] as String? ?? '4.99',
+      );
+    }
+    if (response.statusCode != 200) {
+      throw ApiException(_firstErrorMessage(response.body) ?? 'Could not unlock this provider.');
+    }
+    final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+    return RealProvider.fromJson(decoded['provider'] as Map<String, dynamic>);
   }
 
   Future<SubscriptionStatus> getSubscriptionStatus(String deviceId) async {

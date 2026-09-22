@@ -4,10 +4,9 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 
 from matching.models import Subscription
-from notifications.services import notify
 from .chat_service import refine_request
 from .models import ProviderAvailability, ProviderMatch, ProviderOnboarding, ServiceRequest
-from .serializers import ProviderMatchSerializer, ProviderOnboardingSerializer
+from .serializers import ProviderMatchSerializer, ProviderOnboardingSerializer, RealProviderSerializer
 from .services import (
     CATEGORY_QUERIES,
     CITIES,
@@ -16,6 +15,8 @@ from .services import (
     recent_contact_counts,
     search_providers,
 )
+
+UNLOCK_PRICE_USD = "4.99"
 
 
 def _is_subscribed(device_id: str) -> bool:
@@ -27,13 +28,20 @@ def _is_subscribed(device_id: str) -> bool:
     return True
 
 
-def _mask_phone(phone: str) -> str:
-    """First 4 characters visible, the rest replaced with dots — enough to
-    show a real number exists without giving away a way to contact it."""
-    if not phone:
-        return ""
-    visible = phone[:4]
-    return visible + "•" * max(len(phone) - len(visible), 0)
+def _enrich(providers: list[dict], city: str) -> None:
+    """Attaches the fields every provider gets regardless of unlock state —
+    city, social proof, availability, and the response-time estimate — in
+    place, on the raw search_providers() dicts."""
+    place_ids = [provider["place_id"] for provider in providers if provider["place_id"]]
+    contact_counts = recent_contact_counts(place_ids)
+    availability = availability_map(place_ids)
+    for provider in providers:
+        provider["city"] = city
+        provider["recent_contact_count"] = contact_counts.get(provider["place_id"], 0)
+        provider["is_available_now"] = availability.get(provider["place_id"], True)
+        provider["estimated_response_minutes"] = (
+            estimated_response_minutes(provider["place_id"]) if provider["place_id"] else None
+        )
 
 
 def _search_and_record(
@@ -45,10 +53,14 @@ def _search_and_record(
     classification: dict | None = None,
 ) -> dict:
     """Shared by ProviderSearchView and ChatRefineView: search Google Places
-    for `category`/`city`, then either mask the results (no subscription) or
-    record each as a ProviderMatch and notify on newly-seen providers
-    (subscribed). Returns the dict to use directly as a Response body, or
-    raises RuntimeError/requests.RequestException same as search_providers.
+    for `category`/`city`, then serialize every result through
+    RealProviderSerializer, which masks the phone and omits address/website/
+    maps_url for any place_id this device hasn't unlocked yet (see
+    ProviderUnlockView — that is the ONLY place a ProviderMatch row, and
+    therefore a device's unlock of a specific provider, gets created).
+    Appearing in these results never creates one. Returns the dict to use
+    directly as a Response body, or raises RuntimeError/requests.RequestException
+    same as search_providers.
 
     `problem_description` is only ever non-blank when called from the chat
     flow (see ChatRefineView) — the fixed category-tap flow has no free text
@@ -58,11 +70,8 @@ def _search_and_record(
 
     Build plan Phase 1A, task 4: every call creates a ServiceRequest — the
     "job" anchor Phase 1B's matching and Phase 1C's Leads read from — even
-    for an unsubscribed preview search, since the request itself exists
-    independently of whether the client can see full contact details yet.
-    ProviderMatch rows created below are linked to it via the nullable
-    `service_request` FK; this does not change ProviderMatch's own shape or
-    the History tab's API.
+    when no provider is ever unlocked from it, since the request itself
+    exists independently of whether the client unlocks any contact details.
     """
     classification = classification or {}
     service_request = ServiceRequest.objects.create(
@@ -79,86 +88,39 @@ def _search_and_record(
     )
 
     providers = search_providers(category, city, force_refresh=force_refresh)
-    place_ids = [provider["place_id"] for provider in providers if provider["place_id"]]
+    _enrich(providers, city)
 
-    # Social proof and the availability badge are shown on both masked and
-    # full cards — engagement/availability signal is useful before someone
-    # subscribes too. Response-time is only meaningful once a client has
-    # actually unlocked a provider, so it's attached to full results only.
-    contact_counts = recent_contact_counts(place_ids)
-    availability = availability_map(place_ids)
-    for provider in providers:
-        provider["recent_contact_count"] = contact_counts.get(provider["place_id"], 0)
-        provider["is_available_now"] = availability.get(provider["place_id"], True)
+    # "Found" (not "searching") now that real results exist for this
+    # request — still not "requested": no provider has been unlocked yet.
+    if providers:
+        service_request.status = ProviderMatch.STATUS_FOUND
+        service_request.save(update_fields=["status", "updated_at"])
 
-    if not _is_subscribed(device_id):
-        preview = [
-            {
-                "name": provider["name"],
-                "rating": provider["rating"],
-                "rating_count": provider["rating_count"],
-                "phone": _mask_phone(provider["phone"]),
-                "recent_contact_count": provider["recent_contact_count"],
-                "is_available_now": provider["is_available_now"],
-            }
-            for provider in providers
-        ]
-        return {"subscription_required": True, "providers": preview, "service_request_id": service_request.id}
-
-    new_provider_count = 0
-    for provider in providers:
-        if not provider["place_id"]:
-            continue
-        provider["estimated_response_minutes"] = estimated_response_minutes(provider["place_id"])
-        defaults = {
-            "category": category,
-            "city": city,
-            "provider_name": provider["name"],
-            "provider_phone": provider["phone"],
-            "provider_address": provider["address"],
-            "provider_website": provider["website"],
-            # Always points at the request that most recently touched this
-            # row — later plain (non-chat) searches re-touching a match
-            # still attach it to their own ServiceRequest.
-            "service_request": service_request,
-        }
-        # Only set when we actually have one — a later plain (non-chat)
-        # search re-touching this row must not blank out a description a
-        # previous chat search already recorded.
-        if problem_description:
-            defaults["problem_description"] = problem_description
-        _, created = ProviderMatch.objects.update_or_create(
-            device_id=device_id,
-            place_id=provider["place_id"],
-            defaults=defaults,
+    place_ids = {provider["place_id"] for provider in providers if provider["place_id"]}
+    unlocked_place_ids = set(
+        ProviderMatch.objects.filter(device_id=device_id, place_id__in=place_ids).values_list(
+            "place_id", flat=True
         )
-        if created:
-            new_provider_count += 1
+    )
 
-    # Only notify when this device hasn't seen these providers before —
-    # otherwise re-opening the same category/city would spam a
-    # notification on every preview.
-    if new_provider_count > 0:
-        plural = "s" if new_provider_count != 1 else ""
-        notify(
-            device_id,
-            f"{new_provider_count} new {category} provider{plural} found",
-            f"We found {new_provider_count} verified provider{plural} in {city} ready to help.",
-            category=category,
-        )
-
-    return {"subscription_required": False, "providers": providers, "service_request_id": service_request.id}
+    data = RealProviderSerializer(providers, many=True, context={"unlocked_place_ids": unlocked_place_ids}).data
+    return {
+        "is_subscribed": _is_subscribed(device_id),
+        "providers": data,
+        "service_request_id": service_request.id,
+    }
 
 
 class ProviderSearchView(APIView):
     """GET /api/providers/search/?category=&city=&device_id=[&force_refresh=true]
 
-    Real providers via Google Places (see provider_search.services), gated
-    behind the same device-based Subscription used everywhere else in this
-    app (matching.models.Subscription / matching.views.SubscriptionStatusView):
-    subscribed devices get full contact info and every provider they see is
-    recorded in ProviderMatch; unsubscribed devices get a masked preview and
-    `subscription_required: true`.
+    Real providers via Google Places (see provider_search.services). Every
+    result is masked (see RealProviderSerializer) unless this device has
+    already unlocked that specific place_id via ProviderUnlockView — an
+    active Subscription does NOT change this response; it only means the
+    device's next unlock of any one provider will be free instead of
+    charging $4.99. `is_subscribed` is included as a hint for the client's
+    unlock-prompt copy, not as a gate on this endpoint's data.
     """
 
     def get(self, request):
@@ -217,7 +179,7 @@ class ChatRefineView(APIView):
                 "category": None,
                 "urgency": refined["urgency"],
                 "notes": refined["notes"],
-                "subscription_required": False,
+                "is_subscribed": _is_subscribed(device_id),
                 "providers": [],
             })
 
@@ -242,6 +204,100 @@ class ChatRefineView(APIView):
             "required_qualifications": refined["required_qualifications"],
             **result,
         })
+
+
+class ProviderUnlockView(APIView):
+    """POST /api/providers/unlock/ {"device_id", "place_id", "category", "city", "paid": bool}
+
+    The ONLY place a real phone number, address, or website is ever
+    revealed, and the ONLY place a ProviderMatch ("Your requests" entry) is
+    ever created — never as a side effect of search (see
+    provider_search.views._search_and_record / RealProviderSerializer).
+
+    Access is granted if the device has an active Subscription (free,
+    unlimited), or if the client sets `"paid": true` (a one-off $4.99
+    unlock). Like SubscriptionActivateView, `paid` is trusted from the
+    client — there is no real payment processor wired up for this
+    consumable purchase yet either; this is enough to exercise the gate
+    end-to-end, not to bill anyone for real.
+
+    Re-unlocking a provider this device already unlocked is a no-op that
+    just refreshes its contact details and returns 200 — it never resets
+    `status` or `unlock_method` on an existing row.
+    """
+
+    def post(self, request):
+        device_id = request.data.get("device_id")
+        place_id = request.data.get("place_id")
+        category = request.data.get("category")
+        city = request.data.get("city")
+        paid = request.data.get("paid") is True
+
+        if not device_id:
+            return Response({"detail": "device_id is required."}, status=400)
+        if not place_id:
+            return Response({"detail": "place_id is required."}, status=400)
+        if category not in CATEGORY_QUERIES:
+            return Response(
+                {"detail": f"category is required and must be one of {list(CATEGORY_QUERIES)}."}, status=400
+            )
+        if city not in CITIES:
+            return Response({"detail": f"city is required and must be one of {CITIES}."}, status=400)
+
+        subscribed = _is_subscribed(device_id)
+        if not subscribed and not paid:
+            return Response(
+                {
+                    "detail": f"Subscribe or pay ${UNLOCK_PRICE_USD} to unlock this provider's contact details.",
+                    "price_usd": UNLOCK_PRICE_USD,
+                },
+                status=402,
+            )
+
+        try:
+            providers = search_providers(category, city)
+        except RuntimeError as exc:
+            return Response({"detail": str(exc)}, status=503)
+        except requests.RequestException:
+            return Response({"detail": "Could not reach the provider search service."}, status=502)
+
+        provider = next((p for p in providers if p["place_id"] == place_id), None)
+        if provider is None:
+            return Response(
+                {"detail": "That provider wasn't found for this category/city — try searching again."}, status=404
+            )
+
+        service_request = (
+            ServiceRequest.objects.filter(device_id=device_id, category=category, city=city)
+            .order_by("-created_at")
+            .first()
+        )
+        match, created = ProviderMatch.objects.get_or_create(
+            device_id=device_id,
+            place_id=place_id,
+            defaults={
+                "category": category,
+                "city": city,
+                "provider_name": provider["name"],
+                "provider_phone": provider["phone"],
+                "provider_address": provider["address"],
+                "provider_website": provider["website"],
+                "service_request": service_request,
+                "unlock_method": (
+                    ProviderMatch.UNLOCK_METHOD_SUBSCRIPTION if subscribed else ProviderMatch.UNLOCK_METHOD_PAID
+                ),
+            },
+        )
+        if not created:
+            match.provider_name = provider["name"]
+            match.provider_phone = provider["phone"]
+            match.provider_address = provider["address"]
+            match.provider_website = provider["website"]
+            match.save(update_fields=["provider_name", "provider_phone", "provider_address", "provider_website", "last_viewed_at"])
+
+        _enrich([provider], city)
+        data = RealProviderSerializer(provider, context={"unlocked_place_ids": {place_id}}).data
+        return Response({"provider": data, "match_id": match.id, "match_status": match.status}, status=200)
 
 
 class ProviderMatchListView(APIView):

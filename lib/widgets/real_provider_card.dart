@@ -4,11 +4,17 @@ import 'package:flutter/services.dart';
 import '../api/real_provider.dart';
 import '../app_colors.dart';
 import '../app_styles.dart';
+import 'unlock_provider_dialog.dart';
 
 class RealProviderCard extends StatefulWidget {
-  const RealProviderCard({super.key, required this.provider, this.onDismiss});
+  const RealProviderCard({super.key, required this.provider, required this.category, this.onDismiss});
 
   final RealProvider provider;
+
+  // Slug for the category this provider was found under — needed to call
+  // ProviderUnlockView, which re-looks-up the provider's real contact
+  // details server-side rather than trusting anything the client sends.
+  final String category;
 
   // Called when the user marks this provider "not interested" — the parent
   // is responsible for removing it from whatever list it's rendering from.
@@ -23,9 +29,23 @@ class _RealProviderCardState extends State<RealProviderCard> {
   // Bookmarking is local-only for now — nothing backs it on the server yet.
   bool _isSaved = false;
 
+  // A local, mutable copy — replaced in place once this provider is
+  // unlocked (from the card's CTA or the details sheet), so the card and
+  // any open sheet both reflect it immediately without re-searching.
+  late RealProvider _provider = widget.provider;
+
+  Future<void> _unlock(BuildContext context) async {
+    final unlocked = await showUnlockProviderDialog(
+      context,
+      provider: _provider,
+      category: widget.category,
+    );
+    if (unlocked != null && mounted) setState(() => _provider = unlocked);
+  }
+
   @override
   Widget build(BuildContext context) {
-    final provider = widget.provider;
+    final provider = _provider;
     // The ripple lives on a Material above the decorated Container, so the
     // card's border and background don't hide it.
     return Container(
@@ -38,14 +58,14 @@ class _RealProviderCardState extends State<RealProviderCard> {
           onTap: () => _showDetails(context),
           child: Padding(
             padding: const EdgeInsets.fromLTRB(20, 10, 8, 20),
-            child: _buildContent(provider),
+            child: _buildContent(context, provider),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildContent(RealProvider provider) {
+  Widget _buildContent(BuildContext context, RealProvider provider) {
     return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -126,7 +146,9 @@ class _RealProviderCardState extends State<RealProviderCard> {
                           ],
                         ),
                       ],
-                      if (provider.address != null) ...[
+                      // Full street address once unlocked; just the city
+                      // (free/descriptive) before that.
+                      if (provider.hasFullDetails && provider.address != null) ...[
                         const SizedBox(height: 4),
                         Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -139,6 +161,15 @@ class _RealProviderCardState extends State<RealProviderCard> {
                                 style: TextStyle(fontSize: 13, color: AppColors.mutedText),
                               ),
                             ),
+                          ],
+                        ),
+                      ] else if (!provider.hasFullDetails && provider.city != null) ...[
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            Icon(Icons.location_on_outlined, size: 14, color: AppColors.mutedText),
+                            const SizedBox(width: 4),
+                            Text(provider.city!, style: TextStyle(fontSize: 13, color: AppColors.mutedText)),
                           ],
                         ),
                       ],
@@ -172,11 +203,8 @@ class _RealProviderCardState extends State<RealProviderCard> {
                         ),
                       ],
                       if (!provider.hasFullDetails) ...[
-                        const SizedBox(height: 6),
-                        const Text(
-                          'Subscribe to see full contact details',
-                          style: TextStyle(fontSize: 12, fontStyle: FontStyle.italic, color: AppColors.turquoise),
-                        ),
+                        const SizedBox(height: 8),
+                        UnlockCtaButton(onTap: () => _unlock(context)),
                       ],
                     ],
                   ),
@@ -202,7 +230,13 @@ class _RealProviderCardState extends State<RealProviderCard> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(kCardRadius)),
       ),
-      builder: (_) => ProviderDetailsSheet(provider: widget.provider),
+      builder: (_) => ProviderDetailsSheet(
+        provider: _provider,
+        category: widget.category,
+        onUnlocked: (updated) {
+          if (mounted) setState(() => _provider = updated);
+        },
+      ),
     );
   }
 }
@@ -210,16 +244,45 @@ class _RealProviderCardState extends State<RealProviderCard> {
 /// Full details for one provider, opened from the card's chevron / tap.
 /// Website and maps links are shown as copyable text because the app has no
 /// url_launcher dependency yet.
-class ProviderDetailsSheet extends StatelessWidget {
-  const ProviderDetailsSheet({super.key, required this.provider});
+class ProviderDetailsSheet extends StatefulWidget {
+  const ProviderDetailsSheet({
+    super.key,
+    required this.provider,
+    required this.category,
+    this.onUnlocked,
+  });
 
   final RealProvider provider;
+  final String category;
+
+  // Fired the instant an unlock succeeds from inside this sheet — lets the
+  // card behind it refresh immediately, independent of how/when the sheet
+  // itself is eventually dismissed.
+  final ValueChanged<RealProvider>? onUnlocked;
+
+  @override
+  State<ProviderDetailsSheet> createState() => _ProviderDetailsSheetState();
+}
+
+class _ProviderDetailsSheetState extends State<ProviderDetailsSheet> {
+  late RealProvider _provider = widget.provider;
+
+  Future<void> _unlock() async {
+    final unlocked = await showUnlockProviderDialog(context, provider: _provider, category: widget.category);
+    if (unlocked == null || !mounted) return;
+    setState(() => _provider = unlocked);
+    widget.onUnlocked?.call(unlocked);
+  }
 
   @override
   Widget build(BuildContext context) {
+    final provider = _provider;
     final rows = <Widget>[
       if (provider.phone.isNotEmpty) _DetailRow(icon: Icons.phone_outlined, label: 'Phone', value: provider.phone),
-      if (provider.address != null) _DetailRow(icon: Icons.location_on_outlined, label: 'Address', value: provider.address!),
+      if (provider.hasFullDetails && provider.address != null)
+        _DetailRow(icon: Icons.location_on_outlined, label: 'Address', value: provider.address!)
+      else if (provider.city != null)
+        _DetailRow(icon: Icons.location_on_outlined, label: 'City', value: provider.city!),
       if (provider.website != null && provider.website!.isNotEmpty)
         _DetailRow(icon: Icons.language, label: 'Website', value: provider.website!),
       if (provider.mapsUrl != null && provider.mapsUrl!.isNotEmpty)
@@ -275,17 +338,77 @@ class ProviderDetailsSheet extends StatelessWidget {
                   style: const TextStyle(fontSize: 13, color: AppColors.turquoise, fontWeight: FontWeight.w600),
                 ),
               ),
-            if (!provider.hasFullDetails)
-              const Padding(
-                padding: EdgeInsets.only(top: 8),
-                child: Text(
-                  'Subscribe to see full contact details',
-                  style: TextStyle(fontSize: 13, fontStyle: FontStyle.italic, color: AppColors.turquoise),
-                ),
-              ),
+            if (!provider.hasFullDetails) ...[
+              const SizedBox(height: 12),
+              UnlockCtaButton(onTap: _unlock, expand: true),
+            ],
           ],
         ),
       ),
+    );
+  }
+}
+
+/// "Unlock contact — $4.99" (plus a short "or subscribe" line underneath) —
+/// the one CTA that replaces every direct call/message affordance on a
+/// locked card. Both call sites route through [showUnlockProviderDialog],
+/// which decides server-side whether this device's subscription covers it
+/// for free or a $4.99 charge is needed — this button never assumes either;
+/// the subscribe option is always offered there too if payment is needed.
+///
+/// The label is deliberately short (previously "Unlock contact — $4.99 or
+/// subscribe" overflowed its pill on narrower layouts, e.g. inside an Ask
+/// AI chat bubble — see real_provider_card_test.dart's regression test).
+/// [Flexible] + [TextOverflow.ellipsis] is kept as a second line of defence
+/// in case of even narrower/larger-text contexts than tested.
+class UnlockCtaButton extends StatelessWidget {
+  const UnlockCtaButton({super.key, required this.onTap, this.expand = false});
+
+  final VoidCallback onTap;
+  final bool expand;
+
+  @override
+  Widget build(BuildContext context) {
+    final button = Material(
+      color: AppColors.turquoise.withValues(alpha: 0.12),
+      borderRadius: BorderRadius.circular(20),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          child: Row(
+            mainAxisSize: expand ? MainAxisSize.max : MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              const Icon(Icons.lock_outline, size: 14, color: AppColors.turquoise),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  'Unlock contact — \$4.99',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.turquoise),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    final sized = expand ? SizedBox(width: double.infinity, child: button) : button;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: expand ? CrossAxisAlignment.center : CrossAxisAlignment.start,
+      children: [
+        sized,
+        const SizedBox(height: 4),
+        Text(
+          'or subscribe for unlimited unlocks',
+          style: TextStyle(fontSize: 11, color: AppColors.mutedText),
+        ),
+      ],
     );
   }
 }

@@ -10,6 +10,7 @@ from provider_search.views import (
     ProviderMatchStatusView,
     ProviderOnboardingView,
     ProviderSearchView,
+    ProviderUnlockView,
 )
 
 urlpatterns = [
@@ -18,6 +19,7 @@ urlpatterns = [
     path("api/catalog/", include("catalog.urls")),
     path("api/", include("matching.urls")),
     path("api/providers/search/", ProviderSearchView.as_view(), name="provider-search"),
+    path("api/providers/unlock/", ProviderUnlockView.as_view(), name="provider-unlock"),
     path("api/providers/known/", KnownProvidersView.as_view(), name="providers-known"),
     path("api/provider-matches/", ProviderMatchListView.as_view(), name="provider-match-list"),
     path("api/provider-matches/<int:pk>/status/", ProviderMatchStatusView.as_view(), name="provider-match-status"),
