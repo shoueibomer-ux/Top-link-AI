@@ -79,6 +79,9 @@ class ProviderMatchSerializer(serializers.ModelSerializer):
             "problem_description",
             "status",
             "unlock_method",
+            "provider_decision",
+            "provider_message",
+            "responded_at",
             "first_unlocked_at",
             "last_viewed_at",
         ]

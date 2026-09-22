@@ -84,6 +84,23 @@ class ProviderMatch(models.Model):
     # correct default, never "searching"/"found" (those describe a provider
     # that doesn't have a row here yet) and never "matched" (retired).
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_REQUESTED)
+    # Set only by ProviderRequestRespondView, the one place a provider can
+    # act on a request — accept/decline is intentionally a separate field
+    # from `status` (which just moves requested -> responded either way) so
+    # the client can tell the two apart and show a decline clearly instead
+    # of a request that merely looks "responded".
+    DECISION_ACCEPTED = "accepted"
+    DECISION_DECLINED = "declined"
+    DECISION_CHOICES = [
+        (DECISION_ACCEPTED, "Accepted"),
+        (DECISION_DECLINED, "Declined"),
+    ]
+    provider_decision = models.CharField(max_length=20, choices=DECISION_CHOICES, blank=True)
+    # The provider's optional reply message, captured at the same time as
+    # the decision — blank for a response with no message, and always blank
+    # until then.
+    provider_message = models.TextField(blank=True)
+    responded_at = models.DateTimeField(null=True, blank=True)
     first_unlocked_at = models.DateTimeField(auto_now_add=True)
     last_viewed_at = models.DateTimeField(auto_now=True)
 

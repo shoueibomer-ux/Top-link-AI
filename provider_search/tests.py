@@ -1,11 +1,17 @@
 from unittest.mock import patch
 
+from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 from django.utils import timezone
+from rest_framework_simplejwt.tokens import RefreshToken
 
+from accounts.models import ProviderBusinessProfile, UserProfile, UserRole
 from matching.models import Subscription
+from notifications.models import Notification
 from .models import ProviderMatch, ServiceRequest
 from .serializers import mask_phone
+
+User = get_user_model()
 
 TEST_API_KEY = "test-key"
 
@@ -197,3 +203,198 @@ class ProviderGatingTests(TestCase):
         self.assertEqual(len(matches), 1)
         self.assertEqual(matches[0]["status"], "requested")
         self.assertNotEqual(matches[0]["status"], "matched")
+
+
+@override_settings(API_KEY=TEST_API_KEY, GOOGLE_PLACES_API_KEY="unused-in-tests")
+class ProviderResponseLoopTests(TestCase):
+    """Covers the provider-side accept/decline loop — ProviderIncomingRequestListView
+    and ProviderRequestRespondView — the mechanism that finally lets a
+    ProviderMatch leave STATUS_REQUESTED. Before this, nothing in the app
+    ever set STATUS_RESPONDED, so every unlocked request sat at "Requested"
+    forever (see the website's "Receive customer requests — Rolling out"
+    label this feature replaces)."""
+
+    def setUp(self):
+        self.headers = {"HTTP_X_API_KEY": TEST_API_KEY}
+
+    def _make_provider(self, email, place_id=None, business_name="Acme Plumbing"):
+        user = User.objects.create_user(username=email, email=email, password="pass-12345!")
+        UserProfile.objects.create(user=user, role=UserRole.PROVIDER, full_name="Pat Provider")
+        profile = ProviderBusinessProfile.objects.create(user=user, business_name=business_name, place_id=place_id)
+        return user, profile
+
+    def _make_customer(self, email):
+        user = User.objects.create_user(username=email, email=email, password="pass-12345!")
+        UserProfile.objects.create(user=user, role=UserRole.CUSTOMER, full_name="Cami Customer")
+        return user
+
+    def _auth_headers(self, user):
+        access_token = RefreshToken.for_user(user).access_token
+        return {**self.headers, "HTTP_AUTHORIZATION": f"Bearer {access_token}"}
+
+    def _make_match(
+        self, place_id, device_id="client-device", status=ProviderMatch.STATUS_REQUESTED, category="plumbing"
+    ):
+        return ProviderMatch.objects.create(
+            device_id=device_id,
+            category=category,
+            city="Edmonton",
+            place_id=place_id,
+            provider_name="Acme Plumbing",
+            provider_phone="+1 780-904-1234",
+            provider_address="1 Main St NW, Edmonton, AB",
+            unlock_method=ProviderMatch.UNLOCK_METHOD_PAID,
+            status=status,
+        )
+
+    # ---- GET /api/provider/requests/ ----
+
+    def test_provider_sees_only_their_own_requested_matches(self):
+        user, _ = self._make_provider("prov1@example.com", place_id="plumbing-place-1")
+        mine = self._make_match("plumbing-place-1")
+        self._make_match("plumbing-place-2")  # a different listing entirely
+        self._make_match("plumbing-place-1", device_id="other-device", status=ProviderMatch.STATUS_RESPONDED)
+
+        response = self.client.get("/api/provider/requests/", **self._auth_headers(user))
+        self.assertEqual(response.status_code, 200)
+        results = response.json()["requests"]
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["id"], mine.id)
+
+    def test_unclaimed_provider_sees_an_empty_queue_not_an_error(self):
+        user, _ = self._make_provider("prov2@example.com", place_id=None)
+        response = self.client.get("/api/provider/requests/", **self._auth_headers(user))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["requests"], [])
+
+    def test_customer_account_cannot_list_incoming_requests(self):
+        user = self._make_customer("cust1@example.com")
+        response = self.client.get("/api/provider/requests/", **self._auth_headers(user))
+        self.assertEqual(response.status_code, 403)
+
+    def test_unauthenticated_request_is_rejected(self):
+        response = self.client.get("/api/provider/requests/", **self.headers)
+        self.assertEqual(response.status_code, 401)
+
+    # ---- POST /api/provider/requests/<id>/respond/ ----
+
+    def test_accept_updates_status_and_stores_message_and_notifies_the_client(self):
+        user, _ = self._make_provider("prov3@example.com", place_id="plumbing-place-3", business_name="Acme Plumbing")
+        match = self._make_match("plumbing-place-3", device_id="notify-device")
+
+        response = self.client.post(
+            f"/api/provider/requests/{match.id}/respond/",
+            {"decision": "accepted", "message": "On our way tomorrow at 9am."},
+            content_type="application/json",
+            **self._auth_headers(user),
+        )
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["status"], ProviderMatch.STATUS_RESPONDED)
+        self.assertEqual(body["provider_decision"], "accepted")
+        self.assertEqual(body["provider_message"], "On our way tomorrow at 9am.")
+        self.assertIsNotNone(body["responded_at"])
+
+        match.refresh_from_db()
+        self.assertEqual(match.status, ProviderMatch.STATUS_RESPONDED)
+        self.assertEqual(match.provider_decision, ProviderMatch.DECISION_ACCEPTED)
+
+        notification = Notification.objects.get(device_id="notify-device")
+        self.assertIn("Acme Plumbing", notification.title)
+        self.assertIn("accepted", notification.body)
+        self.assertIn("On our way", notification.body)
+        self.assertEqual(notification.category, "plumbing")
+
+    def test_decline_updates_status_and_decision_distinctly_from_accept(self):
+        user, _ = self._make_provider("prov4@example.com", place_id="plumbing-place-4")
+        match = self._make_match("plumbing-place-4", device_id="decline-device")
+
+        response = self.client.post(
+            f"/api/provider/requests/{match.id}/respond/",
+            {"decision": "declined"},
+            content_type="application/json",
+            **self._auth_headers(user),
+        )
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["status"], ProviderMatch.STATUS_RESPONDED)
+        self.assertEqual(body["provider_decision"], "declined")
+
+        notification = Notification.objects.get(device_id="decline-device")
+        self.assertIn("declined", notification.body)
+
+    def test_a_provider_cannot_respond_to_another_providers_request(self):
+        self._make_provider("prov5@example.com", place_id="plumbing-place-5")
+        intruder, _ = self._make_provider("intruder@example.com", place_id="plumbing-place-99")
+        match = self._make_match("plumbing-place-5")
+
+        response = self.client.post(
+            f"/api/provider/requests/{match.id}/respond/",
+            {"decision": "accepted"},
+            content_type="application/json",
+            **self._auth_headers(intruder),
+        )
+        self.assertEqual(response.status_code, 404)
+        match.refresh_from_db()
+        self.assertEqual(match.status, ProviderMatch.STATUS_REQUESTED)
+
+    def test_customer_account_cannot_respond(self):
+        self._make_provider("prov6@example.com", place_id="plumbing-place-6")
+        customer = self._make_customer("cust2@example.com")
+        match = self._make_match("plumbing-place-6")
+
+        response = self.client.post(
+            f"/api/provider/requests/{match.id}/respond/",
+            {"decision": "accepted"},
+            content_type="application/json",
+            **self._auth_headers(customer),
+        )
+        self.assertEqual(response.status_code, 403)
+        match.refresh_from_db()
+        self.assertEqual(match.status, ProviderMatch.STATUS_REQUESTED)
+
+    def test_responding_twice_is_rejected_the_second_time_and_does_not_change_the_decision(self):
+        user, _ = self._make_provider("prov7@example.com", place_id="plumbing-place-7")
+        match = self._make_match("plumbing-place-7")
+
+        first = self.client.post(
+            f"/api/provider/requests/{match.id}/respond/",
+            {"decision": "accepted"},
+            content_type="application/json",
+            **self._auth_headers(user),
+        )
+        self.assertEqual(first.status_code, 200)
+
+        second = self.client.post(
+            f"/api/provider/requests/{match.id}/respond/",
+            {"decision": "declined"},
+            content_type="application/json",
+            **self._auth_headers(user),
+        )
+        self.assertEqual(second.status_code, 400)
+        match.refresh_from_db()
+        self.assertEqual(match.provider_decision, ProviderMatch.DECISION_ACCEPTED)
+
+    def test_invalid_decision_value_is_rejected(self):
+        user, _ = self._make_provider("prov8@example.com", place_id="plumbing-place-8")
+        match = self._make_match("plumbing-place-8")
+
+        response = self.client.post(
+            f"/api/provider/requests/{match.id}/respond/",
+            {"decision": "maybe"},
+            content_type="application/json",
+            **self._auth_headers(user),
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_unclaimed_provider_cannot_respond(self):
+        user, _ = self._make_provider("prov9@example.com", place_id=None)
+        match = self._make_match("plumbing-place-9")
+
+        response = self.client.post(
+            f"/api/provider/requests/{match.id}/respond/",
+            {"decision": "accepted"},
+            content_type="application/json",
+            **self._auth_headers(user),
+        )
+        self.assertEqual(response.status_code, 403)

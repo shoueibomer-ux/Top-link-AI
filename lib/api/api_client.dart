@@ -232,6 +232,45 @@ class ApiClient {
     return ProviderMatchRecord.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
   }
 
+  /// See provider_search.views.ProviderIncomingRequestListView — the
+  /// authenticated provider's queue of requests still waiting on them
+  /// (status "requested"). Same ProviderMatchSerializer shape the client's
+  /// own "Your requests" history uses (see ProviderMatchRecord); it never
+  /// includes device_id, so it's safe to show a provider.
+  Future<List<ProviderMatchRecord>> getIncomingProviderRequests(String accessToken) async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/provider/requests/'),
+      headers: _authHeaders(accessToken),
+    );
+    if (response.statusCode != 200) {
+      throw ApiException(_firstErrorMessage(response.body) ?? 'Could not load incoming requests.');
+    }
+    final requests = jsonDecode(response.body)['requests'] as List<dynamic>;
+    return requests.map((r) => ProviderMatchRecord.fromJson(r as Map<String, dynamic>)).toList();
+  }
+
+  /// See provider_search.views.ProviderRequestRespondView. `decision` must
+  /// be [ProviderDecision.accepted] or [ProviderDecision.declined] — the
+  /// only place a request moves out of "Requested", and the only way the
+  /// client ever finds out a provider replied (it fires a notification —
+  /// see notifications.services.notify).
+  Future<ProviderMatchRecord> respondToProviderRequest({
+    required String accessToken,
+    required int requestId,
+    required String decision,
+    String message = '',
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/provider/requests/$requestId/respond/'),
+      headers: _authHeaders(accessToken),
+      body: jsonEncode({'decision': decision, if (message.isNotEmpty) 'message': message}),
+    );
+    if (response.statusCode != 200) {
+      throw ApiException(_firstErrorMessage(response.body) ?? 'Could not respond to that request.');
+    }
+    return ProviderMatchRecord.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
   /// See provider_search.views.ChatRefineView — free-text alternative to the
   /// fixed category-tap onboarding flow.
   Future<ChatRefineResult> refineChatMessage({

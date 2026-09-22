@@ -1,9 +1,13 @@
 import requests
 from django.utils import timezone
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 from rest_framework.response import Response
 
+from accounts.models import UserRole
 from matching.models import Subscription
+from matching.permissions import HasApiKey
+from notifications.services import notify
 from .chat_service import refine_request
 from .models import ProviderAvailability, ProviderMatch, ProviderOnboarding, ServiceRequest
 from .serializers import ProviderMatchSerializer, ProviderOnboardingSerializer, RealProviderSerializer
@@ -17,6 +21,23 @@ from .services import (
 )
 
 UNLOCK_PRICE_USD = "4.99"
+
+
+def _provider_business_profile_or_error(request):
+    """Returns (business_profile, None) for an authenticated provider
+    account, or (None, Response) to return immediately otherwise. Shared by
+    ProviderIncomingRequestListView/ProviderRequestRespondView — the same
+    role check as accounts.views.ProviderProfileView, kept as a local
+    function rather than imported so provider_search doesn't reach into
+    accounts.views for it (models only).
+    """
+    profile = getattr(request.user, "profile", None)
+    if profile is None or profile.role != UserRole.PROVIDER:
+        return None, Response({"detail": "Only provider accounts can do this."}, status=403)
+    business_profile = getattr(request.user, "provider_business_profile", None)
+    if business_profile is None:
+        return None, Response({"detail": "Only provider accounts can do this."}, status=403)
+    return business_profile, None
 
 
 def _is_subscribed(device_id: str) -> bool:
@@ -344,6 +365,92 @@ class ProviderMatchStatusView(APIView):
         # auto_now) so recent_contact_counts()'s 7-day window is measured
         # from when the status actually changed, not the original find.
         match.save(update_fields=["status", "last_viewed_at"])
+        return Response(ProviderMatchSerializer(match).data)
+
+
+class ProviderIncomingRequestListView(APIView):
+    """GET /api/provider/requests/
+
+    The authenticated provider's queue of incoming requests still waiting on
+    them — every ProviderMatch row at `place_id == this provider's claimed
+    listing` and `status == STATUS_REQUESTED`, oldest first. This is the
+    other side of ProviderUnlockView: a client unlocking a provider creates
+    exactly the row this endpoint surfaces to that provider, which is what
+    finally lets a request leave "Requested" and become "Responded" (see
+    ProviderRequestRespondView) instead of sitting there forever.
+
+    An unclaimed provider (no place_id on their business profile yet) has no
+    way to be matched against a ProviderMatch row, so this returns an empty
+    queue rather than an error — claiming a listing is a separate, already-
+    existing step (see accounts.views.ProviderProfileView).
+    """
+
+    permission_classes = [HasApiKey, IsAuthenticated]
+
+    def get(self, request):
+        business_profile, error = _provider_business_profile_or_error(request)
+        if error:
+            return error
+        if not business_profile.place_id:
+            return Response({"requests": []})
+
+        matches = ProviderMatch.objects.filter(
+            place_id=business_profile.place_id, status=ProviderMatch.STATUS_REQUESTED
+        ).order_by("first_unlocked_at")
+        return Response({"requests": ProviderMatchSerializer(matches, many=True).data})
+
+
+class ProviderRequestRespondView(APIView):
+    """POST /api/provider/requests/<id>/respond/ {"decision": "accepted"|"declined", "message": (optional)}
+
+    The ONLY place a ProviderMatch moves from STATUS_REQUESTED to
+    STATUS_RESPONDED — closing the loop ProviderUnlockView opens. Scoped to
+    the authenticated provider's own claimed place_id (like
+    ProviderMatchStatusView is scoped to device_id on the client side), so
+    one provider can't respond to — or even see the id of — another
+    provider's request by guessing a pk. Notifies the requesting device
+    (see notifications.services.notify) the same way SubscriptionActivateView
+    already does, so the client finds out proactively rather than by
+    polling "Your requests".
+    """
+
+    permission_classes = [HasApiKey, IsAuthenticated]
+
+    def post(self, request, pk):
+        business_profile, error = _provider_business_profile_or_error(request)
+        if error:
+            return error
+        if not business_profile.place_id:
+            return Response({"detail": "Claim a business listing before responding to requests."}, status=403)
+
+        decision = request.data.get("decision")
+        if decision not in (ProviderMatch.DECISION_ACCEPTED, ProviderMatch.DECISION_DECLINED):
+            return Response({"detail": "decision must be 'accepted' or 'declined'."}, status=400)
+        message = (request.data.get("message") or "").strip()
+
+        try:
+            match = ProviderMatch.objects.get(pk=pk, place_id=business_profile.place_id)
+        except ProviderMatch.DoesNotExist:
+            return Response({"detail": "Not found."}, status=404)
+
+        if match.status != ProviderMatch.STATUS_REQUESTED:
+            return Response({"detail": "This request has already been responded to."}, status=400)
+
+        match.status = ProviderMatch.STATUS_RESPONDED
+        match.provider_decision = decision
+        match.provider_message = message
+        match.responded_at = timezone.now()
+        match.save(
+            update_fields=["status", "provider_decision", "provider_message", "responded_at", "last_viewed_at"]
+        )
+
+        provider_label = business_profile.business_name or match.provider_name
+        verb = "accepted" if decision == ProviderMatch.DECISION_ACCEPTED else "declined"
+        body = f"{provider_label} {verb} your request."
+        if message:
+            body += f' "{message}"'
+        notify(match.device_id, f"{provider_label} responded to your request", body, category=match.category)
+
         return Response(ProviderMatchSerializer(match).data)
 
 

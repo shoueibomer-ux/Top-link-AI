@@ -324,7 +324,7 @@ class _HistoryTabState extends State<_HistoryTab> {
               )
             else
               for (final match in visible) ...[
-                _RequestCard(match: match, onStatusSelected: (status) => _updateStatus(match, status)),
+                RequestCard(match: match, onStatusSelected: (status) => _updateStatus(match, status)),
                 const SizedBox(height: 14),
               ],
           ],
@@ -370,8 +370,12 @@ class _StatusChip extends StatelessWidget {
   }
 }
 
-class _RequestCard extends StatelessWidget {
-  const _RequestCard({required this.match, required this.onStatusSelected});
+/// Public (not `_`-prefixed) so it can be pumped directly in widget tests
+/// with a hand-built [ProviderMatchRecord] — the same pattern RealProviderCard
+/// uses — rather than needing to mock the network calls _HistoryTabState
+/// makes to fetch real data.
+class RequestCard extends StatelessWidget {
+  const RequestCard({super.key, required this.match, required this.onStatusSelected});
 
   final ProviderMatchRecord match;
   final ValueChanged<String> onStatusSelected;
@@ -415,7 +419,27 @@ class _RequestCard extends StatelessWidget {
                   ),
                 ],
                 const SizedBox(height: 10),
-                _StatusBadge(status: match.status),
+                StatusBadge(status: match.status, decision: match.providerDecision),
+                // Declined must never look like a request that's merely
+                // pending — spell it out rather than leaving the badge
+                // alone to carry that.
+                if (match.status == ProviderMatchStatus.responded &&
+                    match.providerDecision == ProviderDecision.declined) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    'This provider declined your request.',
+                    style: TextStyle(fontSize: 12, color: Colors.redAccent.shade200, fontWeight: FontWeight.w600),
+                  ),
+                ],
+                if (match.providerMessage.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    '"${match.providerMessage}"',
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 12, color: AppColors.navy.withValues(alpha: 0.7)),
+                  ),
+                ],
               ],
             ),
           ),
@@ -434,23 +458,33 @@ class _RequestCard extends StatelessWidget {
   }
 }
 
-class _StatusBadge extends StatelessWidget {
-  const _StatusBadge({required this.status});
+/// Public for the same reason as [RequestCard] — directly testable.
+class StatusBadge extends StatelessWidget {
+  const StatusBadge({super.key, required this.status, this.decision = ''});
 
   final String status;
+  // The provider's accept/decline (see ProviderDecision) — only meaningful
+  // once status == responded; blank otherwise.
+  final String decision;
 
   @override
   Widget build(BuildContext context) {
-    final color = switch (status) {
-      ProviderMatchStatus.archived || ProviderMatchStatus.cancelled => AppColors.muted,
-      ProviderMatchStatus.completed => AppColors.navy,
-      _ => AppColors.turquoise,
-    };
+    final isDeclined = status == ProviderMatchStatus.responded && decision == ProviderDecision.declined;
+    final isAccepted = status == ProviderMatchStatus.responded && decision == ProviderDecision.accepted;
+
+    final label = isDeclined || isAccepted ? ProviderDecision.label(decision) : ProviderMatchStatus.label(status);
+    final color = isDeclined
+        ? Colors.redAccent
+        : switch (status) {
+            ProviderMatchStatus.archived || ProviderMatchStatus.cancelled => AppColors.muted,
+            ProviderMatchStatus.completed => AppColors.navy,
+            _ => AppColors.turquoise,
+          };
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(20)),
       child: Text(
-        ProviderMatchStatus.label(status),
+        label,
         style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: color),
       ),
     );

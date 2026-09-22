@@ -13,11 +13,15 @@ class ProviderMatchRecord {
     required this.providerWebsite,
     required this.problemDescription,
     required this.status,
+    required this.providerDecision,
+    required this.providerMessage,
+    required this.respondedAt,
     required this.firstUnlockedAt,
     required this.lastViewedAt,
   });
 
   factory ProviderMatchRecord.fromJson(Map<String, dynamic> json) {
+    final respondedAt = json['responded_at'] as String?;
     return ProviderMatchRecord(
       id: json['id'] as int,
       category: json['category'] as String? ?? '',
@@ -28,6 +32,9 @@ class ProviderMatchRecord {
       providerWebsite: json['provider_website'] as String? ?? '',
       problemDescription: json['problem_description'] as String? ?? '',
       status: json['status'] as String? ?? ProviderMatchStatus.requested,
+      providerDecision: json['provider_decision'] as String? ?? '',
+      providerMessage: json['provider_message'] as String? ?? '',
+      respondedAt: respondedAt == null ? null : DateTime.parse(respondedAt),
       firstUnlockedAt: DateTime.parse(json['first_unlocked_at'] as String),
       lastViewedAt: DateTime.parse(json['last_viewed_at'] as String),
     );
@@ -44,8 +51,27 @@ class ProviderMatchRecord {
   // for matches found via the fixed category-tap onboarding flow.
   final String problemDescription;
   final String status;
+  // Set only once a provider has actually responded (see
+  // ProviderDecision) — blank until then, even after status has moved to
+  // "responded". Lets the client tell an accept from a decline instead of
+  // both looking like the same generic "Responded" state.
+  final String providerDecision;
+  final String providerMessage;
+  final DateTime? respondedAt;
   final DateTime firstUnlockedAt;
   final DateTime lastViewedAt;
+}
+
+/// Mirrors provider_search.models.ProviderMatch.DECISION_CHOICES.
+class ProviderDecision {
+  static const accepted = 'accepted';
+  static const declined = 'declined';
+
+  static String label(String decision) => switch (decision) {
+        accepted => 'Accepted',
+        declined => 'Declined',
+        _ => decision,
+      };
 }
 
 /// Mirrors provider_search.models.ProviderMatch.STATUS_CHOICES — minus
