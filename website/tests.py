@@ -64,15 +64,38 @@ class PageTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'content="noindex,follow"')
 
-    def test_logo_image_is_used_in_header_and_footer_and_files_exist(self):
+    def test_logo_is_used_in_header_and_footer_and_all_icon_files_exist(self):
         from django.contrib.staticfiles import finders
 
         html = self.client.get("/").content.decode()
-        self.assertEqual(html.count("website/images/logo-roundel.png"), 2)  # header + footer
+        self.assertEqual(html.count("website/images/logo-roundel.svg"), 2)  # header + footer
         self.assertNotIn(">TA<", html)
-        for name in ("logo-roundel.png", "favicon-32.png", "favicon-48.png"):
+        for name in ("logo-roundel.svg", "favicon.svg", "favicon-32.png", "favicon-48.png",
+                     "apple-touch-icon.png", "og-image.png"):
             self.assertIsNotNone(finders.find(f"website/images/{name}"), name)
-            self.assertIn(name.split(".")[0], html) if name.startswith("favicon") else None
+        self.assertIn('rel="apple-touch-icon" sizes="180x180"', html)
+        self.assertIn('rel="icon" type="image/svg+xml"', html)
+
+    def test_social_share_image_tags_and_real_dimensions(self):
+        import struct
+        from django.contrib.staticfiles import finders
+
+        html = self.client.get("/").content.decode()
+        self.assertIn('property="og:image" content="http://testserver/static/website/images/og-image.png"', html)
+        self.assertIn('name="twitter:card" content="summary_large_image"', html)
+
+        def png_size(name):
+            with open(finders.find(f"website/images/{name}"), "rb") as f:
+                head = f.read(24)
+            return struct.unpack(">II", head[16:24])
+
+        self.assertEqual(png_size("og-image.png"), (1200, 630))
+        self.assertEqual(png_size("apple-touch-icon.png"), (180, 180))
+
+    def test_header_hides_wordmark_text_on_small_screens(self):
+        css = open(__import__("django.contrib.staticfiles.finders", fromlist=["find"]).find("website/css/site.css"), encoding="utf-8").read()
+        self.assertIn("max-width: 559px", css)
+        self.assertIn(".site-header .brand-text { display: none; }", css)
 
     def test_unknown_service_404(self):
         self.assertEqual(self.client.get("/services/does-not-exist/").status_code, 404)

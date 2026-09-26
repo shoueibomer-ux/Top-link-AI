@@ -246,3 +246,8 @@ ul, ol { margin: 0; padding: 0; }
 .prose p, .prose li { color: #24374f; }
 .draft-note { background: rgba(25,195,177,.12); border: 1.5px solid var(--turquoise); border-radius: var(--radius-sm); padding: .9rem 1.1rem; }
 .muted-text { color: var(--muted); }
+
+/* Small screens: the header shows the circle icon alone, no wordmark text. */
+@media (max-width: 559px) {
+  .site-header .brand-text { display: none; }
+}

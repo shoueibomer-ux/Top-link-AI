@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024" role="img" aria-label="Top-Link AI">
+  <circle cx="512" cy="512" r="512" fill="#0B1F3A"/>
+  <circle cx="512" cy="512" r="457.2" fill="none" stroke="#19C3B1" stroke-opacity="0.55" stroke-width="14.8"/>
+  <path fill="#FFFFFF" fill-rule="evenodd" d="M194.56 405.11 L401.87 405.11 L401.87 454.34 L322.83 454.34 L322.83 618.89 L273.60 618.89 L273.60 454.34 L194.56 454.34 Z"/>
+  <path fill="#19C3B1" fill-rule="evenodd" d="M427.78 405.11 L477.02 405.11 L477.02 569.66 L576.78 569.66 L576.78 618.89 L427.78 618.89 Z"/>
+  <path fill="#FFFFFF" fill-rule="evenodd" d="M602.70 618.89 L686.27 405.11 L745.87 405.11 L829.44 618.89 L776.58 618.89 L755.30 564.47 L676.83 564.47 L655.56 618.89 Z M692.53 524.31 L716.07 464.11 L739.60 524.31 Z"/>
+</svg>
