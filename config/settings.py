@@ -172,3 +172,25 @@ if not DEBUG:
 from corsheaders.defaults import default_headers  # noqa: E402
 
 CORS_ALLOW_HEADERS = [*default_headers, "x-api-key"]
+
+# --- Transport security (production only — DEBUG=True means a local HTTP
+# dev server, where redirecting to HTTPS or marking cookies Secure would
+# just break `runserver`). Security audit finding H1. ---
+SECURE_SSL_REDIRECT = not DEBUG
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
+# 1 year, the standard "submit to hstspreload.org" duration — 0 in DEBUG so
+# a browser never caches an HSTS policy for localhost.
+SECURE_HSTS_SECONDS = 0 if DEBUG else 31536000
+SECURE_HSTS_INCLUDE_SUBDOMAINS = not DEBUG
+SECURE_HSTS_PRELOAD = not DEBUG
+
+# SECURE_SSL_REDIRECT/HSTS both rely on request.is_secure(), which is wrong
+# behind a reverse proxy that terminates TLS and forwards plain HTTP
+# internally — the request would redirect-loop forever. Trusting
+# X-Forwarded-Proto is only safe when a real proxy sets it (and strips any
+# client-supplied copy) — never enable this without confirming the actual
+# deployment topology, since trusting a client-spoofable header otherwise
+# defeats SECURE_SSL_REDIRECT entirely.
+if os.environ.get("DJANGO_BEHIND_PROXY") == "True":
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
