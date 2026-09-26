@@ -8,6 +8,17 @@ import '../widgets/pressable.dart';
 import 'device_id.dart';
 import 'subscription_service.dart';
 
+/// The app's up-front paywall (see subscription.AppEntryPoint) — two ways
+/// past it, matching provider_search.models.ProviderMatch.UNLOCK_METHOD_CHOICES
+/// one level up:
+///   - $9.99/month subscription (existing) — unlimited provider unlocks
+///     while active, same as ProviderUnlockView granting access for free
+///     whenever `_is_subscribed(device_id)` is true.
+///   - $4.99 one-time (new) — a single-unlock credit. UI/pricing only for
+///     now; the purchase itself isn't wired up yet (see _buyOneTime) pending
+///     confirming how a credit bought here — before any provider has even
+///     been searched for — gets redeemed against the *next* provider this
+///     device unlocks.
 class PaywallScreen extends StatefulWidget {
   const PaywallScreen({super.key, required this.onSubscribed});
 
@@ -17,6 +28,10 @@ class PaywallScreen extends StatefulWidget {
   State<PaywallScreen> createState() => _PaywallScreenState();
 }
 
+/// The two ways a device can get past this screen — see the class doc on
+/// [PaywallScreen] for which fields on the backend this maps to.
+enum _PlanOption { subscription, oneTime }
+
 class _PaywallScreenState extends State<PaywallScreen> {
   final _apiClient = ApiClient();
   late final _subscriptionService = SubscriptionService(apiClient: _apiClient);
@@ -24,6 +39,7 @@ class _PaywallScreenState extends State<PaywallScreen> {
   String? _deviceId;
   bool _isProcessing = false;
   String? _errorMessage;
+  _PlanOption _selectedPlan = _PlanOption.subscription;
 
   @override
   void initState() {
@@ -87,6 +103,15 @@ class _PaywallScreenState extends State<PaywallScreen> {
     }
   }
 
+  // Deliberately not calling into SubscriptionService or the backend yet —
+  // see PaywallScreen's class doc. Same "acknowledged, not yet functional"
+  // shape as _restore() below rather than silently faking a purchase.
+  void _buyOneTime() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('One-time unlock purchases are coming soon.')),
+    );
+  }
+
   void _restore() {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('No previous purchases to restore yet.')),
@@ -98,16 +123,16 @@ class _PaywallScreenState extends State<PaywallScreen> {
     return Scaffold(
       backgroundColor: AppColors.lightBackground,
       body: SafeArea(
-        child: Padding(
+        // A scroll view (not the previous fixed Spacer-based layout) since
+        // a second plan card means this no longer reliably fits one screen
+        // on smaller devices.
+        child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
           child: Column(
             children: [
               const SizedBox(height: 12),
-              // This screen's body is AppColors.lightBackground, not the
-              // navy the wordmark's default white color assumes — see
-              // AppLogo's class doc.
-              const AppLogo(height: 36, wordmarkColor: AppColors.navy),
-              const Spacer(),
+              const AppLogo(height: 36),
+              const SizedBox(height: 32),
               const Icon(Icons.workspace_premium, size: 64, color: AppColors.turquoise),
               const SizedBox(height: 24),
               const Text(
@@ -117,49 +142,36 @@ class _PaywallScreenState extends State<PaywallScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                'Subscribe to get matched with trusted local providers, powered by AI.',
+                'Choose how you want to get matched with trusted local providers, powered by AI.',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 14, color: AppColors.muted),
               ),
               const SizedBox(height: 28),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                  color: AppColors.white,
-                  borderRadius: BorderRadius.circular(kRadius),
-                  boxShadow: kCardShadow,
-                  border: Border.all(color: AppColors.turquoise, width: 2),
-                ),
-                child: Column(
-                  children: [
-                    const Text(
-                      'Monthly Plan',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.navy),
-                    ),
-                    const SizedBox(height: 8),
-                    RichText(
-                      text: const TextSpan(
-                        children: [
-                          TextSpan(
-                            text: '\$9.99',
-                            style: TextStyle(fontSize: 36, fontWeight: FontWeight.bold, color: AppColors.navy),
-                          ),
-                          TextSpan(
-                            text: ' / month',
-                            style: TextStyle(fontSize: 16, color: AppColors.navy),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    const _BenefitRow(text: 'Unlimited AI-powered matching'),
-                    const _BenefitRow(text: 'Priority support'),
-                    const _BenefitRow(text: 'Cancel anytime'),
-                  ],
-                ),
+              _PlanCard(
+                selected: _selectedPlan == _PlanOption.subscription,
+                onTap: () => setState(() => _selectedPlan = _PlanOption.subscription),
+                title: 'Monthly Plan',
+                priceWhole: '\$9.99',
+                priceSuffix: ' / month',
+                benefits: const [
+                  'Unlimited AI-powered matching',
+                  'Priority support',
+                  'Cancel anytime',
+                ],
               ),
-              const Spacer(),
+              const SizedBox(height: 14),
+              _PlanCard(
+                selected: _selectedPlan == _PlanOption.oneTime,
+                onTap: () => setState(() => _selectedPlan = _PlanOption.oneTime),
+                title: 'One-Time Unlock',
+                priceWhole: '\$4.99',
+                priceSuffix: ' one-time',
+                benefits: const [
+                  'Full contact details for one provider',
+                  'No subscription, no recurring charge',
+                ],
+              ),
+              const SizedBox(height: 28),
               if (_errorMessage != null) ...[
                 Text(
                   _errorMessage!,
@@ -174,7 +186,9 @@ class _PaywallScreenState extends State<PaywallScreen> {
                   width: double.infinity,
                   height: 56,
                   child: ElevatedButton(
-                    onPressed: (_isProcessing || _deviceId == null) ? null : _subscribe,
+                    onPressed: (_isProcessing || _deviceId == null)
+                        ? null
+                        : (_selectedPlan == _PlanOption.subscription ? _subscribe : _buyOneTime),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.turquoise,
                       disabledBackgroundColor: AppColors.turquoise.withValues(alpha: 0.35),
@@ -191,7 +205,12 @@ class _PaywallScreenState extends State<PaywallScreen> {
                               valueColor: AlwaysStoppedAnimation(AppColors.white),
                             ),
                           )
-                        : const Text('Subscribe', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                        : Text(
+                            _selectedPlan == _PlanOption.subscription
+                                ? 'Subscribe'
+                                : 'Unlock one provider — \$4.99',
+                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                          ),
                   ),
                 ),
               ),
@@ -200,7 +219,97 @@ class _PaywallScreenState extends State<PaywallScreen> {
                 onPressed: _isProcessing ? null : _restore,
                 child: const Text('Restore purchases', style: TextStyle(color: AppColors.turquoise)),
               ),
+              const SizedBox(height: 12),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// One selectable plan — a tappable card with a radio-style indicator, the
+/// same visual weight regardless of which option it represents (a customer
+/// choosing the cheaper one-time unlock shouldn't feel steered away from
+/// it).
+class _PlanCard extends StatelessWidget {
+  const _PlanCard({
+    required this.selected,
+    required this.onTap,
+    required this.title,
+    required this.priceWhole,
+    required this.priceSuffix,
+    required this.benefits,
+  });
+
+  final bool selected;
+  final VoidCallback onTap;
+  final String title;
+  final String priceWhole;
+  final String priceSuffix;
+  final List<String> benefits;
+
+  @override
+  Widget build(BuildContext context) {
+    return Pressable(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(kRadius),
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: AppColors.white,
+              borderRadius: BorderRadius.circular(kRadius),
+              boxShadow: kCardShadow,
+              border: Border.all(
+                color: selected ? AppColors.turquoise : AppColors.cardBorder,
+                width: selected ? 2 : 1,
+              ),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  selected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+                  color: selected ? AppColors.turquoise : AppColors.muted,
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.navy),
+                      ),
+                      const SizedBox(height: 6),
+                      // Text.rich (not a bare RichText) so this is still a
+                      // Text widget under the hood — find.text() in tests
+                      // can only see a RichText's flattened content that way.
+                      Text.rich(
+                        TextSpan(
+                          children: [
+                            TextSpan(
+                              text: priceWhole,
+                              style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: AppColors.navy),
+                            ),
+                            TextSpan(
+                              text: priceSuffix,
+                              style: const TextStyle(fontSize: 14, color: AppColors.navy),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      for (final benefit in benefits) _BenefitRow(text: benefit),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
