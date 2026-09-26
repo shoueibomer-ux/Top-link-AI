@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../api/provider_reaction.dart';
 import '../api/real_provider.dart';
 import '../app_colors.dart';
 import '../app_styles.dart';
 import 'unlock_provider_dialog.dart';
 
 class RealProviderCard extends StatefulWidget {
-  const RealProviderCard({super.key, required this.provider, required this.category, this.onDismiss});
+  const RealProviderCard({super.key, required this.provider, required this.category});
 
   final RealProvider provider;
 
@@ -16,23 +17,50 @@ class RealProviderCard extends StatefulWidget {
   // details server-side rather than trusting anything the client sends.
   final String category;
 
-  // Called when the user marks this provider "not interested" — the parent
-  // is responsible for removing it from whatever list it's rendering from.
-  // No backend persistence yet, so a dismissal only lasts for this session.
-  final VoidCallback? onDismiss;
-
   @override
   State<RealProviderCard> createState() => _RealProviderCardState();
 }
 
+// Muted red for the active not-interested state — distinct from the turquoise
+// used for saved/liked, but softer than an error red.
+const _dislikedColor = Color(0xFFC0563F);
+
 class _RealProviderCardState extends State<RealProviderCard> {
-  // Bookmarking is local-only for now — nothing backs it on the server yet.
-  bool _isSaved = false;
+  // Bookmark / like / not-interested, remembered on this device by the
+  // provider's place id (see ProviderReactionStore) — nothing is sent to the
+  // server. Like and not-interested are mutually exclusive; the rule lives in
+  // ProviderReaction. Not-interested dims the card but keeps it in the list,
+  // so it can be undone with another tap.
+  ProviderReaction _reaction = ProviderReaction.none;
+
+  // Set once the customer taps anything, so the (async) load of the stored
+  // reaction can't land afterwards and undo what they just did.
+  bool _touched = false;
 
   // A local, mutable copy — replaced in place once this provider is
   // unlocked (from the card's CTA or the details sheet), so the card and
   // any open sheet both reflect it immediately without re-searching.
   late RealProvider _provider = widget.provider;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadReaction();
+  }
+
+  Future<void> _loadReaction() async {
+    final stored = await ProviderReactionStore.load(widget.provider.placeId);
+    if (mounted && !_touched) setState(() => _reaction = stored);
+  }
+
+  void _react(ProviderReaction Function(ProviderReaction) change) {
+    final next = change(_reaction);
+    setState(() {
+      _touched = true;
+      _reaction = next;
+    });
+    ProviderReactionStore.save(widget.provider.placeId, next);
+  }
 
   Future<void> _unlock(BuildContext context) async {
     final unlocked = await showUnlockProviderDialog(
@@ -73,152 +101,166 @@ class _RealProviderCardState extends State<RealProviderCard> {
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
               _CardIconButton(
-                icon: _isSaved ? Icons.bookmark : Icons.bookmark_border,
-                color: _isSaved ? AppColors.turquoise : AppColors.mutedText,
-                tooltip: _isSaved ? 'Saved' : 'Save provider',
-                onTap: () => setState(() => _isSaved = !_isSaved),
+                icon: _reaction.saved ? Icons.bookmark : Icons.bookmark_border,
+                color: _reaction.saved ? AppColors.turquoise : AppColors.mutedText,
+                tooltip: _reaction.saved ? 'Saved' : 'Save provider',
+                onTap: () => _react((r) => r.toggleSaved()),
               ),
-              const SizedBox(width: 4),
+              const SizedBox(width: 8),
               _CardIconButton(
-                icon: Icons.thumb_down_outlined,
-                color: AppColors.mutedText,
-                tooltip: 'Not interested',
-                onTap: widget.onDismiss,
+                icon: _reaction.liked ? Icons.thumb_up : Icons.thumb_up_outlined,
+                color: _reaction.liked ? AppColors.turquoise : AppColors.mutedText,
+                tooltip: _reaction.liked ? 'Liked' : 'Like',
+                onTap: () => _react((r) => r.toggleLiked()),
+              ),
+              const SizedBox(width: 8),
+              _CardIconButton(
+                icon: _reaction.disliked ? Icons.thumb_down : Icons.thumb_down_outlined,
+                color: _reaction.disliked ? _dislikedColor : AppColors.mutedText,
+                tooltip: _reaction.disliked ? 'Not interested (tap to undo)' : 'Not interested',
+                onTap: () => _react((r) => r.toggleDisliked()),
               ),
             ],
           ),
           // Avatar stays pinned to the top; the chevron is centred vertically
           // at the right edge, below the bookmark / not-interested buttons.
-          IntrinsicHeight(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+          Opacity(
+            opacity: _reaction.disliked ? 0.5 : 1,
+            child: _buildBody(provider),
+          ),
+        ],
+    );
+  }
+
+  Widget _buildBody(RealProvider provider) {
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Align(
+            alignment: Alignment.topCenter,
+            child: CircleAvatar(
+              radius: 24,
+              backgroundColor: AppColors.turquoise.withValues(alpha: 0.12),
+              child: const Icon(Icons.storefront, color: AppColors.turquoise),
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Align(
-                  alignment: Alignment.topCenter,
-                  child: CircleAvatar(
-                    radius: 24,
-                    backgroundColor: AppColors.turquoise.withValues(alpha: 0.12),
-                    child: const Icon(Icons.storefront, color: AppColors.turquoise),
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: Text(
-                              provider.name,
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.navy,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          _AvailabilityBadge(isAvailableNow: provider.isAvailableNow),
-                        ],
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        provider.name,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.navy,
+                        ),
                       ),
-                      if (provider.rating != null) ...[
-                        const SizedBox(height: 4),
-                        Row(
-                          children: [
-                            const Icon(Icons.star, size: 14, color: Colors.amber),
-                            const SizedBox(width: 4),
-                            Text(
-                              '${provider.rating} (${provider.ratingCount ?? 0} reviews)',
-                              style: TextStyle(fontSize: 13, color: AppColors.mutedText),
-                            ),
-                          ],
-                        ),
-                      ],
-                      if (provider.phone.isNotEmpty) ...[
-                        const SizedBox(height: 4),
-                        Row(
-                          children: [
-                            Icon(Icons.phone_outlined, size: 14, color: AppColors.mutedText),
-                            const SizedBox(width: 4),
-                            Text(provider.phone, style: TextStyle(fontSize: 13, color: AppColors.mutedText)),
-                          ],
-                        ),
-                      ],
-                      // Full street address once unlocked; just the city
-                      // (free/descriptive) before that.
-                      if (provider.hasFullDetails && provider.address != null) ...[
-                        const SizedBox(height: 4),
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Icon(Icons.location_on_outlined, size: 14, color: AppColors.mutedText),
-                            const SizedBox(width: 4),
-                            Expanded(
-                              child: Text(
-                                provider.address!,
-                                style: TextStyle(fontSize: 13, color: AppColors.mutedText),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ] else if (!provider.hasFullDetails && provider.city != null) ...[
-                        const SizedBox(height: 4),
-                        Row(
-                          children: [
-                            Icon(Icons.location_on_outlined, size: 14, color: AppColors.mutedText),
-                            const SizedBox(width: 4),
-                            Text(provider.city!, style: TextStyle(fontSize: 13, color: AppColors.mutedText)),
-                          ],
-                        ),
-                      ],
-                      if (provider.estimatedResponseMinutes != null) ...[
-                        const SizedBox(height: 4),
-                        Row(
-                          children: [
-                            Icon(Icons.bolt, size: 14, color: AppColors.turquoise),
-                            const SizedBox(width: 4),
-                            Text(
-                              'Usually responds within ~${provider.estimatedResponseMinutes} min',
-                              style: const TextStyle(fontSize: 12, color: AppColors.turquoise, fontWeight: FontWeight.w600),
-                            ),
-                          ],
-                        ),
-                      ],
-                      if (provider.recentContactCount > 0) ...[
-                        const SizedBox(height: 4),
-                        Row(
-                          children: [
-                            Icon(Icons.people_outline, size: 14, color: AppColors.mutedText),
-                            const SizedBox(width: 4),
-                            Expanded(
-                              child: Text(
-                                '${provider.recentContactCount} ${provider.recentContactCount == 1 ? 'person has' : 'people have'} '
-                                'contacted this provider this week',
-                                style: TextStyle(fontSize: 12, color: AppColors.mutedText),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                      if (!provider.hasFullDetails) ...[
-                        const SizedBox(height: 8),
-                        UnlockCtaButton(onTap: () => _unlock(context)),
-                      ],
+                    ),
+                    const SizedBox(width: 8),
+                    _AvailabilityBadge(isAvailableNow: provider.isAvailableNow),
+                  ],
+                ),
+                if (provider.rating != null) ...[
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      const Icon(Icons.star, size: 14, color: Colors.amber),
+                      const SizedBox(width: 4),
+                      Text(
+                        '${provider.rating} (${provider.ratingCount ?? 0} reviews)',
+                        style: TextStyle(fontSize: 13, color: AppColors.mutedText),
+                      ),
                     ],
                   ),
-                ),
-                const Padding(
-                  padding: EdgeInsets.only(left: 4),
-                  child: Center(
-                    child: Icon(Icons.chevron_right, color: AppColors.mutedText, size: 24),
+                ],
+                if (provider.phone.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Icon(Icons.phone_outlined, size: 14, color: AppColors.mutedText),
+                      const SizedBox(width: 4),
+                      Text(provider.phone, style: TextStyle(fontSize: 13, color: AppColors.mutedText)),
+                    ],
                   ),
-                ),
+                ],
+                // Full street address once unlocked; just the city
+                // (free/descriptive) before that.
+                if (provider.hasFullDetails && provider.address != null) ...[
+                  const SizedBox(height: 4),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(Icons.location_on_outlined, size: 14, color: AppColors.mutedText),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          provider.address!,
+                          style: TextStyle(fontSize: 13, color: AppColors.mutedText),
+                        ),
+                      ),
+                    ],
+                  ),
+                ] else if (!provider.hasFullDetails && provider.city != null) ...[
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Icon(Icons.location_on_outlined, size: 14, color: AppColors.mutedText),
+                      const SizedBox(width: 4),
+                      Text(provider.city!, style: TextStyle(fontSize: 13, color: AppColors.mutedText)),
+                    ],
+                  ),
+                ],
+                if (provider.estimatedResponseMinutes != null) ...[
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Icon(Icons.bolt, size: 14, color: AppColors.turquoise),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Usually responds within ~${provider.estimatedResponseMinutes} min',
+                        style: const TextStyle(fontSize: 12, color: AppColors.turquoise, fontWeight: FontWeight.w600),
+                      ),
+                    ],
+                  ),
+                ],
+                if (provider.recentContactCount > 0) ...[
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Icon(Icons.people_outline, size: 14, color: AppColors.mutedText),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          '${provider.recentContactCount} ${provider.recentContactCount == 1 ? 'person has' : 'people have'} '
+                          'contacted this provider this week',
+                          style: TextStyle(fontSize: 12, color: AppColors.mutedText),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+                if (!provider.hasFullDetails) ...[
+                  const SizedBox(height: 8),
+                  UnlockCtaButton(onTap: () => _unlock(context)),
+                ],
               ],
             ),
           ),
+          const Padding(
+            padding: EdgeInsets.only(left: 4),
+            child: Center(
+              child: Icon(Icons.chevron_right, color: AppColors.mutedText, size: 24),
+            ),
+          ),
         ],
+      ),
     );
   }
 

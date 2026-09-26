@@ -26,11 +26,6 @@ class _CategoryDetailPageState extends State<CategoryDetailPage> {
   final _apiClient = ApiClient();
   late final Future<List<RealProvider>> _providersFuture;
 
-  // Populated once the future resolves — kept mutable (separate from the
-  // FutureBuilder's own snapshot) so "not interested" can remove a card
-  // from view via setState without re-fetching.
-  List<RealProvider>? _providers;
-
   @override
   void initState() {
     super.initState();
@@ -46,12 +41,7 @@ class _CategoryDetailPageState extends State<CategoryDetailPage> {
       city: ApiClient.demoCity,
       deviceId: deviceId,
     );
-    if (mounted) setState(() => _providers = result.providers);
     return result.providers;
-  }
-
-  void _dismiss(RealProvider provider) {
-    setState(() => _providers?.remove(provider));
   }
 
   @override
@@ -94,7 +84,7 @@ class _CategoryDetailPageState extends State<CategoryDetailPage> {
                           text: 'Could not load providers right now. Pull up this category again later to see who is available.',
                         );
                       }
-                      final providers = _providers!;
+                      final providers = snapshot.data!;
                       if (providers.isEmpty) {
                         return const _MessageCard(
                           text: "No providers found nearby yet — we'll notify you as soon as one is available.",
@@ -103,11 +93,7 @@ class _CategoryDetailPageState extends State<CategoryDetailPage> {
                       return Column(
                         children: [
                           for (final provider in providers) ...[
-                            RealProviderCard(
-                              provider: provider,
-                              category: widget.category.slug,
-                              onDismiss: () => _dismiss(provider),
-                            ),
+                            RealProviderCard(provider: provider, category: widget.category.slug),
                             const SizedBox(height: 14),
                           ],
                         ],

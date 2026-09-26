@@ -35,14 +35,6 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _tabIndex = 0;
 
-  // Local, mutable copy so "not interested" can remove a card from view
-  // without needing a backend round-trip.
-  late final List<RealProvider> _providers = List.of(widget.providers);
-
-  void _dismiss(RealProvider provider) {
-    setState(() => _providers.remove(provider));
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -65,8 +57,7 @@ class _HomeScreenState extends State<HomeScreen> {
           _ => _HomeTab(
               category: widget.category,
               urgency: widget.urgency,
-              providers: _providers,
-              onDismiss: _dismiss,
+              providers: widget.providers,
             ),
         },
       ),
@@ -107,13 +98,11 @@ class _HomeTab extends StatelessWidget {
     required this.category,
     required this.urgency,
     required this.providers,
-    required this.onDismiss,
   });
 
   final ServiceCategory category;
   final Urgency urgency;
   final List<RealProvider> providers;
-  final ValueChanged<RealProvider> onDismiss;
 
   @override
   Widget build(BuildContext context) {
@@ -149,7 +138,7 @@ class _HomeTab extends StatelessWidget {
           const _EmptyProvidersNotice()
         else
           for (final provider in providers) ...[
-            RealProviderCard(provider: provider, category: category.slug, onDismiss: () => onDismiss(provider)),
+            RealProviderCard(provider: provider, category: category.slug),
             const SizedBox(height: 14),
           ],
         const SizedBox(height: 12),
