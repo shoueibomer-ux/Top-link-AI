@@ -6,7 +6,8 @@ from django.utils import timezone
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from accounts.models import ProviderBusinessProfile, UserProfile, UserRole
-from matching.models import Subscription
+from matching.access import credits_available
+from matching.models import Subscription, UnlockCredit
 from notifications.models import Notification
 from .models import ProviderMatch, ServiceRequest
 from .serializers import mask_phone
@@ -398,6 +399,162 @@ class ProviderResponseLoopTests(TestCase):
             **self._auth_headers(user),
         )
         self.assertEqual(response.status_code, 403)
+
+
+
+@override_settings(API_KEY=TEST_API_KEY, GOOGLE_PLACES_API_KEY="unused-in-tests")
+class OneTimeCreditUnlockTests(TestCase):
+    """The paywall's "$4.99 one-time" option: a pre-paid, single-use credit
+    that ProviderUnlockView spends silently — unlock_method="paid" — the next
+    time the device unlocks a provider without a subscription."""
+
+    def setUp(self):
+        self.headers = {"HTTP_X_API_KEY": TEST_API_KEY}
+
+    def _unlock(self, place_id, device_id="credit-device", category="plumbing", paid=None, places=None):
+        with patch("provider_search.views.search_providers") as mocked:
+            mocked.return_value = places if places is not None else fake_places(category, category.title())
+            body = {"device_id": device_id, "place_id": place_id, "category": category, "city": "Edmonton"}
+            if paid is not None:
+                body["paid"] = paid
+            return self.client.post("/api/providers/unlock/", body, content_type="application/json", **self.headers)
+
+    def _grant(self, device_id="credit-device", n=1):
+        for _ in range(n):
+            UnlockCredit.objects.create(device_id=device_id)
+
+    def _subscribe(self, device_id):
+        Subscription.objects.create(
+            device_id=device_id,
+            status="active",
+            start_date=timezone.now(),
+            expiry_date=timezone.now() + timezone.timedelta(days=30),
+        )
+
+    def test_a_credit_is_spent_silently_on_the_next_unlock_and_recorded_as_paid(self):
+        self._grant()
+        response = self._unlock("plumbing-place-1")  # note: no paid flag, no subscription
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertTrue(body["provider"]["is_unlocked"])
+        self.assertEqual(body["provider"]["phone"], "+1 780-904-1234")
+        self.assertEqual(body["unlock_method"], ProviderMatch.UNLOCK_METHOD_PAID)
+        self.assertEqual(body["unlock_credits_remaining"], 0)
+
+        match = ProviderMatch.objects.get(device_id="credit-device", place_id="plumbing-place-1")
+        self.assertEqual(match.unlock_method, ProviderMatch.UNLOCK_METHOD_PAID)
+        self.assertEqual(match.status, ProviderMatch.STATUS_REQUESTED)
+
+        credit = UnlockCredit.objects.get(device_id="credit-device")
+        self.assertIsNotNone(credit.consumed_at)
+        self.assertEqual(credit.consumed_place_id, "plumbing-place-1")
+
+    def test_after_the_credit_is_spent_the_next_provider_needs_payment_again(self):
+        self._grant()
+        self.assertEqual(self._unlock("plumbing-place-1").status_code, 200)
+
+        second = self._unlock("plumbing-place-2")
+        self.assertEqual(second.status_code, 402)
+        self.assertFalse(ProviderMatch.objects.filter(place_id="plumbing-place-2").exists())
+
+    def test_two_credits_unlock_exactly_two_providers(self):
+        self._grant(n=2)
+        self.assertEqual(self._unlock("plumbing-place-1").status_code, 200)
+        self.assertEqual(self._unlock("plumbing-place-2").status_code, 200)
+        self.assertEqual(credits_available("credit-device"), 0)
+
+        third = self._unlock("towing-services-place-1", category="towing-services")
+        self.assertEqual(third.status_code, 402)
+
+    def test_retrying_an_unlock_after_the_credit_was_spent_still_succeeds_and_spends_nothing(self):
+        """A dropped response + retry must not 402 (the provider is already
+        unlocked) and must not eat a second credit."""
+        self._grant(n=2)
+        self._unlock("plumbing-place-1")
+        retry = self._unlock("plumbing-place-1")
+
+        self.assertEqual(retry.status_code, 200)
+        self.assertEqual(retry.json()["unlock_credits_remaining"], 1)
+        self.assertEqual(UnlockCredit.objects.filter(consumed_at__isnull=False).count(), 1)
+        self.assertEqual(ProviderMatch.objects.filter(device_id="credit-device").count(), 1)
+
+    def test_an_already_unlocked_provider_stays_reachable_with_no_credits_left(self):
+        self._grant()
+        self._unlock("plumbing-place-1")
+        self.assertEqual(credits_available("credit-device"), 0)
+
+        self.assertEqual(self._unlock("plumbing-place-1").status_code, 200)
+
+    def test_a_subscribed_device_never_spends_a_credit(self):
+        self._subscribe("credit-device")
+        self._grant()
+        response = self._unlock("plumbing-place-1")
+
+        self.assertEqual(response.json()["unlock_method"], ProviderMatch.UNLOCK_METHOD_SUBSCRIPTION)
+        self.assertEqual(credits_available("credit-device"), 1)
+
+    def test_an_explicit_per_provider_payment_does_not_also_burn_a_credit(self):
+        self._grant()
+        response = self._unlock("plumbing-place-1", paid=True)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["unlock_method"], ProviderMatch.UNLOCK_METHOD_PAID)
+        self.assertEqual(credits_available("credit-device"), 1)
+
+    def test_a_credit_only_works_for_the_device_that_bought_it(self):
+        self._grant("buyer-device")
+        response = self._unlock("plumbing-place-1", device_id="someone-else")
+
+        self.assertEqual(response.status_code, 402)
+        self.assertEqual(credits_available("buyer-device"), 1)
+
+    def test_a_provider_that_cannot_be_found_does_not_burn_the_credit(self):
+        self._grant()
+        response = self._unlock("not-a-real-place")
+
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(credits_available("credit-device"), 1)
+
+    def test_an_upstream_search_failure_does_not_burn_the_credit(self):
+        self._grant()
+        with patch("provider_search.views.search_providers", side_effect=RuntimeError("places down")):
+            response = self.client.post(
+                "/api/providers/unlock/",
+                {"device_id": "credit-device", "place_id": "plumbing-place-1", "category": "plumbing", "city": "Edmonton"},
+                content_type="application/json",
+                **self.headers,
+            )
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(credits_available("credit-device"), 1)
+
+    def test_losing_a_race_for_the_last_credit_rolls_the_unlock_back(self):
+        """If a concurrent request spends the credit between the up-front
+        check and the spend, this request must 402 and leave no ProviderMatch
+        behind (which would otherwise be a free, permanent unlock)."""
+        self._grant()
+        with patch("provider_search.views.consume_credit", return_value=False):
+            response = self._unlock("plumbing-place-1")
+
+        self.assertEqual(response.status_code, 402)
+        self.assertFalse(ProviderMatch.objects.filter(device_id="credit-device").exists())
+
+    def test_holding_a_credit_does_not_unmask_search_results(self):
+        """The credit is spent by an explicit unlock, never by search."""
+        self._grant()
+        with patch("provider_search.views.search_providers") as mocked:
+            mocked.return_value = fake_places("plumbing", "Plumbing")
+            response = self.client.get(
+                "/api/providers/search/",
+                {"category": "plumbing", "city": "Edmonton", "device_id": "credit-device"},
+                **self.headers,
+            )
+        for provider in response.json()["providers"]:
+            self.assertFalse(provider["is_unlocked"])
+            self.assertIsNone(provider["address"])
+            self.assertTrue(provider["phone"].endswith("XXXX"))
+        self.assertEqual(credits_available("credit-device"), 1)
+        self.assertEqual(ProviderMatch.objects.count(), 0)
 
 
 class LegacySearchMatchCleanupTests(TestCase):

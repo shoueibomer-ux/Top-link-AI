@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Category, MatchRequest, Profile, Subscription
+from .models import Category, MatchRequest, Profile, Subscription, UnlockCredit
 
 
 @admin.register(Category)
@@ -37,4 +37,12 @@ class SubscriptionAdmin(admin.ModelAdmin):
     list_display = ("id", "device_id", "status", "start_date", "expiry_date", "updated_at")
     list_filter = ("status",)
     search_fields = ("device_id",)
+    date_hierarchy = "created_at"
+
+
+@admin.register(UnlockCredit)
+class UnlockCreditAdmin(admin.ModelAdmin):
+    list_display = ("id", "device_id", "created_at", "consumed_at", "consumed_place_id")
+    list_filter = (("consumed_at", admin.EmptyFieldListFilter),)
+    search_fields = ("device_id", "transaction_id", "consumed_place_id")
     date_hierarchy = "created_at"

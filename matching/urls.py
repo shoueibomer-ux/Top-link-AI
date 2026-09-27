@@ -1,7 +1,7 @@
 from django.urls import path
 from .views import (
     ProfileCreateView, MatchView, CategoryProvidersView,
-    SubscriptionStatusView, SubscriptionActivateView,
+    SubscriptionStatusView, SubscriptionActivateView, UnlockCreditActivateView,
     CategorySuggestView,
 )
 
@@ -12,4 +12,5 @@ urlpatterns = [
     path("categories/suggest/", CategorySuggestView.as_view(), name="category-suggest"),
     path("subscription/", SubscriptionStatusView.as_view(), name="subscription-status"),
     path("subscription/activate/", SubscriptionActivateView.as_view(), name="subscription-activate"),
+    path("unlock-credits/activate/", UnlockCreditActivateView.as_view(), name="unlock-credit-activate"),
 ]

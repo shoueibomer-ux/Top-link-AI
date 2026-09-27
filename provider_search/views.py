@@ -1,11 +1,12 @@
 import requests
+from django.db import transaction
 from django.utils import timezone
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 from rest_framework.response import Response
 
 from accounts.models import UserRole
-from matching.models import Subscription
+from matching.access import consume_credit, credits_available, is_subscribed
 from matching.permissions import HasApiKey
 from notifications.services import notify
 from .chat_service import refine_request
@@ -41,12 +42,7 @@ def _provider_business_profile_or_error(request):
 
 
 def _is_subscribed(device_id: str) -> bool:
-    subscription = Subscription.objects.filter(device_id=device_id).first()
-    if subscription is None or subscription.status not in ("trial", "active"):
-        return False
-    if subscription.expiry_date and subscription.expiry_date < timezone.now():
-        return False
-    return True
+    return is_subscribed(device_id)
 
 
 def _enrich(providers: list[dict], city: str) -> None:
@@ -235,16 +231,26 @@ class ProviderUnlockView(APIView):
     ever created — never as a side effect of search (see
     provider_search.views._search_and_record / RealProviderSerializer).
 
-    Access is granted if the device has an active Subscription (free,
-    unlimited), or if the client sets `"paid": true` (a one-off $4.99
-    unlock). Like SubscriptionActivateView, `paid` is trusted from the
-    client — there is no real payment processor wired up for this
-    consumable purchase yet either; this is enough to exercise the gate
-    end-to-end, not to bill anyone for real.
+    A NEW unlock is paid for, in this order, by:
+      1. an active Subscription (free, unlimited) -> unlock_method "subscription";
+      2. `"paid": true` — the client asserting it just made a per-provider
+         $4.99 purchase -> "paid". Trusted from the client, like
+         SubscriptionActivateView: there is no real payment processor wired
+         up yet, so this exercises the gate end-to-end, it doesn't bill anyone;
+      3. otherwise the device's oldest unspent UnlockCredit (the paywall's
+         "$4.99 one-time" option), spent silently with no second payment
+         -> "paid";
+      4. otherwise 402.
+    (2) is checked before (3) so a client that just paid per-provider never
+    also burns a pre-paid credit.
 
-    Re-unlocking a provider this device already unlocked is a no-op that
-    just refreshes its contact details and returns 200 — it never resets
-    `status` or `unlock_method` on an existing row.
+    A credit is only spent once the provider was actually found and the
+    ProviderMatch created, in one transaction — a 404/502/race can't burn it.
+
+    Re-unlocking a provider this device already unlocked is free and never
+    consumes anything: it just refreshes its contact details and returns 200
+    (so a retried request after a dropped response still succeeds), and it
+    never resets `status` or `unlock_method` on an existing row.
     """
 
     def post(self, request):
@@ -266,14 +272,9 @@ class ProviderUnlockView(APIView):
             return Response({"detail": f"city is required and must be one of {CITIES}."}, status=400)
 
         subscribed = _is_subscribed(device_id)
-        if not subscribed and not paid:
-            return Response(
-                {
-                    "detail": f"Subscribe or pay ${UNLOCK_PRICE_USD} to unlock this provider's contact details.",
-                    "price_usd": UNLOCK_PRICE_USD,
-                },
-                status=402,
-            )
+        already_unlocked = ProviderMatch.objects.filter(device_id=device_id, place_id=place_id).exists()
+        if not already_unlocked and not subscribed and not paid and not credits_available(device_id):
+            return self._payment_required()
 
         try:
             providers = search_providers(category, city)
@@ -293,32 +294,57 @@ class ProviderUnlockView(APIView):
             .order_by("-created_at")
             .first()
         )
-        match, created = ProviderMatch.objects.get_or_create(
-            device_id=device_id,
-            place_id=place_id,
-            defaults={
-                "category": category,
-                "city": city,
-                "provider_name": provider["name"],
-                "provider_phone": provider["phone"],
-                "provider_address": provider["address"],
-                "provider_website": provider["website"],
-                "service_request": service_request,
-                "unlock_method": (
-                    ProviderMatch.UNLOCK_METHOD_SUBSCRIPTION if subscribed else ProviderMatch.UNLOCK_METHOD_PAID
-                ),
-            },
-        )
-        if not created:
-            match.provider_name = provider["name"]
-            match.provider_phone = provider["phone"]
-            match.provider_address = provider["address"]
-            match.provider_website = provider["website"]
-            match.save(update_fields=["provider_name", "provider_phone", "provider_address", "provider_website", "last_viewed_at"])
+        with transaction.atomic():
+            match, created = ProviderMatch.objects.get_or_create(
+                device_id=device_id,
+                place_id=place_id,
+                defaults={
+                    "category": category,
+                    "city": city,
+                    "provider_name": provider["name"],
+                    "provider_phone": provider["phone"],
+                    "provider_address": provider["address"],
+                    "provider_website": provider["website"],
+                    "service_request": service_request,
+                    "unlock_method": (
+                        ProviderMatch.UNLOCK_METHOD_SUBSCRIPTION if subscribed else ProviderMatch.UNLOCK_METHOD_PAID
+                    ),
+                },
+            )
+            if created and not subscribed and not paid and not consume_credit(device_id, place_id):
+                # The credit seen above was spent by a concurrent request
+                # between that check and here — undo the match we just made.
+                transaction.set_rollback(True)
+                return self._payment_required()
+            if not created:
+                match.provider_name = provider["name"]
+                match.provider_phone = provider["phone"]
+                match.provider_address = provider["address"]
+                match.provider_website = provider["website"]
+                match.save(update_fields=["provider_name", "provider_phone", "provider_address", "provider_website", "last_viewed_at"])
 
         _enrich([provider], city)
         data = RealProviderSerializer(provider, context={"unlocked_place_ids": {place_id}}).data
-        return Response({"provider": data, "match_id": match.id, "match_status": match.status}, status=200)
+        return Response(
+            {
+                "provider": data,
+                "match_id": match.id,
+                "match_status": match.status,
+                "unlock_method": match.unlock_method,
+                "unlock_credits_remaining": credits_available(device_id),
+            },
+            status=200,
+        )
+
+    @staticmethod
+    def _payment_required():
+        return Response(
+            {
+                "detail": f"Subscribe or pay ${UNLOCK_PRICE_USD} to unlock this provider's contact details.",
+                "price_usd": UNLOCK_PRICE_USD,
+            },
+            status=402,
+        )
 
 
 class ProviderMatchListView(APIView):

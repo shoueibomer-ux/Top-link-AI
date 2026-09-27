@@ -69,3 +69,42 @@ class Subscription(models.Model):
 
     def __str__(self):
         return f"{self.device_id} ({self.status})"
+
+
+class UnlockCredit(models.Model):
+    """One pre-paid, single-use provider unlock, bought as the paywall's
+    "$4.99 one-time" option. Deliberately keyed by `device_id` and NOT tied
+    to a provider: at purchase time no provider has been chosen yet (the
+    paywall comes before any search), so the credit just sits here until the
+    next provider this device unlocks — see provider_search.views.
+    ProviderUnlockView, which consumes the oldest unconsumed credit instead
+    of demanding `paid: true` again, and records that unlock as
+    ProviderMatch.unlock_method="paid".
+
+    A device that has bought at least one credit keeps app access afterwards
+    (see matching.access.has_access): browsing/search is always free by
+    design, and otherwise the contact details it just paid for would be
+    locked behind the paywall on the next launch.
+
+    NOTE: like Subscription, granting is currently trusted from the client
+    (see UnlockCreditActivateView) — no App Store/Play Store receipt
+    validation exists yet, so this does not verify anyone actually paid.
+    `transaction_id` (the store's purchase id, when one exists) makes
+    granting idempotent so a retried or replayed purchase can't mint a
+    second credit.
+    """
+
+    device_id = models.CharField(max_length=64, db_index=True)
+    transaction_id = models.CharField(max_length=255, unique=True, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    consumed_at = models.DateTimeField(null=True, blank=True)
+    # Which provider this credit was spent on — for reporting on one-time
+    # vs subscription usage. Blank while unconsumed.
+    consumed_place_id = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        ordering = ["created_at"]
+
+    def __str__(self):
+        state = f"spent on {self.consumed_place_id}" if self.consumed_at else "unspent"
+        return f"{self.device_id} ({state})"
