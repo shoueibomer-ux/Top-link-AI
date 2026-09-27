@@ -22,6 +22,13 @@ class ApiException implements Exception {
   String toString() => message;
 }
 
+/// Thrown when the backend answers 401 to a request carrying a Bearer token —
+/// the access token expired or was revoked. Retrying can't help; the user has
+/// to log in again, which is what callers should offer.
+class SessionExpiredException extends ApiException {
+  SessionExpiredException() : super('Your session has expired. Please log in again.');
+}
+
 /// Thrown by [ApiClient.unlockProvider] when the backend responds 402 —
 /// this device isn't subscribed and didn't set `paid: true`. The UI uses
 /// this to offer "pay $4.99 or subscribe" rather than a generic error.
@@ -402,6 +409,30 @@ class ApiClient {
     return AccountProfile.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
   }
 
+  /// PATCH accounts.views.MeView — edits the signed-in user's own name and/or
+  /// sign-in email (never role or password). Pass only what should change.
+  /// Throws [ApiException] with the server's message for validation failures
+  /// (e.g. an email already in use) and [SessionExpiredException] on 401.
+  Future<AccountProfile> updateMe({
+    required String accessToken,
+    String? fullName,
+    String? email,
+  }) async {
+    final response = await http.patch(
+      Uri.parse('$baseUrl/accounts/me/'),
+      headers: _authHeaders(accessToken),
+      body: jsonEncode({
+        'full_name': ?fullName,
+        'email': ?email,
+      }),
+    );
+    if (response.statusCode == 401) throw SessionExpiredException();
+    if (response.statusCode != 200) {
+      throw ApiException(_firstErrorMessage(response.body) ?? 'Could not save your changes.');
+    }
+    return AccountProfile.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
   /// See accounts.views.ProviderProfileView.
   Future<ProviderBusinessProfile> getProviderBusinessProfile(String accessToken) async {
     final response = await http.get(
@@ -423,6 +454,7 @@ class ApiClient {
       headers: _authHeaders(accessToken),
       body: jsonEncode(fields),
     );
+    if (response.statusCode == 401) throw SessionExpiredException();
     if (response.statusCode != 200) {
       throw ApiException(_firstErrorMessage(response.body) ?? 'Could not save your business profile.');
     }

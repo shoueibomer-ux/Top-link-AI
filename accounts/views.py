@@ -11,6 +11,7 @@ from matching.permissions import HasApiKey
 from .models import ProviderBusinessProfile, UserRole
 from .serializers import (
     EmailTokenObtainPairSerializer,
+    ProfileUpdateSerializer,
     ProviderBusinessProfileSerializer,
     RegisterSerializer,
     UserProfileSerializer,
@@ -104,13 +105,26 @@ class TokenRefreshView(_TokenRefreshView):
 
 
 class MeView(APIView):
-    """GET /api/accounts/me/ — the authenticated user's role + profile
-    (including their ProviderBusinessProfile, when they're a provider)."""
+    """GET/PATCH /api/accounts/me/ — the authenticated user's role + profile
+    (including their ProviderBusinessProfile, when they're a provider).
+
+    PATCH {"full_name": ..., "email": ...} (either, both optional) edits the
+    account holder's own name and sign-in email — see ProfileUpdateSerializer
+    for what is deliberately not editable (role, password).
+    """
 
     permission_classes = [HasApiKey, IsAuthenticated]
 
     def get(self, request):
         return Response(UserProfileSerializer(request.user.profile).data)
+
+    def patch(self, request):
+        profile = request.user.profile
+        serializer = ProfileUpdateSerializer(profile, data=request.data, partial=True, context={"request": request})
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        profile.refresh_from_db()
+        return Response(UserProfileSerializer(profile).data)
 
 
 class ProviderProfileView(APIView):
