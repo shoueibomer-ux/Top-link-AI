@@ -1,9 +1,9 @@
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../onboarding/service_category.dart';
+import 'api_config.dart';
 import 'app_notification.dart';
 import 'auth_models.dart';
 import 'category_suggestions.dart';
@@ -31,24 +31,11 @@ class PaymentRequiredException extends ApiException {
   final String priceUsd;
 }
 
-// The Android emulator can't reach the host machine via "localhost" — that
-// resolves to the emulator itself. 10.0.2.2 is its alias for the host.
-String _defaultBaseUrl() {
-  final host = !kIsWeb && defaultTargetPlatform == TargetPlatform.android
-      ? '10.0.2.2'
-      : 'localhost';
-  return 'http://$host:8000/api';
-}
-
-// Shared secret required by the backend (see matching.permissions.HasApiKey).
-// Must match the backend's API_KEY. The default here is a dev-only value —
-// a real deployment overrides it at build time with
-// --dart-define=API_KEY=<the production key>, so the real secret never sits
-// in source control.
-const _apiKey = String.fromEnvironment('API_KEY', defaultValue: 'dev-local-shared-key');
-
 class ApiClient {
-  ApiClient({String? baseUrl}) : baseUrl = baseUrl ?? _defaultBaseUrl();
+  // The URL and API key come from ApiConfig (build-time --dart-define values;
+  // release builds refuse a non-HTTPS URL or the dev key — see its class
+  // doc). An explicit [baseUrl] is checked by the same rules.
+  ApiClient({String? baseUrl}) : baseUrl = baseUrl == null ? ApiConfig.baseUrl() : ApiConfig.checkBaseUrl(baseUrl);
 
   final String baseUrl;
 
@@ -60,10 +47,10 @@ class ApiClient {
   static const demoLng = -113.4909;
   static const demoCity = 'Edmonton';
 
-  static const _headers = {
-    'Content-Type': 'application/json',
-    'X-API-Key': _apiKey,
-  };
+  Map<String, String> get _headers => {
+        'Content-Type': 'application/json',
+        'X-API-Key': ApiConfig.apiKey(),
+      };
 
   // Adds the Bearer token on top of the usual headers — every accounts.*
   // endpoint that reads/writes a specific account needs both: the shared
