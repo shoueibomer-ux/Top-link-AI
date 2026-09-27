@@ -11,18 +11,23 @@ import 'subscription_service.dart';
 /// The app's up-front paywall (see subscription.AppEntryPoint) — two ways
 /// past it, matching provider_search.models.ProviderMatch.UNLOCK_METHOD_CHOICES
 /// one level up:
-///   - $9.99/month subscription (existing) — unlimited provider unlocks
-///     while active, same as ProviderUnlockView granting access for free
-///     whenever `_is_subscribed(device_id)` is true.
-///   - $4.99 one-time (new) — a single-unlock credit. UI/pricing only for
-///     now; the purchase itself isn't wired up yet (see _buyOneTime) pending
-///     confirming how a credit bought here — before any provider has even
-///     been searched for — gets redeemed against the *next* provider this
-///     device unlocks.
+///   - $9.99/month subscription — unlimited provider unlocks while active,
+///     same as ProviderUnlockView granting access for free whenever
+///     `is_subscribed(device_id)` is true.
+///   - $4.99 one-time — a single-use unlock credit (matching.models.
+///     UnlockCredit). Bought here, before any provider has been searched for,
+///     so it isn't tied to a provider: it gets the customer into the app and
+///     is spent silently — no second payment — on the first provider they
+///     unlock (recorded as unlock_method="paid").
+///
+/// [onSubscribed] fires when either purchase grants access.
 class PaywallScreen extends StatefulWidget {
-  const PaywallScreen({super.key, required this.onSubscribed});
+  const PaywallScreen({super.key, required this.onSubscribed, this.subscriptionService});
 
   final VoidCallback onSubscribed;
+
+  /// Injectable for tests; defaults to the real store-backed service.
+  final SubscriptionService? subscriptionService;
 
   @override
   State<PaywallScreen> createState() => _PaywallScreenState();
@@ -34,7 +39,7 @@ enum _PlanOption { subscription, oneTime }
 
 class _PaywallScreenState extends State<PaywallScreen> {
   final _apiClient = ApiClient();
-  late final _subscriptionService = SubscriptionService(apiClient: _apiClient);
+  late final _subscriptionService = widget.subscriptionService ?? SubscriptionService(apiClient: _apiClient);
 
   String? _deviceId;
   bool _isProcessing = false;
@@ -103,13 +108,37 @@ class _PaywallScreenState extends State<PaywallScreen> {
     }
   }
 
-  // Deliberately not calling into SubscriptionService or the backend yet —
-  // see PaywallScreen's class doc. Same "acknowledged, not yet functional"
-  // shape as _restore() below rather than silently faking a purchase.
-  void _buyOneTime() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('One-time unlock purchases are coming soon.')),
-    );
+  Future<void> _buyOneTime() async {
+    final deviceId = _deviceId;
+    if (deviceId == null) return;
+
+    setState(() {
+      _isProcessing = true;
+      _errorMessage = null;
+    });
+
+    try {
+      // Same bounded wait and dev fallback as _subscribe().
+      final product = await _subscriptionService
+          .queryOneTimeUnlockProduct()
+          .timeout(const Duration(seconds: 5), onTimeout: () => null);
+      if (product != null) {
+        // Real store product configured — the purchase stream listener set up
+        // in _init() grants the credit and calls onSubscribed().
+        await _subscriptionService.buyOneTimeUnlock(product);
+      } else {
+        // No real store product yet (expected during development) — grant a
+        // credit directly so the flow is testable end to end. Remove once
+        // real products are configured.
+        await _subscriptionService.simulateOneTimePurchaseForDevelopment(deviceId);
+        if (!mounted) return;
+        widget.onSubscribed();
+      }
+    } catch (e) {
+      if (mounted) setState(() => _errorMessage = 'Could not complete purchase: $e');
+    } finally {
+      if (mounted) setState(() => _isProcessing = false);
+    }
   }
 
   void _restore() {

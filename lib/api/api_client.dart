@@ -170,6 +170,27 @@ class ApiClient {
     return SubscriptionStatus.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
   }
 
+  /// See matching.views.UnlockCreditActivateView — records a completed
+  /// "$4.99 one-time" purchase as one pending unlock credit for this device,
+  /// which the next provider unlock spends silently. Idempotent per
+  /// [transactionId] (the store's purchase id): replaying the same purchase
+  /// returns the existing credit count instead of granting another. Returns
+  /// how many unspent credits the device now has.
+  Future<int> activateUnlockCredit({required String deviceId, String? transactionId}) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/unlock-credits/activate/'),
+      headers: _headers,
+      body: jsonEncode({
+        'device_id': deviceId,
+        'transaction_id': ?transactionId,
+      }),
+    );
+    if (response.statusCode != 200 && response.statusCode != 201) {
+      throw ApiException(_firstErrorMessage(response.body) ?? 'Could not record your purchase (${response.statusCode}).');
+    }
+    return (jsonDecode(response.body) as Map<String, dynamic>)['unlock_credits'] as int? ?? 0;
+  }
+
   /// See notifications.views.NotificationListView. Notifications fire from
   /// real events (a subscription activating, a provider search turning up
   /// providers this device hasn't seen before) — there's no synthetic seed
@@ -403,6 +424,7 @@ class ApiClient {
       Uri.parse('$baseUrl/accounts/me/'),
       headers: _authHeaders(accessToken),
     );
+    if (response.statusCode == 401) throw SessionExpiredException();
     if (response.statusCode != 200) {
       throw ApiException('Could not load your account (${response.statusCode}).');
     }
@@ -454,7 +476,6 @@ class ApiClient {
       headers: _authHeaders(accessToken),
       body: jsonEncode(fields),
     );
-    if (response.statusCode == 401) throw SessionExpiredException();
     if (response.statusCode != 200) {
       throw ApiException(_firstErrorMessage(response.body) ?? 'Could not save your business profile.');
     }
