@@ -398,3 +398,107 @@ class ProviderResponseLoopTests(TestCase):
             **self._auth_headers(user),
         )
         self.assertEqual(response.status_code, 403)
+
+
+class LegacySearchMatchCleanupTests(TestCase):
+    """Migration 0011: permanently removes the fake "Requested" rows the old
+    every-search-creates-a-match behaviour left behind (and 0009 relabeled
+    instead of removing), while keeping anything that was real."""
+
+    def setUp(self):
+        import importlib
+
+        from django.apps import apps
+        from django.db import connection
+        from django.db.migrations.recorder import MigrationRecorder
+
+        module = importlib.import_module("provider_search.migrations.0011_delete_legacy_search_matches")
+        self.apps = apps
+        self.run_cleanup = module.delete_legacy_search_matches
+
+        class _SchemaEditor:
+            pass
+
+        self.editor = _SchemaEditor()
+        self.editor.connection = connection
+        self.cutoff = MigrationRecorder(connection).migration_qs.get(
+            app="provider_search", name=module._GATING_MIGRATION
+        ).applied
+
+    def _make(self, place_id, status, *, before_gate, decision="", device_id="dev"):
+        match = ProviderMatch.objects.create(
+            device_id=device_id,
+            category="plumbing",
+            city="Edmonton",
+            place_id=place_id,
+            provider_name=place_id,
+            status=status,
+            provider_decision=decision,
+        )
+        # first_unlocked_at is auto_now_add, so backdate/forward-date it directly.
+        when = self.cutoff - timezone.timedelta(days=3) if before_gate else self.cutoff + timezone.timedelta(minutes=5)
+        ProviderMatch.objects.filter(pk=match.pk).update(first_unlocked_at=when)
+        return match
+
+    def _cleanup(self):
+        return self.run_cleanup(self.apps, self.editor)
+
+    def test_deletes_untouched_requested_rows_created_before_the_unlock_gate(self):
+        for i in range(5):
+            self._make(f"legacy-{i}", ProviderMatch.STATUS_REQUESTED, before_gate=True)
+        self.assertEqual(self._cleanup(), 5)  # reports how many it removed
+        self.assertEqual(ProviderMatch.objects.count(), 0)
+
+    def test_keeps_a_real_unlock_created_after_the_gate_shipped(self):
+        real = self._make("real-unlock", ProviderMatch.STATUS_REQUESTED, before_gate=False)
+        self._make("legacy", ProviderMatch.STATUS_REQUESTED, before_gate=True)
+        self._cleanup()
+        self.assertEqual(list(ProviderMatch.objects.values_list("pk", flat=True)), [real.pk])
+
+    def test_keeps_legacy_rows_a_client_advanced_because_that_was_real_engagement(self):
+        kept = [
+            self._make("contacted", ProviderMatch.STATUS_CONTACTED, before_gate=True),
+            self._make("booked", ProviderMatch.STATUS_BOOKED, before_gate=True),
+            self._make("completed", ProviderMatch.STATUS_COMPLETED, before_gate=True),
+            self._make("searching", ProviderMatch.STATUS_SEARCHING, before_gate=True),
+        ]
+        self._make("legacy", ProviderMatch.STATUS_REQUESTED, before_gate=True)
+        self._cleanup()
+        self.assertCountEqual(ProviderMatch.objects.values_list("pk", flat=True), [m.pk for m in kept])
+
+    def test_never_deletes_a_row_a_provider_responded_to(self):
+        responded = self._make(
+            "answered", ProviderMatch.STATUS_RESPONDED, before_gate=True, decision=ProviderMatch.DECISION_ACCEPTED
+        )
+        self._cleanup()
+        self.assertTrue(ProviderMatch.objects.filter(pk=responded.pk).exists())
+
+    def test_covers_every_device_not_just_one(self):
+        for device in ("a", "b", "c"):
+            self._make(f"legacy-{device}", ProviderMatch.STATUS_REQUESTED, before_gate=True, device_id=device)
+        self._cleanup()
+        self.assertEqual(ProviderMatch.objects.count(), 0)
+
+    def test_is_idempotent(self):
+        self._make("legacy", ProviderMatch.STATUS_REQUESTED, before_gate=True)
+        real = self._make("real", ProviderMatch.STATUS_REQUESTED, before_gate=False)
+        self._cleanup()
+        self._cleanup()
+        self.assertEqual(list(ProviderMatch.objects.values_list("pk", flat=True)), [real.pk])
+
+    def test_deleting_the_fake_rows_takes_their_phantom_unlocks_with_them(self):
+        """A legacy row counted as an unlock of that provider's full contact
+        details; once it's gone the provider is masked again for that device."""
+        self._make("plumbing-place-1", ProviderMatch.STATUS_REQUESTED, before_gate=True, device_id="browser")
+        self._cleanup()
+        with patch("provider_search.views.search_providers") as mocked:
+            mocked.return_value = fake_places("plumbing", "Plumbing")
+            with override_settings(API_KEY=TEST_API_KEY):
+                response = self.client.get(
+                    "/api/providers/search/",
+                    {"category": "plumbing", "city": "Edmonton", "device_id": "browser"},
+                    HTTP_X_API_KEY=TEST_API_KEY,
+                )
+        first = next(p for p in response.json()["providers"] if p["place_id"] == "plumbing-place-1")
+        self.assertFalse(first["is_unlocked"])
+        self.assertTrue(first["phone"].endswith("XXXX"))
