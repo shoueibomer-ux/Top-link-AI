@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import '../onboarding/service_category.dart';
 import 'app_notification.dart';
 import 'auth_models.dart';
+import 'category_suggestions.dart';
 import 'chat_refine_result.dart';
 import 'provider_match.dart';
 import 'provider_onboarding.dart';
@@ -287,6 +288,17 @@ class ApiClient {
       throw ApiException('Could not process that message (${response.statusCode}).');
     }
     return ChatRefineResult.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
+  /// See matching.views.CategorySuggestView — the category search bar's
+  /// keyword lookup. Never an AI call, so it is fine to run as the user types.
+  Future<RemoteCategorySuggestions> suggestCategories(String query) async {
+    final uri = Uri.parse('$baseUrl/categories/suggest/').replace(queryParameters: {'q': query});
+    final response = await http.get(uri, headers: _headers);
+    if (response.statusCode != 200) {
+      throw ApiException('Could not load suggestions (${response.statusCode}).');
+    }
+    return RemoteCategorySuggestions.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
   }
 
   /// See provider_search.views.KnownProvidersView — backs the demo Provider

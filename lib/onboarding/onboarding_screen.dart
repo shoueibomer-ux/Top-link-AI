@@ -15,7 +15,11 @@ import 'service_category.dart';
 import 'urgency_step.dart';
 
 class OnboardingScreen extends StatefulWidget {
-  const OnboardingScreen({super.key});
+  /// With [initialCategory] (e.g. picked from the Home screen's search bar),
+  /// the flow starts at the urgency step with that category already chosen.
+  const OnboardingScreen({super.key, this.initialCategory});
+
+  final ServiceCategory? initialCategory;
 
   @override
   State<OnboardingScreen> createState() => _OnboardingScreenState();
@@ -26,8 +30,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   final _apiClient = ApiClient();
 
-  int _step = 0;
-  ServiceCategory? _selectedCategory;
+  late int _step = widget.initialCategory == null ? 0 : 1;
+  late ServiceCategory? _selectedCategory = widget.initialCategory;
   Urgency? _selectedUrgency;
   double _lat = ApiClient.demoLat;
   double _lng = ApiClient.demoLng;

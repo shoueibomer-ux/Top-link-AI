@@ -13,6 +13,7 @@ import '../pages/settings_page.dart';
 import '../subscription/device_id.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/app_logo.dart';
+import '../widgets/category_search_view.dart';
 import '../widgets/notification_bell.dart';
 import '../widgets/real_provider_card.dart';
 
@@ -35,6 +36,16 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _tabIndex = 0;
 
+  /// A category confirmed from the search bar's detail page starts a new
+  /// request in it, at the urgency step — the same flow "change category"
+  /// starts, minus the category picking.
+  void _startRequestIn(ServiceCategory category) {
+    if (!mounted) return;
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(builder: (_) => OnboardingScreen(initialCategory: category)),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -54,10 +65,16 @@ class _HomeScreenState extends State<HomeScreen> {
           1 => const _HistoryTab(),
           2 => const ChatScreen(),
           3 => const SettingsBody(),
-          _ => _HomeTab(
-              category: widget.category,
-              urgency: widget.urgency,
-              providers: widget.providers,
+          // The search field is pinned directly under the app bar: it sits
+          // outside the scrolling list, and only on this tab.
+          _ => CategorySearchView(
+              padding: const EdgeInsets.fromLTRB(24, 16, 24, 12),
+              onSelect: _startRequestIn,
+              child: _HomeTab(
+                category: widget.category,
+                urgency: widget.urgency,
+                providers: widget.providers,
+              ),
             ),
         },
       ),
@@ -107,7 +124,10 @@ class _HomeTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListView(
-      padding: const EdgeInsets.all(24),
+      // Less at the top than the sides: the pinned search field above already
+      // provides the breathing room (and a band of clear space under it that
+      // the list scrolls beneath).
+      padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
       children: [
         const Text(
           "You're all set!",

@@ -12,7 +12,7 @@ from .serializers import (
 # Tested standalone in matching_engine.py — same logic, imported here unchanged.
 from .matching_engine import (
     Profile as EngineProfile, MatchRequest as EngineMatchRequest,
-    find_matches, ai_categorize,
+    find_matches, ai_categorize, keyword_suggestions, rank_keyword_categories,
 )
 from notifications.services import notify
 
@@ -182,3 +182,27 @@ class SubscriptionActivateView(APIView):
                 "Your subscription is active. Start browsing real, verified providers near you.",
             )
         return Response(SubscriptionSerializer(subscription).data, status=status.HTTP_200_OK)
+
+
+class CategorySuggestView(APIView):
+    """GET /api/categories/suggest/?q=<partly typed text>
+
+    Search-as-you-type for the app's category search bar: which categories the
+    text points at (`categories`, best first, slugs from CATEGORY_TAXONOMY —
+    the same keyword classifier ai_categorize() falls back to) and which
+    taxonomy keywords the text is heading toward (`keywords`).
+
+    Like CategoryProvidersView this deliberately never calls the Claude API:
+    it runs on every pause in typing, and free-form requests that need real
+    understanding belong to Ask AI (ChatRefineView), not to a search box.
+    """
+
+    MAX_QUERY_LENGTH = 100
+
+    def get(self, request):
+        query = " ".join(request.query_params.get("q", "").split())[: self.MAX_QUERY_LENGTH]
+        return Response({
+            "query": query,
+            "categories": rank_keyword_categories(query) if query else [],
+            "keywords": keyword_suggestions(query),
+        })
