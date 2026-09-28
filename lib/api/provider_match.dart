@@ -13,11 +13,15 @@ class ProviderMatchRecord {
     required this.providerWebsite,
     required this.problemDescription,
     required this.status,
+    required this.providerDecision,
+    required this.providerMessage,
+    required this.respondedAt,
     required this.firstUnlockedAt,
     required this.lastViewedAt,
   });
 
   factory ProviderMatchRecord.fromJson(Map<String, dynamic> json) {
+    final respondedAt = json['responded_at'] as String?;
     return ProviderMatchRecord(
       id: json['id'] as int,
       category: json['category'] as String? ?? '',
@@ -27,7 +31,10 @@ class ProviderMatchRecord {
       providerAddress: json['provider_address'] as String? ?? '',
       providerWebsite: json['provider_website'] as String? ?? '',
       problemDescription: json['problem_description'] as String? ?? '',
-      status: json['status'] as String? ?? ProviderMatchStatus.matched,
+      status: json['status'] as String? ?? ProviderMatchStatus.requested,
+      providerDecision: json['provider_decision'] as String? ?? '',
+      providerMessage: json['provider_message'] as String? ?? '',
+      respondedAt: respondedAt == null ? null : DateTime.parse(respondedAt),
       firstUnlockedAt: DateTime.parse(json['first_unlocked_at'] as String),
       lastViewedAt: DateTime.parse(json['last_viewed_at'] as String),
     );
@@ -44,14 +51,38 @@ class ProviderMatchRecord {
   // for matches found via the fixed category-tap onboarding flow.
   final String problemDescription;
   final String status;
+  // Set only once a provider has actually responded (see
+  // ProviderDecision) — blank until then, even after status has moved to
+  // "responded". Lets the client tell an accept from a decline instead of
+  // both looking like the same generic "Responded" state.
+  final String providerDecision;
+  final String providerMessage;
+  final DateTime? respondedAt;
   final DateTime firstUnlockedAt;
   final DateTime lastViewedAt;
 }
 
-/// Mirrors provider_search.models.ProviderMatch.STATUS_CHOICES.
+/// Mirrors provider_search.models.ProviderMatch.DECISION_CHOICES.
+class ProviderDecision {
+  static const accepted = 'accepted';
+  static const declined = 'declined';
+
+  static String label(String decision) => switch (decision) {
+        accepted => 'Accepted',
+        declined => 'Declined',
+        _ => decision,
+      };
+}
+
+/// Mirrors provider_search.models.ProviderMatch.STATUS_CHOICES — minus
+/// "searching"/"found" (those describe a provider search hasn't produced an
+/// unlocked entry for yet, so a ProviderMatch row can never actually hold
+/// them — see ProviderMatch's docstring) and "matched" (retired: rows are
+/// no longer auto-created on search, so nothing is ever created in that
+/// state anymore; still handled by [label]'s fallback if old data has it).
 class ProviderMatchStatus {
-  static const searching = 'searching';
-  static const matched = 'matched';
+  static const requested = 'requested';
+  static const responded = 'responded';
   static const contacted = 'contacted';
   static const booked = 'booked';
   static const inProgress = 'in_progress';
@@ -59,17 +90,18 @@ class ProviderMatchStatus {
   static const cancelled = 'cancelled';
   static const archived = 'archived';
 
-  static const all = [searching, matched, contacted, booked, inProgress, completed, cancelled, archived];
+  static const all = [requested, responded, contacted, booked, inProgress, completed, cancelled, archived];
 
   static String label(String status) => switch (status) {
-        searching => 'Searching',
-        matched => 'Matched',
+        requested => 'Requested',
+        responded => 'Responded',
         contacted => 'Contacted',
         booked => 'Booked',
         inProgress => 'In Progress',
         completed => 'Completed',
         cancelled => 'Cancelled',
         archived => 'Archived',
+        'matched' => 'Matched', // legacy rows only — never a fresh default
         _ => status,
       };
 }

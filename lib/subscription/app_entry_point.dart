@@ -23,7 +23,10 @@ class _AppEntryPointState extends State<AppEntryPoint> {
     final deviceId = await getDeviceId();
     try {
       final subscriptionStatus = await ApiClient().getSubscriptionStatus(deviceId);
-      return subscriptionStatus.isActive;
+      // An active subscription OR a bought one-time unlock — see
+      // SubscriptionStatus.canEnterApp for why the latter must not be bounced
+      // back to the paywall.
+      return subscriptionStatus.canEnterApp;
     } catch (_) {
       // Can't reach the backend to verify — fail closed (show the paywall)
       // rather than silently granting access. A production build should

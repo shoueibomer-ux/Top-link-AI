@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 
 import '../app_colors.dart';
 import '../app_styles.dart';
+import '../provider/auth_storage.dart';
 import '../subscription/app_entry_point.dart';
 import '../widgets/app_drawer.dart';
+import 'account_page.dart';
 
 const _appVersion = '1.0.0';
 
@@ -80,7 +82,12 @@ class _SettingsBodyState extends State<SettingsBody> {
     );
   }
 
-  void _logOut() {
+  Future<void> _logOut() async {
+    // Actually end the provider session first: this used to just re-route,
+    // leaving the stored access/refresh tokens in place, so "Log out" logged
+    // nobody out.
+    await AuthStorage.clear();
+    if (!mounted) return;
     // Route back through the paywall gate (not straight to onboarding) so
     // subscription status is re-checked rather than assumed.
     Navigator.of(context).pushAndRemoveUntil(
@@ -101,7 +108,7 @@ class _SettingsBodyState extends State<SettingsBody> {
               icon: Icons.person_outline,
               title: 'Account',
               subtitle: 'Edit profile and email',
-              onTap: () => _showComingSoon('Account editing'),
+              onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AccountPage())),
             ),
           ],
         ),
@@ -198,13 +205,19 @@ class _SettingsCard extends StatelessWidget {
         boxShadow: kCardShadow,
       ),
       clipBehavior: Clip.antiAlias,
-      child: Column(
-        children: [
-          for (var i = 0; i < children.length; i++) ...[
-            if (i > 0) const Divider(height: 1, color: Color(0xFFE1E8EF), indent: 20),
-            children[i],
+      // The tiles paint their tap ripple on the nearest Material, and the
+      // card's DecoratedBox (which has a background colour) would otherwise
+      // be it — hiding every ripple. Flutter asserts about exactly this.
+      child: Material(
+        type: MaterialType.transparency,
+        child: Column(
+          children: [
+            for (var i = 0; i < children.length; i++) ...[
+              if (i > 0) const Divider(height: 1, color: Color(0xFFE1E8EF), indent: 20),
+              children[i],
+            ],
           ],
-        ],
+        ),
       ),
     );
   }

@@ -156,9 +156,14 @@ RECENT_ENGAGEMENT_WINDOW = timedelta(days=7)
 
 
 def recent_contact_counts(place_ids: list[str]) -> dict[str, int]:
-    """Social proof: for each place_id, how many distinct devices have set
-    their ProviderMatch status to "contacted" or further within the last
-    week. Imported here (not at module level) to avoid a circular import —
+    """Social proof: for each place_id, how many distinct devices have
+    unlocked (or progressed further with) that provider in the last week.
+    A ProviderMatch row is only ever created by an explicit unlock (see
+    provider_search.views.ProviderUnlockView) — every status it can hold
+    from "requested" onward represents a real client action, unlike the old
+    "matched" status this used to require moving past. "cancelled" and
+    "archived" are excluded since those represent the client backing out.
+    Imported here (not at module level) to avoid a circular import —
     provider_search.models doesn't import this module, but keeping the
     import local mirrors how chat_service.py reaches into matching.matching_engine.
     """
@@ -167,10 +172,18 @@ def recent_contact_counts(place_ids: list[str]) -> dict[str, int]:
     if not place_ids:
         return {}
     cutoff = timezone.now() - RECENT_ENGAGEMENT_WINDOW
+    engaged_statuses = [
+        ProviderMatch.STATUS_REQUESTED,
+        ProviderMatch.STATUS_RESPONDED,
+        ProviderMatch.STATUS_CONTACTED,
+        ProviderMatch.STATUS_BOOKED,
+        ProviderMatch.STATUS_IN_PROGRESS,
+        ProviderMatch.STATUS_COMPLETED,
+    ]
     rows = (
         ProviderMatch.objects.filter(
             place_id__in=place_ids,
-            status__in=[ProviderMatch.STATUS_CONTACTED, ProviderMatch.STATUS_COMPLETED],
+            status__in=engaged_statuses,
             last_viewed_at__gte=cutoff,
         )
         .values("place_id")

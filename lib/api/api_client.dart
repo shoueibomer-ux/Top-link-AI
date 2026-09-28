@@ -1,11 +1,12 @@
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../onboarding/service_category.dart';
+import 'api_config.dart';
 import 'app_notification.dart';
 import 'auth_models.dart';
+import 'category_suggestions.dart';
 import 'chat_refine_result.dart';
 import 'provider_match.dart';
 import 'provider_onboarding.dart';
@@ -21,24 +22,27 @@ class ApiException implements Exception {
   String toString() => message;
 }
 
-// The Android emulator can't reach the host machine via "localhost" — that
-// resolves to the emulator itself. 10.0.2.2 is its alias for the host.
-String _defaultBaseUrl() {
-  final host = !kIsWeb && defaultTargetPlatform == TargetPlatform.android
-      ? '10.0.2.2'
-      : 'localhost';
-  return 'http://$host:8000/api';
+/// Thrown when the backend answers 401 to a request carrying a Bearer token —
+/// the access token expired or was revoked. Retrying can't help; the user has
+/// to log in again, which is what callers should offer.
+class SessionExpiredException extends ApiException {
+  SessionExpiredException() : super('Your session has expired. Please log in again.');
 }
 
-// Shared secret required by the backend (see matching.permissions.HasApiKey).
-// Must match the backend's API_KEY. The default here is a dev-only value —
-// a real deployment overrides it at build time with
-// --dart-define=API_KEY=<the production key>, so the real secret never sits
-// in source control.
-const _apiKey = String.fromEnvironment('API_KEY', defaultValue: 'dev-local-shared-key');
+/// Thrown by [ApiClient.unlockProvider] when the backend responds 402 —
+/// this device isn't subscribed and didn't set `paid: true`. The UI uses
+/// this to offer "pay $4.99 or subscribe" rather than a generic error.
+class PaymentRequiredException extends ApiException {
+  PaymentRequiredException(super.message, {required this.priceUsd});
+
+  final String priceUsd;
+}
 
 class ApiClient {
-  ApiClient({String? baseUrl}) : baseUrl = baseUrl ?? _defaultBaseUrl();
+  // The URL and API key come from ApiConfig (build-time --dart-define values;
+  // release builds refuse a non-HTTPS URL or the dev key — see its class
+  // doc). An explicit [baseUrl] is checked by the same rules.
+  ApiClient({String? baseUrl}) : baseUrl = baseUrl == null ? ApiConfig.baseUrl() : ApiConfig.checkBaseUrl(baseUrl);
 
   final String baseUrl;
 
@@ -50,10 +54,10 @@ class ApiClient {
   static const demoLng = -113.4909;
   static const demoCity = 'Edmonton';
 
-  static const _headers = {
-    'Content-Type': 'application/json',
-    'X-API-Key': _apiKey,
-  };
+  Map<String, String> get _headers => {
+        'Content-Type': 'application/json',
+        'X-API-Key': ApiConfig.apiKey(),
+      };
 
   // Adds the Bearer token on top of the usual headers — every accounts.*
   // endpoint that reads/writes a specific account needs both: the shared
@@ -65,13 +69,11 @@ class ApiClient {
       };
 
   /// Real providers for a category/city via Google Places (see
-  /// provider_search.views.ProviderSearchView) — gated by the same
-  /// device-based Subscription used everywhere else. Subscribed devices get
-  /// full contact details; unsubscribed devices get a masked preview
-  /// (RealProvider.hasFullDetails is false and result.subscriptionRequired
-  /// is true), which in practice should only happen if a subscription
-  /// lapses between the paywall check and this call, since AppEntryPoint
-  /// already gates the rest of the app behind an active subscription.
+  /// provider_search.views.ProviderSearchView). Every result is masked
+  /// (RealProvider.isUnlocked is false, phone is a masked string, address/
+  /// website/mapsUrl are null) unless this device already unlocked that
+  /// specific provider — see [unlockProvider]. `result.isSubscribed` is
+  /// only a hint for that unlock prompt's copy, not a gate on this call.
   Future<ProviderSearchResult> searchRealProviders({
     required String category,
     required String city,
@@ -87,6 +89,50 @@ class ApiClient {
       throw ApiException('Could not search providers (${response.statusCode}).');
     }
     return ProviderSearchResult.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
+  /// See provider_search.views.ProviderUnlockView — the only way a real
+  /// phone/address/website is ever revealed, and the only way a "Your
+  /// requests" entry is created. Free (no `paid` flag needed) if this
+  /// device has an active subscription; otherwise pass `paid: true` only
+  /// after the client has actually gone through the $4.99 purchase flow
+  /// (see ProviderUnlockDialog) — calling this with `paid: true` unprompted
+  /// would just be lying to the backend about having paid, so callers must
+  /// not do that.
+  ///
+  /// Throws [PaymentRequiredException] (never a raw 402 status check by
+  /// callers) when neither condition holds, so the UI can offer "pay $4.99
+  /// or subscribe" instead of a generic error.
+  Future<RealProvider> unlockProvider({
+    required String deviceId,
+    required String placeId,
+    required String category,
+    required String city,
+    bool paid = false,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/providers/unlock/'),
+      headers: _headers,
+      body: jsonEncode({
+        'device_id': deviceId,
+        'place_id': placeId,
+        'category': category,
+        'city': city,
+        if (paid) 'paid': true,
+      }),
+    );
+    if (response.statusCode == 402) {
+      final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+      throw PaymentRequiredException(
+        decoded['detail'] as String? ?? 'Subscribe or pay to unlock this provider.',
+        priceUsd: decoded['price_usd'] as String? ?? '4.99',
+      );
+    }
+    if (response.statusCode != 200) {
+      throw ApiException(_firstErrorMessage(response.body) ?? 'Could not unlock this provider.');
+    }
+    final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+    return RealProvider.fromJson(decoded['provider'] as Map<String, dynamic>);
   }
 
   Future<SubscriptionStatus> getSubscriptionStatus(String deviceId) async {
@@ -122,6 +168,27 @@ class ApiClient {
       throw ApiException('Could not activate subscription (${response.statusCode}).');
     }
     return SubscriptionStatus.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
+  /// See matching.views.UnlockCreditActivateView — records a completed
+  /// "$4.99 one-time" purchase as one pending unlock credit for this device,
+  /// which the next provider unlock spends silently. Idempotent per
+  /// [transactionId] (the store's purchase id): replaying the same purchase
+  /// returns the existing credit count instead of granting another. Returns
+  /// how many unspent credits the device now has.
+  Future<int> activateUnlockCredit({required String deviceId, String? transactionId}) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/unlock-credits/activate/'),
+      headers: _headers,
+      body: jsonEncode({
+        'device_id': deviceId,
+        'transaction_id': ?transactionId,
+      }),
+    );
+    if (response.statusCode != 200 && response.statusCode != 201) {
+      throw ApiException(_firstErrorMessage(response.body) ?? 'Could not record your purchase (${response.statusCode}).');
+    }
+    return (jsonDecode(response.body) as Map<String, dynamic>)['unlock_credits'] as int? ?? 0;
   }
 
   /// See notifications.views.NotificationListView. Notifications fire from
@@ -181,6 +248,45 @@ class ApiClient {
     return ProviderMatchRecord.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
   }
 
+  /// See provider_search.views.ProviderIncomingRequestListView — the
+  /// authenticated provider's queue of requests still waiting on them
+  /// (status "requested"). Same ProviderMatchSerializer shape the client's
+  /// own "Your requests" history uses (see ProviderMatchRecord); it never
+  /// includes device_id, so it's safe to show a provider.
+  Future<List<ProviderMatchRecord>> getIncomingProviderRequests(String accessToken) async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/provider/requests/'),
+      headers: _authHeaders(accessToken),
+    );
+    if (response.statusCode != 200) {
+      throw ApiException(_firstErrorMessage(response.body) ?? 'Could not load incoming requests.');
+    }
+    final requests = jsonDecode(response.body)['requests'] as List<dynamic>;
+    return requests.map((r) => ProviderMatchRecord.fromJson(r as Map<String, dynamic>)).toList();
+  }
+
+  /// See provider_search.views.ProviderRequestRespondView. `decision` must
+  /// be [ProviderDecision.accepted] or [ProviderDecision.declined] — the
+  /// only place a request moves out of "Requested", and the only way the
+  /// client ever finds out a provider replied (it fires a notification —
+  /// see notifications.services.notify).
+  Future<ProviderMatchRecord> respondToProviderRequest({
+    required String accessToken,
+    required int requestId,
+    required String decision,
+    String message = '',
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/provider/requests/$requestId/respond/'),
+      headers: _authHeaders(accessToken),
+      body: jsonEncode({'decision': decision, if (message.isNotEmpty) 'message': message}),
+    );
+    if (response.statusCode != 200) {
+      throw ApiException(_firstErrorMessage(response.body) ?? 'Could not respond to that request.');
+    }
+    return ProviderMatchRecord.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
   /// See provider_search.views.ChatRefineView — free-text alternative to the
   /// fixed category-tap onboarding flow.
   Future<ChatRefineResult> refineChatMessage({
@@ -197,6 +303,17 @@ class ApiClient {
       throw ApiException('Could not process that message (${response.statusCode}).');
     }
     return ChatRefineResult.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
+  /// See matching.views.CategorySuggestView — the category search bar's
+  /// keyword lookup. Never an AI call, so it is fine to run as the user types.
+  Future<RemoteCategorySuggestions> suggestCategories(String query) async {
+    final uri = Uri.parse('$baseUrl/categories/suggest/').replace(queryParameters: {'q': query});
+    final response = await http.get(uri, headers: _headers);
+    if (response.statusCode != 200) {
+      throw ApiException('Could not load suggestions (${response.statusCode}).');
+    }
+    return RemoteCategorySuggestions.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
   }
 
   /// See provider_search.views.KnownProvidersView — backs the demo Provider
@@ -307,8 +424,33 @@ class ApiClient {
       Uri.parse('$baseUrl/accounts/me/'),
       headers: _authHeaders(accessToken),
     );
+    if (response.statusCode == 401) throw SessionExpiredException();
     if (response.statusCode != 200) {
       throw ApiException('Could not load your account (${response.statusCode}).');
+    }
+    return AccountProfile.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
+  /// PATCH accounts.views.MeView — edits the signed-in user's own name and/or
+  /// sign-in email (never role or password). Pass only what should change.
+  /// Throws [ApiException] with the server's message for validation failures
+  /// (e.g. an email already in use) and [SessionExpiredException] on 401.
+  Future<AccountProfile> updateMe({
+    required String accessToken,
+    String? fullName,
+    String? email,
+  }) async {
+    final response = await http.patch(
+      Uri.parse('$baseUrl/accounts/me/'),
+      headers: _authHeaders(accessToken),
+      body: jsonEncode({
+        'full_name': ?fullName,
+        'email': ?email,
+      }),
+    );
+    if (response.statusCode == 401) throw SessionExpiredException();
+    if (response.statusCode != 200) {
+      throw ApiException(_firstErrorMessage(response.body) ?? 'Could not save your changes.');
     }
     return AccountProfile.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
   }

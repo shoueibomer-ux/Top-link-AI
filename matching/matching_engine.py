@@ -265,14 +265,52 @@ _DISPLAY_NAME_TO_SLUG = {name: slug for slug, name in CATEGORY_DISPLAY_NAMES.ite
 _CLAUDE_MODEL = "claude-sonnet-4-6"
 
 
+def rank_keyword_categories(text: str) -> list:
+    """Keyword-matching classifier, best match first.
+
+    A category matches when any of its keywords appears in `text`. Ranking is
+    deterministic — more distinct keyword hits first, then the longer (more
+    specific) keyword, then taxonomy order — so callers that need a single
+    answer ("leaking pipe" -> plumbing) don't depend on set iteration order.
+    """
+    text_lower = text.lower()
+    scored = []
+    for order, (category, keywords) in enumerate(CATEGORY_TAXONOMY.items()):
+        hits = [kw for kw in keywords if kw in text_lower]
+        if hits:
+            scored.append((-len(hits), -max(len(kw) for kw in hits), order, category))
+    return [category for *_, category in sorted(scored)]
+
+
 def _keyword_categorize(text: str) -> set:
     """Keyword-matching classifier — the fallback when the AI call fails."""
-    text_lower = text.lower()
-    matched = set()
+    return set(rank_keyword_categories(text))
+
+
+def keyword_suggestions(query: str, limit: int = 8) -> list:
+    """Taxonomy keywords a partly-typed `query` could be heading toward, for
+    search-as-you-type: [{"keyword": "faucet", "category": "plumbing"}, ...].
+
+    A keyword matches when it starts with the whole query ("leak" for "lea"),
+    or when the last word typed starts a word of it ("pipe" for "leaking
+    pi"). Keywords that start with the whole query come first. Pure lookup in
+    CATEGORY_TAXONOMY — no AI call, so it is cheap enough to run per keystroke.
+    """
+    text = " ".join(query.lower().split())
+    if len(text) < 2:
+        return []
+    last_word = text.rsplit(" ", 1)[-1]
+
+    prefix_hits, word_hits = [], []
     for category, keywords in CATEGORY_TAXONOMY.items():
-        if any(kw in text_lower for kw in keywords):
-            matched.add(category)
-    return matched
+        for kw in keywords:
+            kw = kw.strip()
+            entry = {"keyword": kw, "category": category}
+            if kw.startswith(text):
+                prefix_hits.append(entry)
+            elif len(last_word) >= 2 and any(word.startswith(last_word) for word in kw.split()):
+                word_hits.append(entry)
+    return (prefix_hits + word_hits)[:limit]
 
 
 def _ai_categorize_llm(text: str) -> set:
