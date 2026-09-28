@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 
+import dj_database_url
 from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
@@ -36,6 +37,14 @@ API_KEY = _env("API_KEY", "dev-local-shared-key")
 
 ALLOWED_HOSTS = [h.strip() for h in os.environ.get("DJANGO_ALLOWED_HOSTS", "").split(",") if h.strip()]
 
+# Render sets this for every service automatically (its *.onrender.com
+# hostname) — added on top of DJANGO_ALLOWED_HOSTS (for a custom domain, once
+# there is one) rather than replacing it, so nothing manual is needed just to
+# reach the default Render URL.
+_render_hostname = os.environ.get("RENDER_EXTERNAL_HOSTNAME")
+if _render_hostname and _render_hostname not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(_render_hostname)
+
 INSTALLED_APPS = [
     "django.contrib.admin",
     "django.contrib.auth",
@@ -56,6 +65,11 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
+    # Serves collected static files directly from the Django process — no
+    # separate static-file host needed on Render. Must stay immediately after
+    # SecurityMiddleware and above everything else (whitenoise's own
+    # requirement).
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -83,16 +97,34 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "config.wsgi.application"
 
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.postgresql",
-        "NAME": _env("DB_NAME", "toplinkai"),
-        "USER": _env("DB_USER", "postgres"),
-        "PASSWORD": _env("DB_PASSWORD", "postgres"),
-        "HOST": _env("DB_HOST", "localhost"),
-        "PORT": _env("DB_PORT", "5432"),
+# DATABASE_URL (set automatically on Render — see render.yaml's `fromDatabase`)
+# takes priority when present; local development keeps using the separate
+# DB_* vars below (or their defaults) so nothing changes for `runserver`.
+_database_url = os.environ.get("DATABASE_URL")
+if _database_url:
+    DATABASES = {
+        "default": dj_database_url.parse(
+            _database_url,
+            conn_max_age=600,
+            # Render's internal connection is plaintext-capable but always
+            # TLS-optional; its external one requires TLS. Requiring it
+            # outside DEBUG covers both without needing to know which one
+            # this is — "require" doesn't validate the certificate, so
+            # Render's self-signed internal cert isn't a problem.
+            ssl_require=not DEBUG,
+        )
     }
-}
+else:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": _env("DB_NAME", "toplinkai"),
+            "USER": _env("DB_USER", "postgres"),
+            "PASSWORD": _env("DB_PASSWORD", "postgres"),
+            "HOST": _env("DB_HOST", "localhost"),
+            "PORT": _env("DB_PORT", "5432"),
+        }
+    }
 
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
@@ -108,19 +140,53 @@ USE_TZ = True
 
 STATIC_URL = "static/"
 
+# Where `collectstatic` writes to (see build.sh) and whitenoise serves from.
+STATIC_ROOT = BASE_DIR / "staticfiles"
+
+# Nothing in this project uses FileField/ImageField, so "default" here is
+# never exercised — set explicitly anyway, since defining STORAGES at all
+# replaces Django's built-in default for *both* keys, not just the one
+# being overridden.
+STORAGES = {
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+    "staticfiles": {
+        # Content-hashed filenames + gzip/brotli pre-compression in
+        # production, so static assets can be served with a far-future cache
+        # header safely. Plain (unhashed) filenames in DEBUG instead — dev
+        # doesn't run `collectstatic` on every change, and website.linkcheck's
+        # tests resolve {% static %} URLs against the source tree via
+        # staticfiles finders, which only know unhashed names.
+        "BACKEND": (
+            "django.contrib.staticfiles.storage.StaticFilesStorage"
+            if DEBUG
+            else "whitenoise.storage.CompressedManifestStaticFilesStorage"
+        ),
+    },
+}
+
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # Redis-backed cache — provider_search relies on this surviving process
 # restarts (Google Places results are cached for 35 days; Django's default
-# LocMemCache would lose that on every deploy/restart). Falls back to a
+# LocMemCache would lose that on every deploy/restart). REDIS_URL is set
+# automatically on Render (see render.yaml's `fromService`); falls back to a
 # local Redis instance for development.
+_redis_url = os.environ.get("REDIS_URL", "redis://127.0.0.1:6379/1")
+_redis_options = {"CLIENT_CLASS": "django_redis.client.DefaultClient"}
+if _redis_url.startswith("rediss://"):
+    # Only reachable with an external (TLS) Redis URL — Render's own internal
+    # connection string is plain redis://, so this doesn't apply to the
+    # render.yaml setup below, only if that's ever swapped for an external
+    # one. "require" without validating the certificate, same reasoning as
+    # the database's ssl_require above.
+    _redis_options["CONNECTION_POOL_KWARGS"] = {"ssl_cert_reqs": None}
 CACHES = {
     "default": {
         "BACKEND": "django_redis.cache.RedisCache",
-        "LOCATION": os.environ.get("REDIS_URL", "redis://127.0.0.1:6379/1"),
-        "OPTIONS": {
-            "CLIENT_CLASS": "django_redis.client.DefaultClient",
-        },
+        "LOCATION": _redis_url,
+        "OPTIONS": _redis_options,
     }
 }
 

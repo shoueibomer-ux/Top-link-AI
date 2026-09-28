@@ -43,6 +43,21 @@ phone can reach your dev server); a release build may not.
 ## Backend production settings
 
 See `.env.example`. With `DJANGO_DEBUG=False` the backend requires
-`DJANGO_SECRET_KEY`, `API_KEY`, the `DB_*` settings and `DJANGO_ALLOWED_HOSTS`,
-turns on HTTPS redirect / HSTS / secure cookies, and needs
-`DJANGO_BEHIND_PROXY=True` only if a reverse proxy terminates TLS for it.
+`DJANGO_SECRET_KEY`, `API_KEY`, a database (`DATABASE_URL`, or the five
+`DB_*` settings) and `DJANGO_ALLOWED_HOSTS`, turns on HTTPS redirect / HSTS /
+secure cookies, and needs `DJANGO_BEHIND_PROXY=True` only if a reverse proxy
+terminates TLS for it.
+
+## Deploying to Render
+
+`render.yaml` is a [Blueprint](https://render.com/docs/blueprint-spec) that
+provisions the backend as a web service plus a managed PostgreSQL database
+and Redis-compatible cache: in the Render dashboard, New → Blueprint, point
+it at this repo, and it reads `render.yaml` from there. `build.sh` (its
+build command) installs dependencies, collects static files, and applies
+migrations on every deploy. Render prompts for the handful of secrets
+`render.yaml` doesn't set itself (the app's `API_KEY`, `GOOGLE_PLACES_API_KEY`,
+etc. — see the comments at the top of that file); nothing else needs
+manual configuration for a first deploy. Static files are served by
+[whitenoise](https://whitenoise.readthedocs.io/), so no separate static host
+or CDN is required to get started.
