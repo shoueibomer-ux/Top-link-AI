@@ -1,0 +1,91 @@
+# Render Blueprint — https://render.com/docs/blueprint-spec
+#
+# Deploys the Django backend (this repo's `config/` project) as a web
+# service, backed by a managed PostgreSQL database and a managed Key Value
+# (Redis-compatible) cache. Does NOT deploy the Flutter app, the marketing
+# website's own domain/CDN setup, or anything on the App Store/Play Store
+# side — those are separate.
+#
+# One-time manual steps after the first Blueprint deploy: Render will prompt
+# for every env var below marked `sync: false` (never committed here, since
+# they're real secrets/config, not something to check into source control).
+#   - DJANGO_ALLOWED_HOSTS: a custom domain, if any. The *.onrender.com
+#     hostname is added automatically (see RENDER_EXTERNAL_HOSTNAME handling
+#     in config/settings.py) — leave this blank until there's a custom domain.
+#   - API_KEY: the shared secret the Flutter app sends as X-API-Key. Must not
+#     be the dev placeholder ("dev-local-shared-key") — see config/settings.py.
+#   - GOOGLE_PLACES_API_KEY: required for provider search to return anything.
+#   - ANTHROPIC_API_KEY: optional — AI category classification and Ask AI's
+#     chat fall back to plain keyword matching without it.
+#   - CORS_ALLOWED_ORIGINS: only needed for a browser-based client (native
+#     mobile ignores CORS entirely) — leave blank otherwise.
+#
+# Known limits of the `free` plans below, worth reading before relying on
+# this for anything real:
+#   - Postgres: free databases are deleted 30 days after creation (14-day
+#     grace period to upgrade first). Fine for a first deploy / trying this
+#     out; upgrade the database's plan before depending on the data.
+#   - Key Value: free instances don't persist to disk, so a restart empties
+#     the cache (cached Google Places results, rate-limit counters) — not
+#     data loss in the important sense, just cache misses right after.
+#   - Web service: free services spin down after 15 minutes idle and take
+#     roughly a minute to wake back up on the next request.
+
+databases:
+  - name: toplinkai-db
+    databaseName: toplinkai
+    user: toplinkai
+    plan: free
+    # No external access — the web service below reaches this over Render's
+    # private network via DATABASE_URL. Raise this only if something outside
+    # Render (a local machine, another host) needs to connect directly.
+    ipAllowList: []
+
+services:
+  - type: keyvalue
+    name: toplinkai-redis
+    plan: free
+    ipAllowList: []
+    # A cache (Google Places results, rate-limit counters), not a queue or
+    # source of truth — safe to evict under memory pressure.
+    maxmemoryPolicy: allkeys-lru
+
+  - type: web
+    name: toplinkai-backend
+    runtime: python
+    plan: free
+    region: oregon
+    buildCommand: ./build.sh
+    startCommand: gunicorn config.wsgi:application
+    # A cheap, DB-free view (website.views.robots_txt) — see config/urls.py.
+    healthCheckPath: /robots.txt
+    envVars:
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+      - key: DJANGO_DEBUG
+        value: "False"
+      # Render terminates TLS and proxies to this service over HTTP,
+      # forwarding X-Forwarded-Proto — see config/settings.py's comment on
+      # SECURE_PROXY_SSL_HEADER for why this must never be set to True
+      # anywhere that isn't actually behind a real proxy.
+      - key: DJANGO_BEHIND_PROXY
+        value: "True"
+      - key: DJANGO_ALLOWED_HOSTS
+        sync: false
+      - key: API_KEY
+        sync: false
+      - key: GOOGLE_PLACES_API_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false
+      - key: DATABASE_URL
+        fromDatabase:
+          name: toplinkai-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: toplinkai-redis
+          property: connectionString

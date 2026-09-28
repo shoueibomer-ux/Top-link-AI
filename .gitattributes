@@ -1,0 +1,5 @@
+# Shell scripts must keep LF line endings — Render (Linux) runs build.sh
+# directly, and a CRLF shebang line fails with "bad interpreter" on Linux.
+# Without this, this repo's core.autocrlf=true would silently corrupt it on
+# a Windows checkout the next time git touches the file.
+*.sh text eol=lf

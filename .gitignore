@@ -53,6 +53,9 @@ __pycache__/
 *.pyc
 db.sqlite3
 .env
+# whitenoise's collectstatic output (Render's build.sh generates this fresh
+# on every deploy — see STATIC_ROOT in config/settings.py)
+/staticfiles/
 
 # Local dev-session debugging scratch (adb screenshots, flutter run stdin pipe)
 .shots/
