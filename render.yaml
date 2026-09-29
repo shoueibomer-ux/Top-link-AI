@@ -28,9 +28,10 @@
 #
 # Known limits of the `free` plans below, worth reading before relying on
 # this for anything real:
-#   - Postgres: free databases are deleted 30 days after creation (14-day
-#     grace period to upgrade first). Fine for a first deploy / trying this
-#     out; upgrade the database's plan before depending on the data.
+#   - Postgres is on a paid plan (0.1c-256mb — Render's smallest paid tier,
+#     same 256MB size as the free one), specifically so it does NOT expire
+#     30 days after creation the way a free Postgres database does. This is
+#     the one piece of this Blueprint meant to hold real data.
 #   - Key Value: free instances don't persist to disk, so a restart empties
 #     the cache (cached Google Places results, rate-limit counters) — not
 #     data loss in the important sense, just cache misses right after.
@@ -41,7 +42,7 @@ databases:
   - name: toplinkai-db
     databaseName: toplinkai
     user: toplinkai
-    plan: free
+    plan: 0.1c-256mb
     # No external access — the web service below reaches this over Render's
     # private network via DATABASE_URL. Raise this only if something outside
     # Render (a local machine, another host) needs to connect directly.
