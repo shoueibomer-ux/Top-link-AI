@@ -19,6 +19,12 @@
 #     chat fall back to plain keyword matching without it.
 #   - CORS_ALLOWED_ORIGINS: only needed for a browser-based client (native
 #     mobile ignores CORS entirely) — leave blank otherwise.
+#   - DJANGO_SUPERUSER_USERNAME / _EMAIL / _PASSWORD: all optional, and all
+#     three must be set together to do anything. If set, build.sh creates
+#     that Django admin login on the next deploy (skipped if it already
+#     exists) — see accounts/management/commands/create_superuser_from_env.py.
+#     Leave all three blank to skip this and create an admin login some
+#     other way (e.g. the Render shell).
 #
 # Known limits of the `free` plans below, worth reading before relying on
 # this for anything real:
@@ -79,6 +85,14 @@ services:
       - key: ANTHROPIC_API_KEY
         sync: false
       - key: CORS_ALLOWED_ORIGINS
+        sync: false
+      # All three optional — leave blank in the Render dashboard prompt to
+      # skip creating an admin login this way. See the comment block above.
+      - key: DJANGO_SUPERUSER_USERNAME
+        sync: false
+      - key: DJANGO_SUPERUSER_EMAIL
+        sync: false
+      - key: DJANGO_SUPERUSER_PASSWORD
         sync: false
       - key: DATABASE_URL
         fromDatabase:
