@@ -1,5 +1,9 @@
+import os
+from unittest.mock import patch
+
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
+from django.core.management import call_command
 from django.test import TestCase, override_settings
 from rest_framework_simplejwt.tokens import RefreshToken
 
@@ -239,3 +243,61 @@ class AccountEditTests(TestCase):
         # Authenticated, but HasApiKey denies it: 403 (not 401, which is for
         # requests that aren't authenticated at all).
         self.assertEqual(no_key.status_code, 403)
+
+
+class CreateSuperuserFromEnvCommandTests(TestCase):
+    """accounts.management.commands.create_superuser_from_env — bootstraps a
+    Django admin login on a fresh deploy (see build.sh)."""
+
+    _ENV = {
+        "DJANGO_SUPERUSER_USERNAME": "opsadmin",
+        "DJANGO_SUPERUSER_EMAIL": "opsadmin@example.com",
+        "DJANGO_SUPERUSER_PASSWORD": _PASSWORD,
+    }
+
+    def _run(self):
+        call_command("create_superuser_from_env")
+
+    def test_creates_the_superuser_when_all_three_vars_are_set(self):
+        with patch.dict(os.environ, self._ENV):
+            self._run()
+
+        user = User.objects.get(username="opsadmin")
+        self.assertTrue(user.is_superuser)
+        self.assertTrue(user.is_staff)
+        self.assertEqual(user.email, "opsadmin@example.com")
+        self.assertTrue(user.check_password(_PASSWORD))
+
+    def test_is_a_noop_when_any_one_var_is_missing(self):
+        for missing in self._ENV:
+            with self.subTest(missing=missing):
+                env = {k: v for k, v in self._ENV.items() if k != missing}
+                # Clearing, not just omitting: the real environment (or an
+                # earlier subTest's patch) must not leak a value in.
+                with patch.dict(os.environ, env, clear=True):
+                    self._run()
+                self.assertFalse(User.objects.filter(username="opsadmin").exists())
+
+    def test_is_a_noop_when_none_are_set(self):
+        with patch.dict(os.environ, {}, clear=True):
+            self._run()
+        self.assertEqual(User.objects.count(), 0)
+
+    def test_running_it_twice_only_creates_the_account_once(self):
+        with patch.dict(os.environ, self._ENV):
+            self._run()
+            self._run()  # e.g. build.sh running again on the next deploy
+
+        self.assertEqual(User.objects.filter(username="opsadmin").count(), 1)
+
+    def test_an_existing_account_with_that_username_is_left_alone(self):
+        existing = User.objects.create_user(username="opsadmin", email="original@example.com", password="whatever")
+        self.assertFalse(existing.is_superuser)
+
+        with patch.dict(os.environ, self._ENV):
+            self._run()
+
+        existing.refresh_from_db()
+        self.assertFalse(existing.is_superuser)  # not promoted
+        self.assertEqual(existing.email, "original@example.com")  # not overwritten
+        self.assertEqual(User.objects.filter(username="opsadmin").count(), 1)  # not duplicated
