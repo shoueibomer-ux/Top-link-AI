@@ -65,6 +65,18 @@ flutter run --release \
   --dart-define=API_KEY="$TOPLINKAI_PROD_API_KEY"
 ```
 
+Windows PowerShell:
+
+```powershell
+$env:TOPLINKAI_PROD_API_KEY = "<the value from Render's API_KEY env var>"
+
+# a release APK:
+flutter build apk --release --dart-define=API_BASE_URL=https://toplinkai-backend.onrender.com/api --dart-define="API_KEY=$env:TOPLINKAI_PROD_API_KEY"
+
+# or run it directly on a connected device, same configuration:
+flutter run --release --dart-define=API_BASE_URL=https://toplinkai-backend.onrender.com/api --dart-define="API_KEY=$env:TOPLINKAI_PROD_API_KEY"
+```
+
 ## Backend production settings
 
 See `.env.example`. With `DJANGO_DEBUG=False` the backend requires
