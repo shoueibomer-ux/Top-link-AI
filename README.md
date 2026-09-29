@@ -40,6 +40,43 @@ Transport Security, so nothing else would stop a cleartext production URL.
 A debug build may use an `http://` `API_BASE_URL` (e.g. a LAN address so a real
 phone can reach your dev server); a release build may not.
 
+### Building against this project's production backend
+
+`API_BASE_URL` is `https://toplinkai-backend.onrender.com/api` — note the
+trailing `/api`: every endpoint call appends its own path to this (see
+`lib/api/api_client.dart`), matching how Django mounts everything under
+`/api/` (see `config/urls.py`), so a value without it would 404 on every
+request. `API_KEY` must be the exact value configured for the
+`toplinkai-backend` web service's `API_KEY` env var on Render (see
+`render.yaml`) — it is a real secret and is **never** committed here or
+passed as a literal on the command line; export it in your own shell first:
+
+```bash
+export TOPLINKAI_PROD_API_KEY=<the value from Render's API_KEY env var>
+
+# a release APK:
+flutter build apk --release \
+  --dart-define=API_BASE_URL=https://toplinkai-backend.onrender.com/api \
+  --dart-define=API_KEY="$TOPLINKAI_PROD_API_KEY"
+
+# or run it directly on a connected device, same configuration:
+flutter run --release \
+  --dart-define=API_BASE_URL=https://toplinkai-backend.onrender.com/api \
+  --dart-define=API_KEY="$TOPLINKAI_PROD_API_KEY"
+```
+
+Windows PowerShell:
+
+```powershell
+$env:TOPLINKAI_PROD_API_KEY = "<the value from Render's API_KEY env var>"
+
+# a release APK:
+flutter build apk --release --dart-define=API_BASE_URL=https://toplinkai-backend.onrender.com/api --dart-define="API_KEY=$env:TOPLINKAI_PROD_API_KEY"
+
+# or run it directly on a connected device, same configuration:
+flutter run --release --dart-define=API_BASE_URL=https://toplinkai-backend.onrender.com/api --dart-define="API_KEY=$env:TOPLINKAI_PROD_API_KEY"
+```
+
 ## Backend production settings
 
 See `.env.example`. With `DJANGO_DEBUG=False` the backend requires
