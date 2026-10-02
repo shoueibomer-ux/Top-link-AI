@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../api/api_client.dart';
@@ -5,6 +6,13 @@ import '../app_colors.dart';
 import '../onboarding/onboarding_screen.dart';
 import 'device_id.dart';
 import 'paywall_screen.dart';
+
+/// Dev-only escape hatch: `flutter run --dart-define=SKIP_PAYWALL=true`
+/// skips the subscription check entirely. Gated on [kDebugMode] on top of
+/// the dart-define itself, so it's a no-op in profile/release builds even if
+/// someone passed the flag by mistake — there is no way to ship a build that
+/// bypasses the paywall.
+const bool kSkipPaywall = bool.fromEnvironment('SKIP_PAYWALL');
 
 /// The app's real starting point: gates the onboarding/matching flow behind
 /// an active subscription. Shown on cold start and whenever the app needs
@@ -20,6 +28,7 @@ class _AppEntryPointState extends State<AppEntryPoint> {
   late final Future<bool> _isSubscribedFuture = _checkSubscription();
 
   Future<bool> _checkSubscription() async {
+    if (kDebugMode && kSkipPaywall) return true;
     final deviceId = await getDeviceId();
     try {
       final subscriptionStatus = await ApiClient().getSubscriptionStatus(deviceId);
