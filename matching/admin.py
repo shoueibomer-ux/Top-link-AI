@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Category, MatchRequest, Profile, Subscription, UnlockCredit
+from .models import Category, MatchRequest, Profile
 
 
 @admin.register(Category)
@@ -30,19 +30,3 @@ class MatchRequestAdmin(admin.ModelAdmin):
     def request_text_preview(self, obj):
         text = obj.request_text
         return text if len(text) <= 60 else f"{text[:60]}…"
-
-
-@admin.register(Subscription)
-class SubscriptionAdmin(admin.ModelAdmin):
-    list_display = ("id", "device_id", "status", "start_date", "expiry_date", "updated_at")
-    list_filter = ("status",)
-    search_fields = ("device_id",)
-    date_hierarchy = "created_at"
-
-
-@admin.register(UnlockCredit)
-class UnlockCreditAdmin(admin.ModelAdmin):
-    list_display = ("id", "device_id", "created_at", "consumed_at", "consumed_place_id")
-    list_filter = (("consumed_at", admin.EmptyFieldListFilter),)
-    search_fields = ("device_id", "transaction_id", "consumed_place_id")
-    date_hierarchy = "created_at"

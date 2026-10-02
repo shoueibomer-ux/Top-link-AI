@@ -1,533 +1,109 @@
-import requests
-from django.db import transaction
-from django.utils import timezone
-from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 from rest_framework.response import Response
 
-from accounts.models import UserRole
-from matching.access import consume_credit, credits_available, is_subscribed
-from matching.permissions import HasApiKey
-from notifications.services import notify
 from .chat_service import refine_request
-from .models import ProviderAvailability, ProviderMatch, ProviderOnboarding, ServiceRequest
-from .serializers import ProviderMatchSerializer, ProviderOnboardingSerializer, RealProviderSerializer
-from .services import (
-    CATEGORY_QUERIES,
-    CITIES,
-    availability_map,
-    estimated_response_minutes,
-    recent_contact_counts,
-    search_providers,
-)
-
-UNLOCK_PRICE_USD = "4.99"
-
-
-def _provider_business_profile_or_error(request):
-    """Returns (business_profile, None) for an authenticated provider
-    account, or (None, Response) to return immediately otherwise. Shared by
-    ProviderIncomingRequestListView/ProviderRequestRespondView — the same
-    role check as accounts.views.ProviderProfileView, kept as a local
-    function rather than imported so provider_search doesn't reach into
-    accounts.views for it (models only).
-    """
-    profile = getattr(request.user, "profile", None)
-    if profile is None or profile.role != UserRole.PROVIDER:
-        return None, Response({"detail": "Only provider accounts can do this."}, status=403)
-    business_profile = getattr(request.user, "provider_business_profile", None)
-    if business_profile is None:
-        return None, Response({"detail": "Only provider accounts can do this."}, status=403)
-    return business_profile, None
-
-
-def _is_subscribed(device_id: str) -> bool:
-    return is_subscribed(device_id)
-
-
-def _enrich(providers: list[dict], city: str) -> None:
-    """Attaches the fields every provider gets regardless of unlock state —
-    city, social proof, availability, and the response-time estimate — in
-    place, on the raw search_providers() dicts."""
-    place_ids = [provider["place_id"] for provider in providers if provider["place_id"]]
-    contact_counts = recent_contact_counts(place_ids)
-    availability = availability_map(place_ids)
-    for provider in providers:
-        provider["city"] = city
-        provider["recent_contact_count"] = contact_counts.get(provider["place_id"], 0)
-        provider["is_available_now"] = availability.get(provider["place_id"], True)
-        provider["estimated_response_minutes"] = (
-            estimated_response_minutes(provider["place_id"]) if provider["place_id"] else None
-        )
-
-
-def _search_and_record(
-    category: str,
-    city: str,
-    device_id: str,
-    force_refresh: bool = False,
-    problem_description: str = "",
-    classification: dict | None = None,
-) -> dict:
-    """Shared by ProviderSearchView and ChatRefineView: search Google Places
-    for `category`/`city`, then serialize every result through
-    RealProviderSerializer, which masks the phone and omits address/website/
-    maps_url for any place_id this device hasn't unlocked yet (see
-    ProviderUnlockView — that is the ONLY place a ProviderMatch row, and
-    therefore a device's unlock of a specific provider, gets created).
-    Appearing in these results never creates one. Returns the dict to use
-    directly as a Response body, or raises RuntimeError/requests.RequestException
-    same as search_providers.
-
-    `problem_description` is only ever non-blank when called from the chat
-    flow (see ChatRefineView) — the fixed category-tap flow has no free text
-    to record, so it's left blank there rather than fabricated. Likewise
-    `classification` (job_size/job_complexity/etc., from
-    chat_service.refine_request) is only ever populated from chat.
-
-    Build plan Phase 1A, task 4: every call creates a ServiceRequest — the
-    "job" anchor Phase 1B's matching and Phase 1C's Leads read from — even
-    when no provider is ever unlocked from it, since the request itself
-    exists independently of whether the client unlocks any contact details.
-    """
-    classification = classification or {}
-    service_request = ServiceRequest.objects.create(
-        device_id=device_id,
-        category=category,
-        city=city,
-        problem_description=problem_description,
-        job_size=classification.get("job_size") or "",
-        job_complexity=classification.get("job_complexity") or "",
-        required_skills=classification.get("required_skills") or [],
-        estimated_team_size=classification.get("estimated_team_size"),
-        required_equipment=classification.get("required_equipment") or [],
-        required_qualifications=classification.get("required_qualifications") or [],
-    )
-
-    providers = search_providers(category, city, force_refresh=force_refresh)
-    _enrich(providers, city)
-
-    # "Found" (not "searching") now that real results exist for this
-    # request — still not "requested": no provider has been unlocked yet.
-    if providers:
-        service_request.status = ProviderMatch.STATUS_FOUND
-        service_request.save(update_fields=["status", "updated_at"])
-
-    place_ids = {provider["place_id"] for provider in providers if provider["place_id"]}
-    unlocked_place_ids = set(
-        ProviderMatch.objects.filter(device_id=device_id, place_id__in=place_ids).values_list(
-            "place_id", flat=True
-        )
-    )
-
-    data = RealProviderSerializer(providers, many=True, context={"unlocked_place_ids": unlocked_place_ids}).data
-    return {
-        "is_subscribed": _is_subscribed(device_id),
-        "providers": data,
-        "service_request_id": service_request.id,
-    }
-
-
-class ProviderSearchView(APIView):
-    """GET /api/providers/search/?category=&city=&device_id=[&force_refresh=true]
-
-    Real providers via Google Places (see provider_search.services). Every
-    result is masked (see RealProviderSerializer) unless this device has
-    already unlocked that specific place_id via ProviderUnlockView — an
-    active Subscription does NOT change this response; it only means the
-    device's next unlock of any one provider will be free instead of
-    charging $4.99. `is_subscribed` is included as a hint for the client's
-    unlock-prompt copy, not as a gate on this endpoint's data.
-    """
-
-    def get(self, request):
-        category = request.query_params.get("category")
-        city = request.query_params.get("city")
-        device_id = request.query_params.get("device_id")
-
-        if category not in CATEGORY_QUERIES:
-            return Response(
-                {"detail": f"category is required and must be one of {list(CATEGORY_QUERIES)}."}, status=400
-            )
-        if city not in CITIES:
-            return Response({"detail": f"city is required and must be one of {CITIES}."}, status=400)
-        if not device_id:
-            return Response({"detail": "device_id is required."}, status=400)
-
-        force_refresh = request.query_params.get("force_refresh") == "true"
-
-        try:
-            result = _search_and_record(category, city, device_id, force_refresh=force_refresh)
-        except RuntimeError as exc:
-            return Response({"detail": str(exc)}, status=503)
-        except requests.RequestException:
-            return Response({"detail": "Could not reach the provider search service."}, status=502)
-
-        return Response(result)
+from .models import ProviderOnboarding, ServiceRequest
+from .serializers import ProviderOnboardingSerializer, ServiceRequestSerializer
+from .services import CITIES
 
 
 class ChatRefineView(APIView):
-    """POST /api/chat/refine/ {"message": ..., "device_id": ..., "city": (optional)}
+    """POST /api/chat/refine/ {"message": ..., "device_id": ...}
 
-    Free-text alternative to the fixed category-tap onboarding flow: extracts
-    a category/urgency/summary from what the client typed (see
-    provider_search.chat_service.refine_request), then immediately runs the
-    same search+record flow as ProviderSearchView so the chat goes straight
-    from "what I typed" to "here are providers" in one round trip.
+    Free-text classification only — no request is created here (see
+    ServiceRequestCreateView for that). Lets Ask AI tell the client what
+    category it thinks they mean before they commit to anything; the client
+    then continues into the same request flow a category tap would, with
+    that category pre-selected (see OnboardingScreen's initialCategory).
     """
 
     def post(self, request):
         text = (request.data.get("message") or "").strip()
         device_id = request.data.get("device_id")
-        city = request.data.get("city") or "Edmonton"
 
         if not text:
             return Response({"detail": "message is required."}, status=400)
         if not device_id:
             return Response({"detail": "device_id is required."}, status=400)
-        if city not in CITIES:
-            return Response({"detail": f"city must be one of {CITIES}."}, status=400)
 
         refined = refine_request(text)
-        category = refined["category"]
-
-        if category is None:
-            return Response({
-                "category": None,
-                "urgency": refined["urgency"],
-                "notes": refined["notes"],
-                "is_subscribed": _is_subscribed(device_id),
-                "providers": [],
-            })
-
-        try:
-            result = _search_and_record(
-                category, city, device_id, problem_description=text, classification=refined
-            )
-        except RuntimeError as exc:
-            return Response({"detail": str(exc)}, status=503)
-        except requests.RequestException:
-            return Response({"detail": "Could not reach the provider search service."}, status=502)
-
         return Response({
-            "category": category,
+            "category": refined["category"],
             "urgency": refined["urgency"],
             "notes": refined["notes"],
-            "job_size": refined["job_size"],
-            "job_complexity": refined["job_complexity"],
-            "required_skills": refined["required_skills"],
-            "estimated_team_size": refined["estimated_team_size"],
-            "required_equipment": refined["required_equipment"],
-            "required_qualifications": refined["required_qualifications"],
-            **result,
         })
 
 
-class ProviderUnlockView(APIView):
-    """POST /api/providers/unlock/ {"device_id", "place_id", "category", "city", "paid": bool}
+class ServiceRequestCreateView(APIView):
+    """POST /api/requests/
+    {"device_id", "category", "phone", "consent": true,
+     "city": (optional), "description": (optional), "urgency": (optional)}
 
-    The ONLY place a real phone number, address, or website is ever
-    revealed, and the ONLY place a ProviderMatch ("Your requests" entry) is
-    ever created — never as a side effect of search (see
-    provider_search.views._search_and_record / RealProviderSerializer).
+    Creates a ServiceRequest — the one thing this endpoint does, shared by
+    the app's own request flow and (once it exists) the website form. No
+    provider matching or routing happens here yet (see docs/ai-agent-system.md
+    for where that's headed); a human currently reads these from the Django
+    admin.
 
-    A NEW unlock is paid for, in this order, by:
-      1. an active Subscription (free, unlimited) -> unlock_method "subscription";
-      2. `"paid": true` — the client asserting it just made a per-provider
-         $4.99 purchase -> "paid". Trusted from the client, like
-         SubscriptionActivateView: there is no real payment processor wired
-         up yet, so this exercises the gate end-to-end, it doesn't bill anyone;
-      3. otherwise the device's oldest unspent UnlockCredit (the paywall's
-         "$4.99 one-time" option), spent silently with no second payment
-         -> "paid";
-      4. otherwise 402.
-    (2) is checked before (3) so a client that just paid per-provider never
-    also burns a pre-paid credit.
-
-    A credit is only spent once the provider was actually found and the
-    ProviderMatch created, in one transaction — a 404/502/race can't burn it.
-
-    Re-unlocking a provider this device already unlocked is free and never
-    consumes anything: it just refreshes its contact details and returns 200
-    (so a retried request after a dropped response still succeeds), and it
-    never resets `status` or `unlock_method` on an existing row.
+    `consent` must be exactly `true` — explicit, per-request, opt-in consent
+    to share the request (including the phone number) with providers. There
+    is no default or inferred consent; a request without it is rejected, not
+    silently created without sharing.
     """
+
+    REQUIRED_CONSENT_MESSAGE = (
+        "You must consent to share your request details, including your phone "
+        "number, with service providers before submitting a request."
+    )
 
     def post(self, request):
         device_id = request.data.get("device_id")
-        place_id = request.data.get("place_id")
         category = request.data.get("category")
-        city = request.data.get("city")
-        paid = request.data.get("paid") is True
+        phone = (request.data.get("phone") or "").strip()
+        city = request.data.get("city") or "Edmonton"
+        description = (request.data.get("description") or "").strip()
+        urgency = request.data.get("urgency") or ""
 
         if not device_id:
             return Response({"detail": "device_id is required."}, status=400)
-        if not place_id:
-            return Response({"detail": "place_id is required."}, status=400)
-        if category not in CATEGORY_QUERIES:
-            return Response(
-                {"detail": f"category is required and must be one of {list(CATEGORY_QUERIES)}."}, status=400
-            )
+        if not category:
+            return Response({"detail": "category is required."}, status=400)
+        if not phone:
+            return Response({"detail": "phone is required."}, status=400)
         if city not in CITIES:
-            return Response({"detail": f"city is required and must be one of {CITIES}."}, status=400)
+            return Response({"detail": f"city must be one of {CITIES}."}, status=400)
+        if request.data.get("consent") is not True:
+            return Response({"detail": self.REQUIRED_CONSENT_MESSAGE}, status=400)
 
-        subscribed = _is_subscribed(device_id)
-        already_unlocked = ProviderMatch.objects.filter(device_id=device_id, place_id=place_id).exists()
-        if not already_unlocked and not subscribed and not paid and not credits_available(device_id):
-            return self._payment_required()
-
-        try:
-            providers = search_providers(category, city)
-        except RuntimeError as exc:
-            return Response({"detail": str(exc)}, status=503)
-        except requests.RequestException:
-            return Response({"detail": "Could not reach the provider search service."}, status=502)
-
-        provider = next((p for p in providers if p["place_id"] == place_id), None)
-        if provider is None:
-            return Response(
-                {"detail": "That provider wasn't found for this category/city — try searching again."}, status=404
-            )
-
-        service_request = (
-            ServiceRequest.objects.filter(device_id=device_id, category=category, city=city)
-            .order_by("-created_at")
-            .first()
+        service_request = ServiceRequest.objects.create(
+            device_id=device_id,
+            category=category,
+            city=city,
+            problem_description=description,
+            phone=phone,
+            consent_given=True,
         )
-        with transaction.atomic():
-            match, created = ProviderMatch.objects.get_or_create(
-                device_id=device_id,
-                place_id=place_id,
-                defaults={
-                    "category": category,
-                    "city": city,
-                    "provider_name": provider["name"],
-                    "provider_phone": provider["phone"],
-                    "provider_address": provider["address"],
-                    "provider_website": provider["website"],
-                    "service_request": service_request,
-                    "unlock_method": (
-                        ProviderMatch.UNLOCK_METHOD_SUBSCRIPTION if subscribed else ProviderMatch.UNLOCK_METHOD_PAID
-                    ),
-                },
-            )
-            if created and not subscribed and not paid and not consume_credit(device_id, place_id):
-                # The credit seen above was spent by a concurrent request
-                # between that check and here — undo the match we just made.
-                transaction.set_rollback(True)
-                return self._payment_required()
-            if not created:
-                match.provider_name = provider["name"]
-                match.provider_phone = provider["phone"]
-                match.provider_address = provider["address"]
-                match.provider_website = provider["website"]
-                match.save(update_fields=["provider_name", "provider_phone", "provider_address", "provider_website", "last_viewed_at"])
-
-        _enrich([provider], city)
-        data = RealProviderSerializer(provider, context={"unlocked_place_ids": {place_id}}).data
         return Response(
             {
-                "provider": data,
-                "match_id": match.id,
-                "match_status": match.status,
-                "unlock_method": match.unlock_method,
-                "unlock_credits_remaining": credits_available(device_id),
+                "request_id": service_request.id,
+                "category": service_request.category,
+                "urgency": urgency,
             },
-            status=200,
-        )
-
-    @staticmethod
-    def _payment_required():
-        return Response(
-            {
-                "detail": f"Subscribe or pay ${UNLOCK_PRICE_USD} to unlock this provider's contact details.",
-                "price_usd": UNLOCK_PRICE_USD,
-            },
-            status=402,
+            status=201,
         )
 
 
-class ProviderMatchListView(APIView):
-    """GET /api/provider-matches/?device_id=
-
-    The client's request/status pipeline: every provider this device has
-    unlocked, each carrying its own status (see ProviderMatch.STATUS_CHOICES),
-    newest first.
-    """
+class ServiceRequestListView(APIView):
+    """GET /api/requests/?device_id=...  — "Your requests": every request
+    this device has submitted, newest first."""
 
     def get(self, request):
         device_id = request.query_params.get("device_id")
         if not device_id:
             return Response({"detail": "device_id is required."}, status=400)
 
-        matches = ProviderMatch.objects.filter(device_id=device_id).order_by("-last_viewed_at")
-        return Response({"matches": ProviderMatchSerializer(matches, many=True).data})
-
-
-class ProviderMatchStatusView(APIView):
-    """POST /api/provider-matches/<id>/status/ {"device_id": ..., "status": ...}
-
-    Lets the client manually advance (or archive) a request. Scoped to
-    device_id as well as pk so one device can't rewrite another's status by
-    guessing an id.
-    """
-
-    def post(self, request, pk):
-        device_id = request.data.get("device_id")
-        status_value = request.data.get("status")
-        valid_statuses = dict(ProviderMatch.STATUS_CHOICES)
-        if not device_id:
-            return Response({"detail": "device_id is required."}, status=400)
-        if status_value not in valid_statuses:
-            return Response({"detail": f"status must be one of {list(valid_statuses)}."}, status=400)
-
-        try:
-            match = ProviderMatch.objects.get(pk=pk, device_id=device_id)
-        except ProviderMatch.DoesNotExist:
-            return Response({"detail": "Not found."}, status=404)
-
-        match.status = status_value
-        # last_viewed_at is included explicitly (not just relying on
-        # auto_now) so recent_contact_counts()'s 7-day window is measured
-        # from when the status actually changed, not the original find.
-        match.save(update_fields=["status", "last_viewed_at"])
-        return Response(ProviderMatchSerializer(match).data)
-
-
-class ProviderIncomingRequestListView(APIView):
-    """GET /api/provider/requests/
-
-    The authenticated provider's queue of incoming requests still waiting on
-    them — every ProviderMatch row at `place_id == this provider's claimed
-    listing` and `status == STATUS_REQUESTED`, oldest first. This is the
-    other side of ProviderUnlockView: a client unlocking a provider creates
-    exactly the row this endpoint surfaces to that provider, which is what
-    finally lets a request leave "Requested" and become "Responded" (see
-    ProviderRequestRespondView) instead of sitting there forever.
-
-    An unclaimed provider (no place_id on their business profile yet) has no
-    way to be matched against a ProviderMatch row, so this returns an empty
-    queue rather than an error — claiming a listing is a separate, already-
-    existing step (see accounts.views.ProviderProfileView).
-    """
-
-    permission_classes = [HasApiKey, IsAuthenticated]
-
-    def get(self, request):
-        business_profile, error = _provider_business_profile_or_error(request)
-        if error:
-            return error
-        if not business_profile.place_id:
-            return Response({"requests": []})
-
-        matches = ProviderMatch.objects.filter(
-            place_id=business_profile.place_id, status=ProviderMatch.STATUS_REQUESTED
-        ).order_by("first_unlocked_at")
-        return Response({"requests": ProviderMatchSerializer(matches, many=True).data})
-
-
-class ProviderRequestRespondView(APIView):
-    """POST /api/provider/requests/<id>/respond/ {"decision": "accepted"|"declined", "message": (optional)}
-
-    The ONLY place a ProviderMatch moves from STATUS_REQUESTED to
-    STATUS_RESPONDED — closing the loop ProviderUnlockView opens. Scoped to
-    the authenticated provider's own claimed place_id (like
-    ProviderMatchStatusView is scoped to device_id on the client side), so
-    one provider can't respond to — or even see the id of — another
-    provider's request by guessing a pk. Notifies the requesting device
-    (see notifications.services.notify) the same way SubscriptionActivateView
-    already does, so the client finds out proactively rather than by
-    polling "Your requests".
-    """
-
-    permission_classes = [HasApiKey, IsAuthenticated]
-
-    def post(self, request, pk):
-        business_profile, error = _provider_business_profile_or_error(request)
-        if error:
-            return error
-        if not business_profile.place_id:
-            return Response({"detail": "Claim a business listing before responding to requests."}, status=403)
-
-        decision = request.data.get("decision")
-        if decision not in (ProviderMatch.DECISION_ACCEPTED, ProviderMatch.DECISION_DECLINED):
-            return Response({"detail": "decision must be 'accepted' or 'declined'."}, status=400)
-        message = (request.data.get("message") or "").strip()
-
-        try:
-            match = ProviderMatch.objects.get(pk=pk, place_id=business_profile.place_id)
-        except ProviderMatch.DoesNotExist:
-            return Response({"detail": "Not found."}, status=404)
-
-        if match.status != ProviderMatch.STATUS_REQUESTED:
-            return Response({"detail": "This request has already been responded to."}, status=400)
-
-        match.status = ProviderMatch.STATUS_RESPONDED
-        match.provider_decision = decision
-        match.provider_message = message
-        match.responded_at = timezone.now()
-        match.save(
-            update_fields=["status", "provider_decision", "provider_message", "responded_at", "last_viewed_at"]
-        )
-
-        provider_label = business_profile.business_name or match.provider_name
-        verb = "accepted" if decision == ProviderMatch.DECISION_ACCEPTED else "declined"
-        body = f"{provider_label} {verb} your request."
-        if message:
-            body += f' "{message}"'
-        notify(match.device_id, f"{provider_label} responded to your request", body, category=match.category)
-
-        return Response(ProviderMatchSerializer(match).data)
-
-
-class ProviderAvailabilityView(APIView):
-    """GET/POST /api/provider-availability/?place_id=
-
-    This platform's own "available now / busy" override for a real business
-    (see ProviderAvailability's docstring on the trust limitation — there's
-    no provider account system yet, so this trusts whoever calls it with the
-    shared API key). GET returns the current value (available if no row
-    exists yet); POST {"is_available_now": bool} sets it.
-    """
-
-    def get(self, request):
-        place_id = request.query_params.get("place_id")
-        if not place_id:
-            return Response({"detail": "place_id is required."}, status=400)
-        availability = ProviderAvailability.objects.filter(place_id=place_id).first()
-        is_available_now = availability.is_available_now if availability else True
-        return Response({"place_id": place_id, "is_available_now": is_available_now})
-
-    def post(self, request):
-        place_id = request.data.get("place_id")
-        is_available_now = request.data.get("is_available_now")
-        if not place_id:
-            return Response({"detail": "place_id is required."}, status=400)
-        if not isinstance(is_available_now, bool):
-            return Response({"detail": "is_available_now must be a boolean."}, status=400)
-
-        availability, _ = ProviderAvailability.objects.update_or_create(
-            place_id=place_id, defaults={"is_available_now": is_available_now}
-        )
-        return Response({"place_id": place_id, "is_available_now": availability.is_available_now})
-
-
-class KnownProvidersView(APIView):
-    """GET /api/providers/known/
-
-    Distinct (place_id, name) pairs already seen via search — lets the demo
-    Provider Dashboard offer a "sign in as" picker of real businesses, since
-    there's no provider account system to look this up from otherwise (see
-    ProviderAvailability's docstring).
-    """
-
-    def get(self, request):
-        rows = (
-            ProviderMatch.objects.values("place_id", "provider_name")
-            .distinct()
-            .order_by("provider_name")[:200]
-        )
-        return Response({"providers": list(rows)})
+        requests = ServiceRequest.objects.filter(device_id=device_id).order_by("-created_at")
+        return Response({"requests": ServiceRequestSerializer(requests, many=True).data})
 
 
 class ProviderOnboardingView(APIView):

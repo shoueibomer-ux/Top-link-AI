@@ -1,17 +1,19 @@
 import 'package:flutter/material.dart';
 
 import '../api/api_client.dart';
-import '../api/chat_refine_result.dart';
+import '../api/service_request.dart';
 import '../app_colors.dart';
 import '../app_styles.dart';
+import '../onboarding/onboarding_screen.dart';
 import '../onboarding/service_category.dart';
 import '../subscription/device_id.dart';
-import '../widgets/real_provider_card.dart';
 
 /// Free-text alternative to the fixed category-tap onboarding flow (see
 /// provider_search.chat_service.refine_request / ChatRefineView) — the user
-/// describes what they need in their own words and the backend extracts a
-/// category/urgency, then immediately searches providers for it.
+/// describes what they need in their own words and the backend classifies
+/// it. Classification only: tapping the resulting "Continue" button opens
+/// the same request flow a category tap would (see OnboardingScreen's
+/// initialCategory), where the request is actually submitted.
 class ChatScreen extends StatefulWidget {
   const ChatScreen({super.key});
 
@@ -59,8 +61,7 @@ class _ChatScreenState extends State<ChatScreen> {
       final category = result.category == null ? null : findCategoryBySlug(result.category!);
       final reply = category == null
           ? "I couldn't quite tell what kind of service you need — try naming a trade, like plumbing or electrical."
-          : "Got it — sounds like ${category.label.toLowerCase()}, ${_urgencyPhrase(result.urgency)}."
-              "${result.providers.isEmpty ? ' No providers turned up nearby yet.' : " Here's who's available:"}";
+          : "Got it — sounds like ${category.label.toLowerCase()}, ${_urgencyPhrase(result.urgency)}.";
       setState(() => _messages.add(_ChatMessage.assistant(reply, result)));
     } catch (_) {
       setState(() => _messages.add(
@@ -73,6 +74,14 @@ class _ChatScreenState extends State<ChatScreen> {
       if (mounted) setState(() => _sending = false);
       _scrollToBottom();
     }
+  }
+
+  void _continueWith(String categorySlug) {
+    final category = findCategoryBySlug(categorySlug);
+    if (category == null) return;
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => OnboardingScreen(initialCategory: category)),
+    );
   }
 
   void _scrollToBottom() {
@@ -97,7 +106,8 @@ class _ChatScreenState extends State<ChatScreen> {
                   controller: _scrollController,
                   padding: const EdgeInsets.all(20),
                   itemCount: _messages.length,
-                  itemBuilder: (context, index) => _MessageBubble(message: _messages[index]),
+                  itemBuilder: (context, index) =>
+                      _MessageBubble(message: _messages[index], onContinue: _continueWith),
                 ),
         ),
         if (_sending)
@@ -142,7 +152,7 @@ class _ChatEmptyState extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               'Describe your request in your own words — e.g. "I need a plumber '
-              'available this weekend under \$100" — and we\'ll match you instantly.',
+              'this weekend" — and we\'ll point you to the right category.',
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 14, color: AppColors.muted),
             ),
@@ -154,9 +164,10 @@ class _ChatEmptyState extends StatelessWidget {
 }
 
 class _MessageBubble extends StatelessWidget {
-  const _MessageBubble({required this.message});
+  const _MessageBubble({required this.message, required this.onContinue});
 
   final _ChatMessage message;
+  final ValueChanged<String> onContinue;
 
   @override
   Widget build(BuildContext context) {
@@ -196,12 +207,17 @@ class _MessageBubble extends StatelessWidget {
               ),
               child: Text(message.text, style: const TextStyle(color: AppColors.navy, fontSize: 14)),
             ),
-            if (result != null && result.providers.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              for (final provider in result.providers) ...[
-                RealProviderCard(provider: provider, category: result.category!),
-                const SizedBox(height: 10),
-              ],
+            if (result?.category != null) ...[
+              const SizedBox(height: 10),
+              OutlinedButton(
+                onPressed: () => onContinue(result!.category!),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.turquoise,
+                  side: const BorderSide(color: AppColors.turquoise),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(kRadius)),
+                ),
+                child: const Text('Continue', style: TextStyle(fontWeight: FontWeight.w600)),
+              ),
             ],
           ],
         ),
@@ -238,7 +254,7 @@ class _ChatInputBar extends StatelessWidget {
               textInputAction: TextInputAction.send,
               onSubmitted: (_) => onSend(),
               decoration: InputDecoration(
-                hintText: 'e.g. I need a plumber this weekend, under \$100',
+                hintText: 'e.g. I need a plumber this weekend',
                 hintStyle: TextStyle(color: AppColors.muted, fontSize: 13),
                 filled: true,
                 fillColor: AppColors.lightBackground,

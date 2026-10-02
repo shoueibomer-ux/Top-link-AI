@@ -11,11 +11,9 @@ revived matching_engine scoring. Uses the Claude API when available, falling
 back to keyword matching on any failure so this never raises (same pattern
 as matching.matching_engine.ai_categorize).
 
-Note: provider_search only filters by category + city (see
-provider_search.services.search_providers) — there's no budget/schedule
-filtering against Google Places, so a detail like "under $100" surfaces in
-`notes` for the client to mention when they reach out, rather than actually
-filtering results.
+Note: this only classifies — it never creates a ServiceRequest itself (see
+ServiceRequestCreateView for that) — so a detail like "under $100" surfaces
+in `notes` for whoever reads the request, rather than being acted on here.
 """
 
 import json

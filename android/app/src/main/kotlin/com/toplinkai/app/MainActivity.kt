@@ -1,4 +1,4 @@
-package com.example.toplinkai_app
+package com.toplinkai.app
 
 import io.flutter.embedding.android.FlutterActivity
 

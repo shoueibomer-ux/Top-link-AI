@@ -29,13 +29,23 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   static const _stepCount = 4;
 
   final _apiClient = ApiClient();
+  final _phoneController = TextEditingController();
+  final _descriptionController = TextEditingController();
 
   late int _step = widget.initialCategory == null ? 0 : 1;
   late ServiceCategory? _selectedCategory = widget.initialCategory;
   Urgency? _selectedUrgency;
   double _lat = ApiClient.demoLat;
   double _lng = ApiClient.demoLng;
+  bool _consentGiven = false;
   bool _isSubmitting = false;
+
+  @override
+  void dispose() {
+    _phoneController.dispose();
+    _descriptionController.dispose();
+    super.dispose();
+  }
 
   bool get _canContinue {
     switch (_step) {
@@ -43,6 +53,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         return _selectedCategory != null;
       case 1:
         return _selectedUrgency != null;
+      case 3:
+        return !_isSubmitting && _phoneController.text.trim().isNotEmpty && _consentGiven;
       default:
         return !_isSubmitting;
     }
@@ -61,27 +73,25 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
     try {
       final deviceId = await getDeviceId();
-      final result = await _apiClient.searchRealProviders(
-        category: category.slug,
-        city: ApiClient.demoCity,
+      await _apiClient.createServiceRequest(
         deviceId: deviceId,
+        category: category.slug,
+        phone: _phoneController.text.trim(),
+        consent: _consentGiven,
+        description: _descriptionController.text.trim(),
       );
 
       if (!mounted) return;
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
-          builder: (_) => HomeScreen(
-            category: category,
-            urgency: urgency,
-            providers: result.providers,
-          ),
+          builder: (_) => HomeScreen(category: category, urgency: urgency),
         ),
       );
     } catch (e) {
       if (!mounted) return;
       setState(() => _isSubmitting = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not reach the provider search service: $e')),
+        SnackBar(content: Text('Could not submit your request: $e')),
       );
     }
   }
@@ -143,6 +153,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         ),
                       _ => ConfirmationStep(
                           categoryLabel: _selectedCategory?.label ?? 'service',
+                          phoneController: _phoneController,
+                          descriptionController: _descriptionController,
+                          consentGiven: _consentGiven,
+                          onConsentChanged: (value) => setState(() => _consentGiven = value),
                         ),
                     },
                   ),

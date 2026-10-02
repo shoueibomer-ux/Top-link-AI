@@ -1,134 +1,6 @@
 from django.db import models
 
 
-class ProviderMatch(models.Model):
-    """The client's request/connection record for one real (Google Places)
-    provider — created ONLY when a device actually unlocks that provider's
-    full contact details (see provider_search.views.ProviderUnlockView), not
-    merely because the provider showed up in a search result. A provider
-    appearing in `search_providers()` results is ephemeral (see
-    ServiceRequest.status / STATUS_FOUND) until a client explicitly unlocks
-    it, at which point this row is created and the client's device gains
-    permanent access to the real phone/address/website for that provider.
-
-    NOTE: identifies "the client" by `device_id`, not a FK to Django's User
-    model — this app has no login/signup system, so there's no User row to
-    point at. `device_id` is the same client identifier already used by
-    matching.models.Subscription (see provider_search.views for the
-    subscription check), which is the real mechanism this project uses to
-    answer "who is asking" everywhere else.
-    """
-
-    STATUS_SEARCHING = "searching"
-    STATUS_FOUND = "found"
-    STATUS_REQUESTED = "requested"
-    STATUS_RESPONDED = "responded"
-    STATUS_CONTACTED = "contacted"
-    STATUS_BOOKED = "booked"
-    STATUS_IN_PROGRESS = "in_progress"
-    STATUS_COMPLETED = "completed"
-    STATUS_CANCELLED = "cancelled"
-    STATUS_ARCHIVED = "archived"
-    # Retired: rows created before the unlock-gated flow default to this.
-    # Kept only so old data and ProviderMatchStatusView can still read/set
-    # it if ever needed — no longer offered as a fresh default or (in the
-    # Flutter app) as a manual status choice.
-    STATUS_MATCHED = "matched"
-    STATUS_CHOICES = [
-        (STATUS_SEARCHING, "Searching"),
-        (STATUS_FOUND, "Found"),
-        (STATUS_REQUESTED, "Requested"),
-        (STATUS_RESPONDED, "Responded"),
-        (STATUS_CONTACTED, "Contacted"),
-        (STATUS_BOOKED, "Booked"),
-        (STATUS_IN_PROGRESS, "In Progress"),
-        (STATUS_COMPLETED, "Completed"),
-        (STATUS_CANCELLED, "Cancelled"),
-        (STATUS_ARCHIVED, "Archived"),
-        (STATUS_MATCHED, "Matched (legacy)"),
-    ]
-
-    device_id = models.CharField(max_length=64)
-    category = models.CharField(max_length=50)
-    city = models.CharField(max_length=100)
-    # Nullable/optional: rows created before ServiceRequest existed have
-    # none, and nothing about the client's own History view depends on it
-    # being set — see ServiceRequest's docstring for what this links to.
-    service_request = models.ForeignKey(
-        "ServiceRequest", null=True, blank=True, on_delete=models.SET_NULL, related_name="provider_matches"
-    )
-    place_id = models.CharField(max_length=255)
-    provider_name = models.CharField(max_length=255)
-    provider_phone = models.CharField(max_length=50, blank=True)
-    provider_address = models.CharField(max_length=500, blank=True)
-    provider_website = models.URLField(max_length=500, blank=True)
-    # How this unlock was paid for — "subscription" (device had an active
-    # Subscription at unlock time, no charge) or "paid" (one-off $4.99,
-    # trusted from the client same as SubscriptionActivateView — there's no
-    # real payment processor wired up for this yet either). Blank on rows
-    # created before this field existed.
-    UNLOCK_METHOD_SUBSCRIPTION = "subscription"
-    UNLOCK_METHOD_PAID = "paid"
-    UNLOCK_METHOD_CHOICES = [
-        (UNLOCK_METHOD_SUBSCRIPTION, "Subscription"),
-        (UNLOCK_METHOD_PAID, "Paid ($4.99)"),
-    ]
-    unlock_method = models.CharField(max_length=20, choices=UNLOCK_METHOD_CHOICES, blank=True)
-    # The free-text problem description that led to this match, when it
-    # came from the chat flow (see ChatRefineView) — blank for matches found
-    # via the fixed category-tap onboarding flow, since there's no free text
-    # to capture there. Never backfilled/fabricated for older rows.
-    problem_description = models.TextField(blank=True)
-    # A row only ever gets created by an explicit unlock (see this model's
-    # docstring), so "requested" — a real request was just sent — is the
-    # correct default, never "searching"/"found" (those describe a provider
-    # that doesn't have a row here yet) and never "matched" (retired).
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_REQUESTED)
-    # Set only by ProviderRequestRespondView, the one place a provider can
-    # act on a request — accept/decline is intentionally a separate field
-    # from `status` (which just moves requested -> responded either way) so
-    # the client can tell the two apart and show a decline clearly instead
-    # of a request that merely looks "responded".
-    DECISION_ACCEPTED = "accepted"
-    DECISION_DECLINED = "declined"
-    DECISION_CHOICES = [
-        (DECISION_ACCEPTED, "Accepted"),
-        (DECISION_DECLINED, "Declined"),
-    ]
-    provider_decision = models.CharField(max_length=20, choices=DECISION_CHOICES, blank=True)
-    # The provider's optional reply message, captured at the same time as
-    # the decision — blank for a response with no message, and always blank
-    # until then.
-    provider_message = models.TextField(blank=True)
-    responded_at = models.DateTimeField(null=True, blank=True)
-    first_unlocked_at = models.DateTimeField(auto_now_add=True)
-    last_viewed_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        unique_together = ("device_id", "place_id")
-
-    def __str__(self):
-        return f"{self.device_id} -> {self.provider_name}"
-
-
-class ProviderAvailability(models.Model):
-    """This platform's own "available now / busy" override for a real
-    (Google Places) business, keyed by place_id rather than a provider
-    account — there's no provider login/signup system in this app (see
-    ProviderMatch's docstring for the same limitation on the client side),
-    so any provider toggling this is trusted by place_id alone, via the demo
-    Provider Dashboard screen. A missing row means "available" (the default
-    a newly-found provider should show as, rather than unknown/busy).
-    """
-
-    place_id = models.CharField(max_length=255, unique=True)
-    is_available_now = models.BooleanField(default=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    def __str__(self):
-        return f"{self.place_id}: {'available' if self.is_available_now else 'busy'}"
-
-
 class ProviderOnboarding(models.Model):
     """A provider's structured sign-up, broken into 5 independent sections
     so they can be completed in any order/session — completion_percentage
@@ -202,27 +74,42 @@ class ProviderOnboarding(models.Model):
 
 
 class ServiceRequest(models.Model):
-    """The customer's actual "job" — one row per request, holding the AI's
-    classification of it (see chat_service.refine_request). Build plan
-    Phase 1A, task 4.
+    """The customer's actual "job" — one row per request submitted either
+    from the app's own request flow or (once it exists) the website form,
+    both going through ServiceRequestCreateView. Holds the AI's
+    classification of it when the request came with free text to classify
+    (see chat_service.refine_request).
 
-    This is new modeling that sits ABOVE ProviderMatch, not a replacement
-    for it: ProviderMatch keeps its existing job as the customer's own
-    per-provider engagement/status row (unchanged shape, unchanged API —
-    see its docstring); a ServiceRequest is created alongside it and linked
-    via ProviderMatch.service_request so the "right job" side of the
-    Right Provider -> Right Job -> Right Place chain has a real anchor.
-    Phase 1B's ranking and Phase 1C's Lead model both read from here.
+    Phase 0 of the marketplace build: this used to sit above ProviderMatch
+    (one per client/provider engagement, created only on an explicit unlock
+    of a Google-sourced listing); ProviderMatch and the whole Google-listing
+    search/unlock flow were removed, so this is now the only record of a
+    client's request. `status` is deliberately minimal for now — it only
+    needs to exist, not describe a lifecycle yet — until the LeadOffer model
+    (ServiceRequest -> LeadOffer -> a specific provider) replaces it with a
+    real one.
 
-    Status reuses ProviderMatch.STATUS_CHOICES directly (not a duplicated
-    copy) since the plan calls for a request's lifecycle to "mirror" that
-    vocabulary one level up.
+    `phone` and `consent_given` back the explicit consent the request form
+    collects: "I consent to Top-Link AI sharing the details of this request,
+    including my phone number, with service providers who may be able to
+    help." (see ServiceRequestCreateView) — consent_given is only ever set
+    True by that checkbox, never defaulted or inferred.
     """
+
+    STATUS_NEW = "new"
+    STATUS_CHOICES = [
+        (STATUS_NEW, "New"),
+    ]
 
     device_id = models.CharField(max_length=64, db_index=True)
     category = models.CharField(max_length=50)
     city = models.CharField(max_length=100)
     problem_description = models.TextField(blank=True)
+    phone = models.CharField(max_length=50)
+    # Must be True to create a row at all (see ServiceRequestCreateView) —
+    # stored anyway, rather than assumed, so consent is auditable per request
+    # rather than inferred from the row merely existing.
+    consent_given = models.BooleanField(default=False)
 
     # --- AI classification (chat_service.refine_request) — blank for
     # requests that came from the fixed category-tap flow, which has no
@@ -251,7 +138,7 @@ class ServiceRequest(models.Model):
     required_equipment = models.JSONField(default=list, blank=True)
     required_qualifications = models.JSONField(default=list, blank=True)
 
-    status = models.CharField(max_length=20, choices=ProviderMatch.STATUS_CHOICES, default=ProviderMatch.STATUS_SEARCHING)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_NEW)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

@@ -60,3 +60,4 @@ db.sqlite3
 # Local dev-session debugging scratch (adb screenshots, flutter run stdin pipe)
 .shots/
 .flutter_stdin*
+dump.rdb

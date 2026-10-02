@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 
 import 'api/api_config.dart';
 import 'app_colors.dart';
+import 'onboarding/onboarding_screen.dart';
 import 'onboarding/service_category.dart';
-import 'subscription/app_entry_point.dart';
 
 void main() {
   // A release build with an unsafe or missing API config (no HTTPS URL, or
@@ -44,7 +44,7 @@ class TopLinkApp extends StatelessWidget {
           foregroundColor: AppColors.white,
         ),
       ),
-      home: const AppEntryPoint(),
+      home: const OnboardingScreen(),
     );
   }
 }

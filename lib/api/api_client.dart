@@ -7,11 +7,8 @@ import 'api_config.dart';
 import 'app_notification.dart';
 import 'auth_models.dart';
 import 'category_suggestions.dart';
-import 'chat_refine_result.dart';
-import 'provider_match.dart';
 import 'provider_onboarding.dart';
-import 'real_provider.dart';
-import 'subscription_status.dart';
+import 'service_request.dart';
 
 class ApiException implements Exception {
   ApiException(this.message);
@@ -27,15 +24,6 @@ class ApiException implements Exception {
 /// to log in again, which is what callers should offer.
 class SessionExpiredException extends ApiException {
   SessionExpiredException() : super('Your session has expired. Please log in again.');
-}
-
-/// Thrown by [ApiClient.unlockProvider] when the backend responds 402 —
-/// this device isn't subscribed and didn't set `paid: true`. The UI uses
-/// this to offer "pay $4.99 or subscribe" rather than a generic error.
-class PaymentRequiredException extends ApiException {
-  PaymentRequiredException(super.message, {required this.priceUsd});
-
-  final String priceUsd;
 }
 
 class ApiClient {
@@ -68,133 +56,53 @@ class ApiClient {
         'Authorization': 'Bearer $accessToken',
       };
 
-  /// Real providers for a category/city via Google Places (see
-  /// provider_search.views.ProviderSearchView). Every result is masked
-  /// (RealProvider.isUnlocked is false, phone is a masked string, address/
-  /// website/mapsUrl are null) unless this device already unlocked that
-  /// specific provider — see [unlockProvider]. `result.isSubscribed` is
-  /// only a hint for that unlock prompt's copy, not a gate on this call.
-  Future<ProviderSearchResult> searchRealProviders({
-    required String category,
-    required String city,
+  /// See provider_search.views.ServiceRequestCreateView — the only way a
+  /// request is created, by this flow and (once it exists) the website
+  /// form. `consent` must be true: explicit, per-request agreement to share
+  /// the request (including `phone`) with providers — there is no default,
+  /// callers must have actually shown the consent copy and had it checked.
+  Future<int> createServiceRequest({
     required String deviceId,
-  }) async {
-    final uri = Uri.parse('$baseUrl/providers/search/').replace(queryParameters: {
-      'category': category,
-      'city': city,
-      'device_id': deviceId,
-    });
-    final response = await http.get(uri, headers: _headers);
-    if (response.statusCode != 200) {
-      throw ApiException('Could not search providers (${response.statusCode}).');
-    }
-    return ProviderSearchResult.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
-  }
-
-  /// See provider_search.views.ProviderUnlockView — the only way a real
-  /// phone/address/website is ever revealed, and the only way a "Your
-  /// requests" entry is created. Free (no `paid` flag needed) if this
-  /// device has an active subscription; otherwise pass `paid: true` only
-  /// after the client has actually gone through the $4.99 purchase flow
-  /// (see ProviderUnlockDialog) — calling this with `paid: true` unprompted
-  /// would just be lying to the backend about having paid, so callers must
-  /// not do that.
-  ///
-  /// Throws [PaymentRequiredException] (never a raw 402 status check by
-  /// callers) when neither condition holds, so the UI can offer "pay $4.99
-  /// or subscribe" instead of a generic error.
-  Future<RealProvider> unlockProvider({
-    required String deviceId,
-    required String placeId,
     required String category,
-    required String city,
-    bool paid = false,
+    required String phone,
+    required bool consent,
+    String city = ApiClient.demoCity,
+    String description = '',
   }) async {
     final response = await http.post(
-      Uri.parse('$baseUrl/providers/unlock/'),
+      Uri.parse('$baseUrl/requests/'),
       headers: _headers,
       body: jsonEncode({
         'device_id': deviceId,
-        'place_id': placeId,
         'category': category,
+        'phone': phone,
+        'consent': consent,
         'city': city,
-        if (paid) 'paid': true,
+        'description': description,
       }),
     );
-    if (response.statusCode == 402) {
-      final decoded = jsonDecode(response.body) as Map<String, dynamic>;
-      throw PaymentRequiredException(
-        decoded['detail'] as String? ?? 'Subscribe or pay to unlock this provider.',
-        priceUsd: decoded['price_usd'] as String? ?? '4.99',
-      );
+    if (response.statusCode != 201) {
+      throw ApiException(_firstErrorMessage(response.body) ?? 'Could not submit your request.');
     }
-    if (response.statusCode != 200) {
-      throw ApiException(_firstErrorMessage(response.body) ?? 'Could not unlock this provider.');
-    }
-    final decoded = jsonDecode(response.body) as Map<String, dynamic>;
-    return RealProvider.fromJson(decoded['provider'] as Map<String, dynamic>);
+    return (jsonDecode(response.body) as Map<String, dynamic>)['request_id'] as int;
   }
 
-  Future<SubscriptionStatus> getSubscriptionStatus(String deviceId) async {
+  /// See provider_search.views.ServiceRequestListView — "Your requests".
+  Future<List<ServiceRequestRecord>> getMyServiceRequests(String deviceId) async {
     final response = await http.get(
-      Uri.parse('$baseUrl/subscription/?device_id=$deviceId'),
+      Uri.parse('$baseUrl/requests/mine/?device_id=$deviceId'),
       headers: _headers,
     );
     if (response.statusCode != 200) {
-      throw ApiException('Could not fetch subscription status (${response.statusCode}).');
+      throw ApiException('Could not fetch your requests (${response.statusCode}).');
     }
-    return SubscriptionStatus.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
-  }
-
-  /// TEMPORARY: records a subscription without real App Store/Play Store
-  /// receipt verification — see matching.views.SubscriptionActivateView.
-  Future<SubscriptionStatus> activateSubscription({
-    required String deviceId,
-    required String status,
-    required DateTime startDate,
-    required DateTime expiryDate,
-  }) async {
-    final response = await http.post(
-      Uri.parse('$baseUrl/subscription/activate/'),
-      headers: _headers,
-      body: jsonEncode({
-        'device_id': deviceId,
-        'status': status,
-        'start_date': startDate.toIso8601String(),
-        'expiry_date': expiryDate.toIso8601String(),
-      }),
-    );
-    if (response.statusCode != 200) {
-      throw ApiException('Could not activate subscription (${response.statusCode}).');
-    }
-    return SubscriptionStatus.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
-  }
-
-  /// See matching.views.UnlockCreditActivateView — records a completed
-  /// "$4.99 one-time" purchase as one pending unlock credit for this device,
-  /// which the next provider unlock spends silently. Idempotent per
-  /// [transactionId] (the store's purchase id): replaying the same purchase
-  /// returns the existing credit count instead of granting another. Returns
-  /// how many unspent credits the device now has.
-  Future<int> activateUnlockCredit({required String deviceId, String? transactionId}) async {
-    final response = await http.post(
-      Uri.parse('$baseUrl/unlock-credits/activate/'),
-      headers: _headers,
-      body: jsonEncode({
-        'device_id': deviceId,
-        'transaction_id': ?transactionId,
-      }),
-    );
-    if (response.statusCode != 200 && response.statusCode != 201) {
-      throw ApiException(_firstErrorMessage(response.body) ?? 'Could not record your purchase (${response.statusCode}).');
-    }
-    return (jsonDecode(response.body) as Map<String, dynamic>)['unlock_credits'] as int? ?? 0;
+    final requests = jsonDecode(response.body)['requests'] as List<dynamic>;
+    return requests.map((r) => ServiceRequestRecord.fromJson(r as Map<String, dynamic>)).toList();
   }
 
   /// See notifications.views.NotificationListView. Notifications fire from
-  /// real events (a subscription activating, a provider search turning up
-  /// providers this device hasn't seen before) — there's no synthetic seed
-  /// data, so a fresh device with no activity yet will legitimately see none.
+  /// real events — there's no synthetic seed data, so a fresh device with
+  /// no activity yet will legitimately see none.
   Future<NotificationsResult> getNotifications(String deviceId) async {
     final response = await http.get(
       Uri.parse('$baseUrl/notifications/?device_id=$deviceId'),
@@ -217,87 +125,18 @@ class ApiClient {
     }
   }
 
-  /// See provider_search.views.ProviderMatchListView — every provider this
-  /// device has unlocked, each with its own request-pipeline status.
-  Future<List<ProviderMatchRecord>> getProviderMatches(String deviceId) async {
-    final response = await http.get(
-      Uri.parse('$baseUrl/provider-matches/?device_id=$deviceId'),
-      headers: _headers,
-    );
-    if (response.statusCode != 200) {
-      throw ApiException('Could not fetch request history (${response.statusCode}).');
-    }
-    final matches = jsonDecode(response.body)['matches'] as List<dynamic>;
-    return matches.map((m) => ProviderMatchRecord.fromJson(m as Map<String, dynamic>)).toList();
-  }
-
-  /// See provider_search.views.ProviderMatchStatusView.
-  Future<ProviderMatchRecord> updateProviderMatchStatus({
-    required String deviceId,
-    required int matchId,
-    required String status,
-  }) async {
-    final response = await http.post(
-      Uri.parse('$baseUrl/provider-matches/$matchId/status/'),
-      headers: _headers,
-      body: jsonEncode({'device_id': deviceId, 'status': status}),
-    );
-    if (response.statusCode != 200) {
-      throw ApiException('Could not update request status (${response.statusCode}).');
-    }
-    return ProviderMatchRecord.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
-  }
-
-  /// See provider_search.views.ProviderIncomingRequestListView — the
-  /// authenticated provider's queue of requests still waiting on them
-  /// (status "requested"). Same ProviderMatchSerializer shape the client's
-  /// own "Your requests" history uses (see ProviderMatchRecord); it never
-  /// includes device_id, so it's safe to show a provider.
-  Future<List<ProviderMatchRecord>> getIncomingProviderRequests(String accessToken) async {
-    final response = await http.get(
-      Uri.parse('$baseUrl/provider/requests/'),
-      headers: _authHeaders(accessToken),
-    );
-    if (response.statusCode != 200) {
-      throw ApiException(_firstErrorMessage(response.body) ?? 'Could not load incoming requests.');
-    }
-    final requests = jsonDecode(response.body)['requests'] as List<dynamic>;
-    return requests.map((r) => ProviderMatchRecord.fromJson(r as Map<String, dynamic>)).toList();
-  }
-
-  /// See provider_search.views.ProviderRequestRespondView. `decision` must
-  /// be [ProviderDecision.accepted] or [ProviderDecision.declined] — the
-  /// only place a request moves out of "Requested", and the only way the
-  /// client ever finds out a provider replied (it fires a notification —
-  /// see notifications.services.notify).
-  Future<ProviderMatchRecord> respondToProviderRequest({
-    required String accessToken,
-    required int requestId,
-    required String decision,
-    String message = '',
-  }) async {
-    final response = await http.post(
-      Uri.parse('$baseUrl/provider/requests/$requestId/respond/'),
-      headers: _authHeaders(accessToken),
-      body: jsonEncode({'decision': decision, if (message.isNotEmpty) 'message': message}),
-    );
-    if (response.statusCode != 200) {
-      throw ApiException(_firstErrorMessage(response.body) ?? 'Could not respond to that request.');
-    }
-    return ProviderMatchRecord.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
-  }
-
-  /// See provider_search.views.ChatRefineView — free-text alternative to the
-  /// fixed category-tap onboarding flow.
+  /// See provider_search.views.ChatRefineView — free-text classification
+  /// only (no request is created here; see [createServiceRequest]). Lets
+  /// Ask AI tell the client what category it thinks they mean before they
+  /// commit to anything.
   Future<ChatRefineResult> refineChatMessage({
     required String message,
     required String deviceId,
-    String city = ApiClient.demoCity,
   }) async {
     final response = await http.post(
       Uri.parse('$baseUrl/chat/refine/'),
       headers: _headers,
-      body: jsonEncode({'message': message, 'device_id': deviceId, 'city': city}),
+      body: jsonEncode({'message': message, 'device_id': deviceId}),
     );
     if (response.statusCode != 200) {
       throw ApiException('Could not process that message (${response.statusCode}).');
@@ -314,41 +153,6 @@ class ApiClient {
       throw ApiException('Could not load suggestions (${response.statusCode}).');
     }
     return RemoteCategorySuggestions.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
-  }
-
-  /// See provider_search.views.KnownProvidersView — backs the demo Provider
-  /// Dashboard's "sign in as" picker (no real provider accounts exist yet).
-  Future<List<KnownProvider>> getKnownProviders() async {
-    final response = await http.get(Uri.parse('$baseUrl/providers/known/'), headers: _headers);
-    if (response.statusCode != 200) {
-      throw ApiException('Could not load providers (${response.statusCode}).');
-    }
-    final providers = jsonDecode(response.body)['providers'] as List<dynamic>;
-    return providers.map((p) => KnownProvider.fromJson(p as Map<String, dynamic>)).toList();
-  }
-
-  /// See provider_search.views.ProviderAvailabilityView.
-  Future<bool> getProviderAvailability(String placeId) async {
-    final response = await http.get(
-      Uri.parse('$baseUrl/provider-availability/?place_id=$placeId'),
-      headers: _headers,
-    );
-    if (response.statusCode != 200) {
-      throw ApiException('Could not load availability (${response.statusCode}).');
-    }
-    return jsonDecode(response.body)['is_available_now'] as bool? ?? true;
-  }
-
-  Future<bool> setProviderAvailability({required String placeId, required bool isAvailableNow}) async {
-    final response = await http.post(
-      Uri.parse('$baseUrl/provider-availability/'),
-      headers: _headers,
-      body: jsonEncode({'place_id': placeId, 'is_available_now': isAvailableNow}),
-    );
-    if (response.statusCode != 200) {
-      throw ApiException('Could not update availability (${response.statusCode}).');
-    }
-    return jsonDecode(response.body)['is_available_now'] as bool? ?? isAvailableNow;
   }
 
   /// See provider_search.views.ProviderOnboardingView.
@@ -531,18 +335,4 @@ class ApiClient {
     }
     return null;
   }
-}
-
-class KnownProvider {
-  const KnownProvider({required this.placeId, required this.name});
-
-  factory KnownProvider.fromJson(Map<String, dynamic> json) {
-    return KnownProvider(
-      placeId: json['place_id'] as String,
-      name: json['provider_name'] as String? ?? '',
-    );
-  }
-
-  final String placeId;
-  final String name;
 }

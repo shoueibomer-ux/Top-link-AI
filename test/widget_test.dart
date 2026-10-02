@@ -20,10 +20,8 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
-    // Pumps OnboardingScreen directly rather than the full app (TopLinkApp)
-    // — the app's real entry point is now gated behind a subscription check
-    // (see subscription/app_entry_point.dart), which needs a live backend.
-    // This test is about the onboarding step flow itself, not the gate.
+    // Pumps OnboardingScreen directly — it's also the app's real entry point
+    // (see main.dart) now that there's no subscription gate in front of it.
     await tester.pumpWidget(const MaterialApp(home: OnboardingScreen()));
 
     // Step 1: category selection is now a two-level drill-down (Phase 1B).
@@ -54,11 +52,19 @@ void main() {
     await tester.tap(find.text('Next'));
     await tester.pumpAndSettle();
 
-    // Step 4: confirmation message.
-    expect(
-      find.text('We found providers ready to help you in your area'),
-      findsOneWidget,
-    );
+    // Step 4: review and submit — phone + explicit consent are required
+    // before "Continue" (which submits the request) is enabled.
+    expect(find.text('Review and submit your Plumbing request'), findsOneWidget);
     expect(find.text('Continue'), findsOneWidget);
+    ElevatedButton continueButton() => tester.widget<ElevatedButton>(find.widgetWithText(ElevatedButton, 'Continue'));
+    expect(continueButton().onPressed, isNull);
+
+    await tester.enterText(find.byType(TextField).first, '+1 780 555 0100');
+    await tester.pump();
+    expect(continueButton().onPressed, isNull); // phone alone isn't enough
+
+    await tester.tap(find.byType(Checkbox));
+    await tester.pump();
+    expect(continueButton().onPressed, isNotNull); // phone + consent both given
   });
 }
