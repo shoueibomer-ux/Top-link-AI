@@ -1,661 +1,229 @@
 from unittest.mock import patch
 
-from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
-from django.utils import timezone
-from rest_framework_simplejwt.tokens import RefreshToken
 
-from accounts.models import ProviderBusinessProfile, UserProfile, UserRole
-from matching.access import credits_available
-from matching.models import Subscription, UnlockCredit
-from notifications.models import Notification
-from .models import ProviderMatch, ServiceRequest
-from .serializers import mask_phone
-
-User = get_user_model()
+from .models import ProviderOnboarding, ServiceRequest
 
 TEST_API_KEY = "test-key"
 
 
-def fake_places(category: str, name_prefix: str) -> list[dict]:
-    return [
-        {
-            "place_id": f"{category}-place-1",
-            "name": f"{name_prefix} Pros",
-            "address": "123 Main St NW, Edmonton, AB T5T 2V9, Canada",
-            "phone": "+1 780-904-1234",
-            "website": "https://example.com",
-            "rating": 4.8,
-            "rating_count": 120,
-            "maps_url": "https://maps.example.com/1",
-        },
-        {
-            "place_id": f"{category}-place-2",
-            "name": f"{name_prefix} Experts",
-            "address": "456 Side Ave, Edmonton, AB T5T 2V9, Canada",
-            "phone": "+1 780-555-9876",
-            "website": "https://example2.com",
-            "rating": 4.5,
-            "rating_count": 42,
-            "maps_url": "https://maps.example.com/2",
-        },
-    ]
-
-
-@override_settings(API_KEY=TEST_API_KEY, GOOGLE_PLACES_API_KEY="unused-in-tests")
-class ProviderGatingTests(TestCase):
-    """Covers every category the same way — parametrized over 'plumbing' and
-    'towing-services' — per the requirement that the fix isn't specific to
-    whichever category happened to be shown while testing."""
+@override_settings(API_KEY=TEST_API_KEY)
+class ChatRefineViewTests(TestCase):
+    """POST /api/chat/refine/ — classification only, no request is created
+    here (see ServiceRequestCreateViewTests for that)."""
 
     def setUp(self):
         self.headers = {"HTTP_X_API_KEY": TEST_API_KEY}
 
-    def _search(self, category, city="Edmonton", device_id="device-a"):
-        with patch("provider_search.views.search_providers") as mocked:
-            mocked.return_value = fake_places(category, category.title())
-            return self.client.get(
-                "/api/providers/search/",
-                {"category": category, "city": city, "device_id": device_id},
-                **self.headers,
-            )
+    def _refine(self, **body):
+        return self.client.post("/api/chat/refine/", body, content_type="application/json", **self.headers)
 
-    def _unlock(self, category, place_id, device_id="device-a", city="Edmonton", paid=None):
-        with patch("provider_search.views.search_providers") as mocked:
-            mocked.return_value = fake_places(category, category.title())
-            body = {"device_id": device_id, "place_id": place_id, "category": category, "city": city}
-            if paid is not None:
-                body["paid"] = paid
-            return self.client.post("/api/providers/unlock/", body, content_type="application/json", **self.headers)
-
-    def _subscribe(self, device_id="device-a"):
-        Subscription.objects.create(
-            device_id=device_id,
-            status="active",
-            start_date=timezone.now(),
-            expiry_date=timezone.now() + timezone.timedelta(days=30),
-        )
-
-    # ---- mask_phone() itself ----
-
-    def test_mask_phone_keeps_area_code_and_exchange_masks_last_four(self):
-        self.assertEqual(mask_phone("+1 780-904-1234"), "+1 780-904-XXXX")
-        self.assertEqual(mask_phone(""), "")
-
-    # ---- Issue 1: search never leaks full contact info, for any category, subscribed or not ----
-
-    def test_search_masks_phone_and_omits_address_for_unsubscribed_device(self):
-        for category in ("plumbing", "towing-services"):
-            with self.subTest(category=category):
-                response = self._search(category, device_id="unsub-device")
-                self.assertEqual(response.status_code, 200)
-                providers = response.json()["providers"]
-                self.assertEqual(len(providers), 2)
-                for p in providers:
-                    self.assertFalse(p["is_unlocked"])
-                    self.assertNotIn("1234", p["phone"])
-                    self.assertTrue(p["phone"].endswith("XXXX"))
-                    self.assertIsNone(p["address"])
-                    self.assertIsNone(p["website"])
-                    self.assertIsNone(p["maps_url"])
-                    self.assertEqual(p["city"], "Edmonton")  # free descriptive info stays
-
-    def test_search_ALSO_masks_for_a_subscribed_device_until_explicit_unlock(self):
-        """The core Issue 1/2 fix: an active subscription must not make
-        search itself return full contact info or create request rows —
-        only an explicit unlock does that."""
-        self._subscribe("sub-device")
-        response = self._search("plumbing", device_id="sub-device")
+    def test_classifies_free_text_into_a_category(self):
+        response = self._refine(message="my kitchen sink is leaking", device_id="dev-1")
+        self.assertEqual(response.status_code, 200)
         body = response.json()
-        self.assertTrue(body["is_subscribed"])
-        for p in body["providers"]:
-            self.assertFalse(p["is_unlocked"])
-            self.assertIsNone(p["address"])
-            self.assertTrue(p["phone"].endswith("XXXX"))
-        self.assertEqual(ProviderMatch.objects.count(), 0)
+        self.assertEqual(body["category"], "plumbing")
+        self.assertIn("urgency", body)
+        self.assertIn("notes", body)
 
-    def test_free_preview_keeps_rating_availability_and_response_time_visible(self):
-        response = self._search("cleaning-services", device_id="anon-device")
-        provider = response.json()["providers"][0]
-        self.assertEqual(provider["rating"], 4.8)
-        self.assertEqual(provider["rating_count"], 120)
-        self.assertIn("is_available_now", provider)
-        self.assertIsNotNone(provider["estimated_response_minutes"])
-
-    # ---- Issue 2: search never creates a ProviderMatch / "Your requests" row ----
-
-    def test_search_creates_no_provider_match_rows_at_all(self):
-        for category in ("plumbing", "towing-services"):
-            self._search(category, device_id="device-b")
-        self.assertEqual(ProviderMatch.objects.count(), 0)
-
-    def test_search_still_creates_a_service_request_and_marks_it_found(self):
-        response = self._search("plumbing", device_id="device-c")
-        sr_id = response.json()["service_request_id"]
-        service_request = ServiceRequest.objects.get(id=sr_id)
-        self.assertEqual(service_request.status, ProviderMatch.STATUS_FOUND)
-
-    # ---- Unlock gate ----
-
-    def test_unlock_without_subscription_or_payment_is_rejected_and_creates_nothing(self):
-        response = self._unlock("plumbing", "plumbing-place-1", device_id="broke-device")
-        self.assertEqual(response.status_code, 402)
-        self.assertEqual(ProviderMatch.objects.count(), 0)
-
-    def test_paid_unlock_reveals_full_details_and_creates_a_requested_row(self):
-        for category in ("plumbing", "towing-services"):
-            with self.subTest(category=category):
-                place_id = f"{category}-place-1"
-                response = self._unlock(category, place_id, device_id=f"paid-{category}", paid=True)
-                self.assertEqual(response.status_code, 200)
-                body = response.json()["provider"]
-                self.assertTrue(body["is_unlocked"])
-                self.assertEqual(body["phone"], "+1 780-904-1234")
-                self.assertIn("123 Main St", body["address"])
-
-                match = ProviderMatch.objects.get(device_id=f"paid-{category}", place_id=place_id)
-                self.assertEqual(match.status, ProviderMatch.STATUS_REQUESTED)
-                self.assertEqual(match.unlock_method, ProviderMatch.UNLOCK_METHOD_PAID)
-
-    def test_subscribed_unlock_is_free_and_recorded_as_subscription_method(self):
-        self._subscribe("sub-unlocker")
-        response = self._unlock("plumbing", "plumbing-place-1", device_id="sub-unlocker")
+    def test_unclassifiable_text_returns_a_null_category_not_an_error(self):
+        # Forces the deterministic keyword-fallback path (see chat_service.
+        # refine_request, which itself falls back to matching_engine.
+        # ai_categorize) rather than depending on what the real Claude API
+        # happens to guess for nonsense text.
+        with (
+            patch("provider_search.chat_service._refine_with_llm", side_effect=RuntimeError("no LLM in this test")),
+            patch("matching.matching_engine._ai_categorize_llm", side_effect=RuntimeError("no LLM in this test")),
+        ):
+            response = self._refine(message="zzzz qqqq", device_id="dev-1")
         self.assertEqual(response.status_code, 200)
-        match = ProviderMatch.objects.get(device_id="sub-unlocker", place_id="plumbing-place-1")
-        self.assertEqual(match.unlock_method, ProviderMatch.UNLOCK_METHOD_SUBSCRIPTION)
-        self.assertEqual(match.status, ProviderMatch.STATUS_REQUESTED)
+        self.assertIsNone(response.json()["category"])
 
-    def test_unlocking_one_provider_does_not_unlock_others_in_the_same_search(self):
-        self._unlock("plumbing", "plumbing-place-1", device_id="picky-device", paid=True)
-        response = self._search("plumbing", device_id="picky-device")
-        providers = {p["place_id"]: p for p in response.json()["providers"]}
-        self.assertTrue(providers["plumbing-place-1"]["is_unlocked"])
-        self.assertFalse(providers["plumbing-place-2"]["is_unlocked"])
-        self.assertIsNone(providers["plumbing-place-2"]["address"])
+    def test_never_creates_a_service_request(self):
+        self._refine(message="my kitchen sink is leaking", device_id="dev-1")
+        self.assertEqual(ServiceRequest.objects.count(), 0)
 
-    def test_reunlocking_refreshes_contact_details_but_never_resets_progressed_status(self):
-        self._unlock("plumbing", "plumbing-place-1", device_id="repeat-device", paid=True)
-        match = ProviderMatch.objects.get(device_id="repeat-device", place_id="plumbing-place-1")
-        match.status = ProviderMatch.STATUS_COMPLETED
-        match.save(update_fields=["status"])
+    def test_message_is_required(self):
+        self.assertEqual(self._refine(device_id="dev-1").status_code, 400)
+        self.assertEqual(self._refine(message="   ", device_id="dev-1").status_code, 400)
 
-        response = self._unlock("plumbing", "plumbing-place-1", device_id="repeat-device", paid=True)
-        self.assertEqual(response.status_code, 200)
-        match.refresh_from_db()
-        self.assertEqual(match.status, ProviderMatch.STATUS_COMPLETED)
-        self.assertEqual(ProviderMatch.objects.filter(device_id="repeat-device").count(), 1)
+    def test_device_id_is_required(self):
+        self.assertEqual(self._refine(message="a leaking pipe").status_code, 400)
 
-    def test_unlock_requires_a_known_category_and_city(self):
-        response = self._unlock("not-a-real-category", "x", device_id="d", paid=True)
+    def test_it_requires_the_api_key(self):
+        response = self.client.post(
+            "/api/chat/refine/", {"message": "x", "device_id": "dev-1"}, content_type="application/json"
+        )
+        self.assertEqual(response.status_code, 401)
+
+
+@override_settings(API_KEY=TEST_API_KEY)
+class ServiceRequestCreateViewTests(TestCase):
+    """POST /api/requests/ — the only way a ServiceRequest is created, by the
+    app's own request flow today and (once it exists) the website form.
+    Replaces the old Google-listing search+unlock flow entirely."""
+
+    def setUp(self):
+        self.headers = {"HTTP_X_API_KEY": TEST_API_KEY}
+
+    def _create(self, **overrides):
+        body = {
+            "device_id": "dev-1",
+            "category": "plumbing",
+            "phone": "+1 780-555-0100",
+            "city": "Edmonton",
+            "consent": True,
+            **overrides,
+        }
+        return self.client.post("/api/requests/", body, content_type="application/json", **self.headers)
+
+    def test_creates_a_service_request_with_consent_recorded(self):
+        response = self._create()
+        self.assertEqual(response.status_code, 201)
+        body = response.json()
+        self.assertEqual(body["category"], "plumbing")
+        self.assertIn("request_id", body)
+
+        request = ServiceRequest.objects.get(id=body["request_id"])
+        self.assertEqual(request.device_id, "dev-1")
+        self.assertEqual(request.category, "plumbing")
+        self.assertEqual(request.city, "Edmonton")
+        self.assertEqual(request.phone, "+1 780-555-0100")
+        self.assertTrue(request.consent_given)
+
+    def test_optional_description_is_stored_as_problem_description(self):
+        response = self._create(description="Leaking under the sink")
+        request = ServiceRequest.objects.get(id=response.json()["request_id"])
+        self.assertEqual(request.problem_description, "Leaking under the sink")
+
+    def test_description_is_optional(self):
+        response = self._create()
+        self.assertEqual(response.status_code, 201)
+        request = ServiceRequest.objects.get(id=response.json()["request_id"])
+        self.assertEqual(request.problem_description, "")
+
+    def test_city_defaults_to_edmonton_when_not_given(self):
+        body = {"device_id": "dev-1", "category": "plumbing", "phone": "+1 780-555-0100", "consent": True}
+        response = self.client.post("/api/requests/", body, content_type="application/json", **self.headers)
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(ServiceRequest.objects.get().city, "Edmonton")
+
+    # ---- Explicit consent is mandatory — never defaulted, never inferred ----
+
+    def test_without_consent_nothing_is_created(self):
+        for missing_consent in (False, None, "yes", 1):
+            with self.subTest(consent=missing_consent):
+                response = self._create(consent=missing_consent, device_id=f"dev-{missing_consent}")
+                self.assertEqual(response.status_code, 400)
+        self.assertEqual(ServiceRequest.objects.count(), 0)
+
+    def test_consent_omitted_entirely_is_also_rejected(self):
+        body = {"device_id": "dev-1", "category": "plumbing", "phone": "+1 780-555-0100"}
+        response = self.client.post("/api/requests/", body, content_type="application/json", **self.headers)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(ServiceRequest.objects.count(), 0)
+
+    # ---- Required fields ----
+
+    def test_device_id_is_required(self):
+        response = self._create(device_id="")
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(ServiceRequest.objects.count(), 0)
+
+    def test_category_is_required(self):
+        response = self._create(category="")
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(ServiceRequest.objects.count(), 0)
+
+    def test_phone_is_required(self):
+        response = self._create(phone="")
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(ServiceRequest.objects.count(), 0)
+
+    def test_phone_that_is_only_whitespace_is_rejected(self):
+        response = self._create(phone="   ")
         self.assertEqual(response.status_code, 400)
 
-    # ---- "Your requests" only grows from real unlocks, and starts at "requested" ----
+    def test_city_must_be_a_served_city(self):
+        response = self._create(city="Toronto")
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(ServiceRequest.objects.count(), 0)
 
-    def test_your_requests_list_only_contains_explicitly_unlocked_providers(self):
-        device_id = "history-device"
-        self._search("plumbing", device_id=device_id)
-        self._search("towing-services", device_id=device_id)
-        self.assertEqual(
-            self.client.get(f"/api/provider-matches/?device_id={device_id}", **self.headers).json()["matches"], []
-        )
-
-        self._unlock("plumbing", "plumbing-place-1", device_id=device_id, paid=True)
-        matches = self.client.get(f"/api/provider-matches/?device_id={device_id}", **self.headers).json()["matches"]
-        self.assertEqual(len(matches), 1)
-        self.assertEqual(matches[0]["status"], "requested")
-        self.assertNotEqual(matches[0]["status"], "matched")
+    def test_it_requires_the_api_key(self):
+        body = {"device_id": "dev-1", "category": "plumbing", "phone": "+1 780-555-0100", "consent": True}
+        response = self.client.post("/api/requests/", body, content_type="application/json")
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(ServiceRequest.objects.count(), 0)
 
 
-@override_settings(API_KEY=TEST_API_KEY, GOOGLE_PLACES_API_KEY="unused-in-tests")
-class ProviderResponseLoopTests(TestCase):
-    """Covers the provider-side accept/decline loop — ProviderIncomingRequestListView
-    and ProviderRequestRespondView — the mechanism that finally lets a
-    ProviderMatch leave STATUS_REQUESTED. Before this, nothing in the app
-    ever set STATUS_RESPONDED, so every unlocked request sat at "Requested"
-    forever (see the website's "Receive customer requests — Rolling out"
-    label this feature replaces)."""
+@override_settings(API_KEY=TEST_API_KEY)
+class ServiceRequestListViewTests(TestCase):
+    """GET /api/requests/mine/ — "Your requests"."""
 
     def setUp(self):
         self.headers = {"HTTP_X_API_KEY": TEST_API_KEY}
 
-    def _make_provider(self, email, place_id=None, business_name="Acme Plumbing"):
-        user = User.objects.create_user(username=email, email=email, password="pass-12345!")
-        UserProfile.objects.create(user=user, role=UserRole.PROVIDER, full_name="Pat Provider")
-        profile = ProviderBusinessProfile.objects.create(user=user, business_name=business_name, place_id=place_id)
-        return user, profile
-
-    def _make_customer(self, email):
-        user = User.objects.create_user(username=email, email=email, password="pass-12345!")
-        UserProfile.objects.create(user=user, role=UserRole.CUSTOMER, full_name="Cami Customer")
-        return user
-
-    def _auth_headers(self, user):
-        access_token = RefreshToken.for_user(user).access_token
-        return {**self.headers, "HTTP_AUTHORIZATION": f"Bearer {access_token}"}
-
-    def _make_match(
-        self, place_id, device_id="client-device", status=ProviderMatch.STATUS_REQUESTED, category="plumbing"
-    ):
-        return ProviderMatch.objects.create(
+    def _make(self, device_id="dev-1", **fields):
+        return ServiceRequest.objects.create(
             device_id=device_id,
-            category=category,
-            city="Edmonton",
-            place_id=place_id,
-            provider_name="Acme Plumbing",
-            provider_phone="+1 780-904-1234",
-            provider_address="1 Main St NW, Edmonton, AB",
-            unlock_method=ProviderMatch.UNLOCK_METHOD_PAID,
-            status=status,
+            category=fields.pop("category", "plumbing"),
+            city=fields.pop("city", "Edmonton"),
+            phone=fields.pop("phone", "+1 780-555-0100"),
+            consent_given=True,
+            **fields,
         )
 
-    # ---- GET /api/provider/requests/ ----
+    def test_lists_only_this_devices_requests_newest_first(self):
+        self._make(device_id="dev-1", category="plumbing")
+        newest = self._make(device_id="dev-1", category="electrical")
+        self._make(device_id="dev-2", category="roofing")  # a different device
 
-    def test_provider_sees_only_their_own_requested_matches(self):
-        user, _ = self._make_provider("prov1@example.com", place_id="plumbing-place-1")
-        mine = self._make_match("plumbing-place-1")
-        self._make_match("plumbing-place-2")  # a different listing entirely
-        self._make_match("plumbing-place-1", device_id="other-device", status=ProviderMatch.STATUS_RESPONDED)
-
-        response = self.client.get("/api/provider/requests/", **self._auth_headers(user))
+        response = self.client.get("/api/requests/mine/", {"device_id": "dev-1"}, **self.headers)
         self.assertEqual(response.status_code, 200)
         results = response.json()["requests"]
-        self.assertEqual(len(results), 1)
-        self.assertEqual(results[0]["id"], mine.id)
+        self.assertEqual(len(results), 2)
+        self.assertEqual(results[0]["id"], newest.id)
 
-    def test_unclaimed_provider_sees_an_empty_queue_not_an_error(self):
-        user, _ = self._make_provider("prov2@example.com", place_id=None)
-        response = self.client.get("/api/provider/requests/", **self._auth_headers(user))
+    def test_a_device_with_no_requests_gets_an_empty_list_not_an_error(self):
+        response = self.client.get("/api/requests/mine/", {"device_id": "nobody"}, **self.headers)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["requests"], [])
 
-    def test_customer_account_cannot_list_incoming_requests(self):
-        user = self._make_customer("cust1@example.com")
-        response = self.client.get("/api/provider/requests/", **self._auth_headers(user))
-        self.assertEqual(response.status_code, 403)
+    def test_includes_phone_since_its_the_devices_own_data(self):
+        self._make(phone="+1 780-555-0199")
+        results = self.client.get("/api/requests/mine/", {"device_id": "dev-1"}, **self.headers).json()["requests"]
+        self.assertEqual(results[0]["phone"], "+1 780-555-0199")
 
-    def test_unauthenticated_request_is_rejected(self):
-        response = self.client.get("/api/provider/requests/", **self.headers)
-        self.assertEqual(response.status_code, 401)
-
-    # ---- POST /api/provider/requests/<id>/respond/ ----
-
-    def test_accept_updates_status_and_stores_message_and_notifies_the_client(self):
-        user, _ = self._make_provider("prov3@example.com", place_id="plumbing-place-3", business_name="Acme Plumbing")
-        match = self._make_match("plumbing-place-3", device_id="notify-device")
-
-        response = self.client.post(
-            f"/api/provider/requests/{match.id}/respond/",
-            {"decision": "accepted", "message": "On our way tomorrow at 9am."},
-            content_type="application/json",
-            **self._auth_headers(user),
-        )
-        self.assertEqual(response.status_code, 200)
-        body = response.json()
-        self.assertEqual(body["status"], ProviderMatch.STATUS_RESPONDED)
-        self.assertEqual(body["provider_decision"], "accepted")
-        self.assertEqual(body["provider_message"], "On our way tomorrow at 9am.")
-        self.assertIsNotNone(body["responded_at"])
-
-        match.refresh_from_db()
-        self.assertEqual(match.status, ProviderMatch.STATUS_RESPONDED)
-        self.assertEqual(match.provider_decision, ProviderMatch.DECISION_ACCEPTED)
-
-        notification = Notification.objects.get(device_id="notify-device")
-        self.assertIn("Acme Plumbing", notification.title)
-        self.assertIn("accepted", notification.body)
-        self.assertIn("On our way", notification.body)
-        self.assertEqual(notification.category, "plumbing")
-
-    def test_decline_updates_status_and_decision_distinctly_from_accept(self):
-        user, _ = self._make_provider("prov4@example.com", place_id="plumbing-place-4")
-        match = self._make_match("plumbing-place-4", device_id="decline-device")
-
-        response = self.client.post(
-            f"/api/provider/requests/{match.id}/respond/",
-            {"decision": "declined"},
-            content_type="application/json",
-            **self._auth_headers(user),
-        )
-        self.assertEqual(response.status_code, 200)
-        body = response.json()
-        self.assertEqual(body["status"], ProviderMatch.STATUS_RESPONDED)
-        self.assertEqual(body["provider_decision"], "declined")
-
-        notification = Notification.objects.get(device_id="decline-device")
-        self.assertIn("declined", notification.body)
-
-    def test_a_provider_cannot_respond_to_another_providers_request(self):
-        self._make_provider("prov5@example.com", place_id="plumbing-place-5")
-        intruder, _ = self._make_provider("intruder@example.com", place_id="plumbing-place-99")
-        match = self._make_match("plumbing-place-5")
-
-        response = self.client.post(
-            f"/api/provider/requests/{match.id}/respond/",
-            {"decision": "accepted"},
-            content_type="application/json",
-            **self._auth_headers(intruder),
-        )
-        self.assertEqual(response.status_code, 404)
-        match.refresh_from_db()
-        self.assertEqual(match.status, ProviderMatch.STATUS_REQUESTED)
-
-    def test_customer_account_cannot_respond(self):
-        self._make_provider("prov6@example.com", place_id="plumbing-place-6")
-        customer = self._make_customer("cust2@example.com")
-        match = self._make_match("plumbing-place-6")
-
-        response = self.client.post(
-            f"/api/provider/requests/{match.id}/respond/",
-            {"decision": "accepted"},
-            content_type="application/json",
-            **self._auth_headers(customer),
-        )
-        self.assertEqual(response.status_code, 403)
-        match.refresh_from_db()
-        self.assertEqual(match.status, ProviderMatch.STATUS_REQUESTED)
-
-    def test_responding_twice_is_rejected_the_second_time_and_does_not_change_the_decision(self):
-        user, _ = self._make_provider("prov7@example.com", place_id="plumbing-place-7")
-        match = self._make_match("plumbing-place-7")
-
-        first = self.client.post(
-            f"/api/provider/requests/{match.id}/respond/",
-            {"decision": "accepted"},
-            content_type="application/json",
-            **self._auth_headers(user),
-        )
-        self.assertEqual(first.status_code, 200)
-
-        second = self.client.post(
-            f"/api/provider/requests/{match.id}/respond/",
-            {"decision": "declined"},
-            content_type="application/json",
-            **self._auth_headers(user),
-        )
-        self.assertEqual(second.status_code, 400)
-        match.refresh_from_db()
-        self.assertEqual(match.provider_decision, ProviderMatch.DECISION_ACCEPTED)
-
-    def test_invalid_decision_value_is_rejected(self):
-        user, _ = self._make_provider("prov8@example.com", place_id="plumbing-place-8")
-        match = self._make_match("plumbing-place-8")
-
-        response = self.client.post(
-            f"/api/provider/requests/{match.id}/respond/",
-            {"decision": "maybe"},
-            content_type="application/json",
-            **self._auth_headers(user),
-        )
+    def test_device_id_is_required(self):
+        response = self.client.get("/api/requests/mine/", **self.headers)
         self.assertEqual(response.status_code, 400)
 
-    def test_unclaimed_provider_cannot_respond(self):
-        user, _ = self._make_provider("prov9@example.com", place_id=None)
-        match = self._make_match("plumbing-place-9")
-
-        response = self.client.post(
-            f"/api/provider/requests/{match.id}/respond/",
-            {"decision": "accepted"},
-            content_type="application/json",
-            **self._auth_headers(user),
-        )
-        self.assertEqual(response.status_code, 403)
+    def test_it_requires_the_api_key(self):
+        response = self.client.get("/api/requests/mine/", {"device_id": "dev-1"})
+        self.assertEqual(response.status_code, 401)
 
 
-
-@override_settings(API_KEY=TEST_API_KEY, GOOGLE_PLACES_API_KEY="unused-in-tests")
-class OneTimeCreditUnlockTests(TestCase):
-    """The paywall's "$4.99 one-time" option: a pre-paid, single-use credit
-    that ProviderUnlockView spends silently — unlock_method="paid" — the next
-    time the device unlocks a provider without a subscription."""
+@override_settings(API_KEY=TEST_API_KEY)
+class ProviderOnboardingViewTests(TestCase):
+    """Untouched by the Google-listing/paywall removal — a quick smoke test
+    that it still works now that provider_search.views was rewritten."""
 
     def setUp(self):
         self.headers = {"HTTP_X_API_KEY": TEST_API_KEY}
 
-    def _unlock(self, place_id, device_id="credit-device", category="plumbing", paid=None, places=None):
-        with patch("provider_search.views.search_providers") as mocked:
-            mocked.return_value = places if places is not None else fake_places(category, category.title())
-            body = {"device_id": device_id, "place_id": place_id, "category": category, "city": "Edmonton"}
-            if paid is not None:
-                body["paid"] = paid
-            return self.client.post("/api/providers/unlock/", body, content_type="application/json", **self.headers)
-
-    def _grant(self, device_id="credit-device", n=1):
-        for _ in range(n):
-            UnlockCredit.objects.create(device_id=device_id)
-
-    def _subscribe(self, device_id):
-        Subscription.objects.create(
-            device_id=device_id,
-            status="active",
-            start_date=timezone.now(),
-            expiry_date=timezone.now() + timezone.timedelta(days=30),
-        )
-
-    def test_a_credit_is_spent_silently_on_the_next_unlock_and_recorded_as_paid(self):
-        self._grant()
-        response = self._unlock("plumbing-place-1")  # note: no paid flag, no subscription
-
+    def test_get_creates_and_returns_a_blank_onboarding_record(self):
+        response = self.client.get("/api/provider-onboarding/", {"provider_id": "prov-1"}, **self.headers)
         self.assertEqual(response.status_code, 200)
-        body = response.json()
-        self.assertTrue(body["provider"]["is_unlocked"])
-        self.assertEqual(body["provider"]["phone"], "+1 780-904-1234")
-        self.assertEqual(body["unlock_method"], ProviderMatch.UNLOCK_METHOD_PAID)
-        self.assertEqual(body["unlock_credits_remaining"], 0)
+        self.assertEqual(response.json()["completion_percentage"], 0)
+        self.assertTrue(ProviderOnboarding.objects.filter(provider_id="prov-1").exists())
 
-        match = ProviderMatch.objects.get(device_id="credit-device", place_id="plumbing-place-1")
-        self.assertEqual(match.unlock_method, ProviderMatch.UNLOCK_METHOD_PAID)
-        self.assertEqual(match.status, ProviderMatch.STATUS_REQUESTED)
-
-        credit = UnlockCredit.objects.get(device_id="credit-device")
-        self.assertIsNotNone(credit.consumed_at)
-        self.assertEqual(credit.consumed_place_id, "plumbing-place-1")
-
-    def test_after_the_credit_is_spent_the_next_provider_needs_payment_again(self):
-        self._grant()
-        self.assertEqual(self._unlock("plumbing-place-1").status_code, 200)
-
-        second = self._unlock("plumbing-place-2")
-        self.assertEqual(second.status_code, 402)
-        self.assertFalse(ProviderMatch.objects.filter(place_id="plumbing-place-2").exists())
-
-    def test_two_credits_unlock_exactly_two_providers(self):
-        self._grant(n=2)
-        self.assertEqual(self._unlock("plumbing-place-1").status_code, 200)
-        self.assertEqual(self._unlock("plumbing-place-2").status_code, 200)
-        self.assertEqual(credits_available("credit-device"), 0)
-
-        third = self._unlock("towing-services-place-1", category="towing-services")
-        self.assertEqual(third.status_code, 402)
-
-    def test_retrying_an_unlock_after_the_credit_was_spent_still_succeeds_and_spends_nothing(self):
-        """A dropped response + retry must not 402 (the provider is already
-        unlocked) and must not eat a second credit."""
-        self._grant(n=2)
-        self._unlock("plumbing-place-1")
-        retry = self._unlock("plumbing-place-1")
-
-        self.assertEqual(retry.status_code, 200)
-        self.assertEqual(retry.json()["unlock_credits_remaining"], 1)
-        self.assertEqual(UnlockCredit.objects.filter(consumed_at__isnull=False).count(), 1)
-        self.assertEqual(ProviderMatch.objects.filter(device_id="credit-device").count(), 1)
-
-    def test_an_already_unlocked_provider_stays_reachable_with_no_credits_left(self):
-        self._grant()
-        self._unlock("plumbing-place-1")
-        self.assertEqual(credits_available("credit-device"), 0)
-
-        self.assertEqual(self._unlock("plumbing-place-1").status_code, 200)
-
-    def test_a_subscribed_device_never_spends_a_credit(self):
-        self._subscribe("credit-device")
-        self._grant()
-        response = self._unlock("plumbing-place-1")
-
-        self.assertEqual(response.json()["unlock_method"], ProviderMatch.UNLOCK_METHOD_SUBSCRIPTION)
-        self.assertEqual(credits_available("credit-device"), 1)
-
-    def test_an_explicit_per_provider_payment_does_not_also_burn_a_credit(self):
-        self._grant()
-        response = self._unlock("plumbing-place-1", paid=True)
-
+    def test_post_updates_one_section(self):
+        self.client.get("/api/provider-onboarding/", {"provider_id": "prov-1"}, **self.headers)
+        response = self.client.post(
+            "/api/provider-onboarding/",
+            {"provider_id": "prov-1", "section": "service_area", "fields": {"city": "Calgary"}},
+            content_type="application/json",
+            **self.headers,
+        )
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["unlock_method"], ProviderMatch.UNLOCK_METHOD_PAID)
-        self.assertEqual(credits_available("credit-device"), 1)
-
-    def test_a_credit_only_works_for_the_device_that_bought_it(self):
-        self._grant("buyer-device")
-        response = self._unlock("plumbing-place-1", device_id="someone-else")
-
-        self.assertEqual(response.status_code, 402)
-        self.assertEqual(credits_available("buyer-device"), 1)
-
-    def test_a_provider_that_cannot_be_found_does_not_burn_the_credit(self):
-        self._grant()
-        response = self._unlock("not-a-real-place")
-
-        self.assertEqual(response.status_code, 404)
-        self.assertEqual(credits_available("credit-device"), 1)
-
-    def test_an_upstream_search_failure_does_not_burn_the_credit(self):
-        self._grant()
-        with patch("provider_search.views.search_providers", side_effect=RuntimeError("places down")):
-            response = self.client.post(
-                "/api/providers/unlock/",
-                {"device_id": "credit-device", "place_id": "plumbing-place-1", "category": "plumbing", "city": "Edmonton"},
-                content_type="application/json",
-                **self.headers,
-            )
-        self.assertEqual(response.status_code, 503)
-        self.assertEqual(credits_available("credit-device"), 1)
-
-    def test_losing_a_race_for_the_last_credit_rolls_the_unlock_back(self):
-        """If a concurrent request spends the credit between the up-front
-        check and the spend, this request must 402 and leave no ProviderMatch
-        behind (which would otherwise be a free, permanent unlock)."""
-        self._grant()
-        with patch("provider_search.views.consume_credit", return_value=False):
-            response = self._unlock("plumbing-place-1")
-
-        self.assertEqual(response.status_code, 402)
-        self.assertFalse(ProviderMatch.objects.filter(device_id="credit-device").exists())
-
-    def test_holding_a_credit_does_not_unmask_search_results(self):
-        """The credit is spent by an explicit unlock, never by search."""
-        self._grant()
-        with patch("provider_search.views.search_providers") as mocked:
-            mocked.return_value = fake_places("plumbing", "Plumbing")
-            response = self.client.get(
-                "/api/providers/search/",
-                {"category": "plumbing", "city": "Edmonton", "device_id": "credit-device"},
-                **self.headers,
-            )
-        for provider in response.json()["providers"]:
-            self.assertFalse(provider["is_unlocked"])
-            self.assertIsNone(provider["address"])
-            self.assertTrue(provider["phone"].endswith("XXXX"))
-        self.assertEqual(credits_available("credit-device"), 1)
-        self.assertEqual(ProviderMatch.objects.count(), 0)
-
-
-class LegacySearchMatchCleanupTests(TestCase):
-    """Migration 0011: permanently removes the fake "Requested" rows the old
-    every-search-creates-a-match behaviour left behind (and 0009 relabeled
-    instead of removing), while keeping anything that was real."""
-
-    def setUp(self):
-        import importlib
-
-        from django.apps import apps
-        from django.db import connection
-        from django.db.migrations.recorder import MigrationRecorder
-
-        module = importlib.import_module("provider_search.migrations.0011_delete_legacy_search_matches")
-        self.apps = apps
-        self.run_cleanup = module.delete_legacy_search_matches
-
-        class _SchemaEditor:
-            pass
-
-        self.editor = _SchemaEditor()
-        self.editor.connection = connection
-        self.cutoff = MigrationRecorder(connection).migration_qs.get(
-            app="provider_search", name=module._GATING_MIGRATION
-        ).applied
-
-    def _make(self, place_id, status, *, before_gate, decision="", device_id="dev"):
-        match = ProviderMatch.objects.create(
-            device_id=device_id,
-            category="plumbing",
-            city="Edmonton",
-            place_id=place_id,
-            provider_name=place_id,
-            status=status,
-            provider_decision=decision,
-        )
-        # first_unlocked_at is auto_now_add, so backdate/forward-date it directly.
-        when = self.cutoff - timezone.timedelta(days=3) if before_gate else self.cutoff + timezone.timedelta(minutes=5)
-        ProviderMatch.objects.filter(pk=match.pk).update(first_unlocked_at=when)
-        return match
-
-    def _cleanup(self):
-        return self.run_cleanup(self.apps, self.editor)
-
-    def test_deletes_untouched_requested_rows_created_before_the_unlock_gate(self):
-        for i in range(5):
-            self._make(f"legacy-{i}", ProviderMatch.STATUS_REQUESTED, before_gate=True)
-        self.assertEqual(self._cleanup(), 5)  # reports how many it removed
-        self.assertEqual(ProviderMatch.objects.count(), 0)
-
-    def test_keeps_a_real_unlock_created_after_the_gate_shipped(self):
-        real = self._make("real-unlock", ProviderMatch.STATUS_REQUESTED, before_gate=False)
-        self._make("legacy", ProviderMatch.STATUS_REQUESTED, before_gate=True)
-        self._cleanup()
-        self.assertEqual(list(ProviderMatch.objects.values_list("pk", flat=True)), [real.pk])
-
-    def test_keeps_legacy_rows_a_client_advanced_because_that_was_real_engagement(self):
-        kept = [
-            self._make("contacted", ProviderMatch.STATUS_CONTACTED, before_gate=True),
-            self._make("booked", ProviderMatch.STATUS_BOOKED, before_gate=True),
-            self._make("completed", ProviderMatch.STATUS_COMPLETED, before_gate=True),
-            self._make("searching", ProviderMatch.STATUS_SEARCHING, before_gate=True),
-        ]
-        self._make("legacy", ProviderMatch.STATUS_REQUESTED, before_gate=True)
-        self._cleanup()
-        self.assertCountEqual(ProviderMatch.objects.values_list("pk", flat=True), [m.pk for m in kept])
-
-    def test_never_deletes_a_row_a_provider_responded_to(self):
-        responded = self._make(
-            "answered", ProviderMatch.STATUS_RESPONDED, before_gate=True, decision=ProviderMatch.DECISION_ACCEPTED
-        )
-        self._cleanup()
-        self.assertTrue(ProviderMatch.objects.filter(pk=responded.pk).exists())
-
-    def test_covers_every_device_not_just_one(self):
-        for device in ("a", "b", "c"):
-            self._make(f"legacy-{device}", ProviderMatch.STATUS_REQUESTED, before_gate=True, device_id=device)
-        self._cleanup()
-        self.assertEqual(ProviderMatch.objects.count(), 0)
-
-    def test_is_idempotent(self):
-        self._make("legacy", ProviderMatch.STATUS_REQUESTED, before_gate=True)
-        real = self._make("real", ProviderMatch.STATUS_REQUESTED, before_gate=False)
-        self._cleanup()
-        self._cleanup()
-        self.assertEqual(list(ProviderMatch.objects.values_list("pk", flat=True)), [real.pk])
-
-    def test_deleting_the_fake_rows_takes_their_phantom_unlocks_with_them(self):
-        """A legacy row counted as an unlock of that provider's full contact
-        details; once it's gone the provider is masked again for that device."""
-        self._make("plumbing-place-1", ProviderMatch.STATUS_REQUESTED, before_gate=True, device_id="browser")
-        self._cleanup()
-        with patch("provider_search.views.search_providers") as mocked:
-            mocked.return_value = fake_places("plumbing", "Plumbing")
-            with override_settings(API_KEY=TEST_API_KEY):
-                response = self.client.get(
-                    "/api/providers/search/",
-                    {"category": "plumbing", "city": "Edmonton", "device_id": "browser"},
-                    HTTP_X_API_KEY=TEST_API_KEY,
-                )
-        first = next(p for p in response.json()["providers"] if p["place_id"] == "plumbing-place-1")
-        self.assertFalse(first["is_unlocked"])
-        self.assertTrue(first["phone"].endswith("XXXX"))
+        self.assertEqual(ProviderOnboarding.objects.get(provider_id="prov-1").city, "Calgary")

@@ -8,7 +8,6 @@ import '../pages/settings_page.dart';
 import '../provider/auth_storage.dart';
 import '../provider/provider_auth_screen.dart';
 import '../provider/provider_business_profile_screen.dart';
-import '../provider/provider_dashboard_screen.dart';
 import '../provider/provider_onboarding_screen.dart';
 import 'app_logo.dart';
 import 'pressable.dart';
@@ -44,11 +43,6 @@ class AppDrawer extends StatelessWidget {
             icon: Icons.business_center_outlined,
             label: 'Business Profile',
             onTap: () => _openBusinessProfile(context),
-          ),
-          _DrawerItem(
-            icon: Icons.storefront_outlined,
-            label: 'Provider Dashboard',
-            onTap: () => _navigateTo(context, const ProviderDashboardScreen()),
           ),
           _DrawerItem(
             icon: Icons.assignment_outlined,

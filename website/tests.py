@@ -3,7 +3,6 @@ from django.test import TestCase, override_settings
 from catalog.models import Category, Service
 from matching.matching_engine import CATEGORY_DISPLAY_NAMES, CATEGORY_TAXONOMY
 from provider_search.chat_service import _CATEGORY_DISPLAY_NAMES
-from provider_search.services import CATEGORY_QUERIES
 
 from . import selectors
 from .content.seo_pages import SEO_PAGES
@@ -130,10 +129,9 @@ class TaxonomyIntegrityTests(TestCase):
         )
         self.assertEqual(sectors, {"home-services", "outdoor-services"})
 
-    def test_every_service_is_covered_by_search_and_classification(self):
+    def test_every_service_is_covered_by_classification(self):
         slugs = set(Service.objects.values_list("slug", flat=True))
         for name, mapping in [
-            ("CATEGORY_QUERIES", CATEGORY_QUERIES),
             ("CATEGORY_TAXONOMY", CATEGORY_TAXONOMY),
             ("CATEGORY_DISPLAY_NAMES", CATEGORY_DISPLAY_NAMES),
             ("chat display names", _CATEGORY_DISPLAY_NAMES),

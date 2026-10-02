@@ -1,52 +1,21 @@
 import 'package:flutter/material.dart';
 
-import '../api/api_client.dart';
-import '../api/real_provider.dart';
 import '../app_colors.dart';
 import '../app_styles.dart';
-import '../subscription/device_id.dart';
 import '../widgets/pressable.dart';
-import '../widgets/real_provider_card.dart';
 import 'service_category.dart';
 
 /// Full-page category preview, pushed when a category card is tapped on the
 /// onboarding category step. Pops with `true` if the user taps "Select this
 /// category" (the onboarding screen then advances to the urgency step), or
 /// with no result on back navigation.
-class CategoryDetailPage extends StatefulWidget {
+class CategoryDetailPage extends StatelessWidget {
   const CategoryDetailPage({super.key, required this.category});
 
   final ServiceCategory category;
 
   @override
-  State<CategoryDetailPage> createState() => _CategoryDetailPageState();
-}
-
-class _CategoryDetailPageState extends State<CategoryDetailPage> {
-  final _apiClient = ApiClient();
-  late final Future<List<RealProvider>> _providersFuture;
-
-  @override
-  void initState() {
-    super.initState();
-    _providersFuture = _load();
-  }
-
-  Future<List<RealProvider>> _load() async {
-    final deviceId = await getDeviceId();
-    // Uses the same demo city the location step's demo coordinates fall
-    // in — the real location isn't chosen yet at this point in onboarding.
-    final result = await _apiClient.searchRealProviders(
-      category: widget.category.slug,
-      city: ApiClient.demoCity,
-      deviceId: deviceId,
-    );
-    return result.providers;
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final category = widget.category;
     return Scaffold(
       backgroundColor: AppColors.lightBackground,
       appBar: AppBar(title: Text(category.label)),
@@ -58,48 +27,6 @@ class _CategoryDetailPageState extends State<CategoryDetailPage> {
                 padding: const EdgeInsets.all(24),
                 children: [
                   _CategoryHeader(category: category),
-                  const SizedBox(height: 28),
-                  const Text(
-                    'Available providers',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.navy,
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  FutureBuilder<List<RealProvider>>(
-                    future: _providersFuture,
-                    builder: (context, snapshot) {
-                      if (snapshot.connectionState != ConnectionState.done) {
-                        return const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 40),
-                          child: Center(
-                            child: CircularProgressIndicator(color: AppColors.turquoise),
-                          ),
-                        );
-                      }
-                      if (snapshot.hasError) {
-                        return _MessageCard(
-                          text: 'Could not load providers right now. Pull up this category again later to see who is available.',
-                        );
-                      }
-                      final providers = snapshot.data!;
-                      if (providers.isEmpty) {
-                        return const _MessageCard(
-                          text: "No providers found nearby yet — we'll notify you as soon as one is available.",
-                        );
-                      }
-                      return Column(
-                        children: [
-                          for (final provider in providers) ...[
-                            RealProviderCard(provider: provider, category: widget.category.slug),
-                            const SizedBox(height: 14),
-                          ],
-                        ],
-                      );
-                    },
-                  ),
                 ],
               ),
             ),
@@ -208,21 +135,3 @@ class _SectionLabel extends StatelessWidget {
   }
 }
 
-class _MessageCard extends StatelessWidget {
-  const _MessageCard({required this.text});
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(22),
-      decoration: BoxDecoration(
-        color: AppColors.white,
-        borderRadius: BorderRadius.circular(kRadius),
-        boxShadow: kCardShadow,
-      ),
-      child: Text(text, style: TextStyle(fontSize: 14, color: AppColors.muted)),
-    );
-  }
-}

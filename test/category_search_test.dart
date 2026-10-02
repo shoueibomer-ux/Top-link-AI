@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:toplinkai_app/api/category_suggestions.dart';
-import 'package:toplinkai_app/api/real_provider.dart';
 import 'package:toplinkai_app/chat/chat_screen.dart';
 import 'package:toplinkai_app/onboarding/category_detail_page.dart';
 import 'package:toplinkai_app/onboarding/category_search.dart';
@@ -293,7 +292,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byType(CategoryDetailPage), findsOneWidget);
-      expect(find.text('Available providers'), findsOneWidget);
+      expect(find.text('WHAT WE COVER'), findsOneWidget);
       expect(tester.widget<CategoryDetailPage>(find.byType(CategoryDetailPage)).category.slug, 'plumbing');
       // The shortcut skips the group / service lists entirely.
       expect(find.byType(ServiceListPage), findsNothing);
@@ -429,16 +428,11 @@ void main() {
       addTearDown(tester.view.resetDevicePixelRatio);
     }
 
-    // Enough providers that the Home tab's list has to scroll.
-    final providers = [
-      for (var i = 0; i < 8; i++) RealProvider(name: 'Provider $i', phone: '+1 780-555-000$i', placeId: 'p$i'),
-    ];
-
     Future<void> pumpHome(WidgetTester tester) async {
       useRealisticDeviceSize(tester);
       await tester.pumpWidget(
         MaterialApp(
-          home: HomeScreen(category: _plumbing, urgency: Urgency.today, providers: providers),
+          home: HomeScreen(category: _plumbing, urgency: Urgency.today),
         ),
       );
       await tester.pump();
@@ -466,35 +460,27 @@ void main() {
       expect(find.descendant(of: find.byType(TextField), matching: find.byType(Text)), findsNothing);
     });
 
-    testWidgets('it stays put while the Home content scrolls underneath', (tester) async {
+    // NOTE: there used to be a dedicated "the search bar stays put while Home
+    // content scrolls underneath" test here, exercised against a long fake
+    // provider list. Home's content is fixed and short now (no provider list
+    // in this phase — see docs/ai-agent-system.md's Phase 0), so it no longer
+    // scrolls far enough to exercise that meaningfully; the bar sitting
+    // outside the scrolling area is still covered structurally by 'it belongs
+    // to the Home tab only' and the field-position test above.
+
+    testWidgets('typing replaces the Home content with results; clearing restores it', (tester) async {
       await pumpHome(tester);
-      final before = tester.getRect(find.byType(TextField));
-      final heading = tester.getTopLeft(find.text('Recommended providers'));
-
-      await tester.drag(find.byType(ListView).first, const Offset(0, -600));
-      await tester.pump();
-
-      expect(tester.getTopLeft(find.text('Recommended providers')).dy, lessThan(heading.dy)); // it did scroll
-      expect(tester.getRect(find.byType(TextField)), before); // the bar didn't
-    });
-
-    testWidgets('typing replaces the Home content with results; clearing restores it, scroll and all',
-        (tester) async {
-      await pumpHome(tester);
-      await tester.drag(find.byType(ListView).first, const Offset(0, -300));
-      await tester.pumpAndSettle(); // let the fling finish before measuring
-      final scrolledTo = tester.getTopLeft(find.text('Recommended providers')).dy;
+      expect(find.text("You're all set!"), findsOneWidget);
 
       await tester.enterText(find.byType(TextField), 'plumb');
       await tester.pump(const Duration(milliseconds: 350));
       await tester.pump();
       expect(find.text('Plumbing'), findsOneWidget);
-      expect(find.text('Recommended providers'), findsNothing);
+      expect(find.text("You're all set!"), findsNothing);
 
       await tester.tap(find.byTooltip('Clear search'));
       await tester.pump();
-      expect(find.text('Recommended providers'), findsOneWidget);
-      expect(tester.getTopLeft(find.text('Recommended providers')).dy, scrolledTo);
+      expect(find.text("You're all set!"), findsOneWidget);
     });
 
     testWidgets('it belongs to the Home tab only', (tester) async {

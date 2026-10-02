@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../app_colors.dart';
 import '../app_styles.dart';
+import '../onboarding/onboarding_screen.dart';
 import '../provider/auth_storage.dart';
-import '../subscription/app_entry_point.dart';
 import '../widgets/app_drawer.dart';
 import 'account_page.dart';
 
@@ -88,10 +88,8 @@ class _SettingsBodyState extends State<SettingsBody> {
     // nobody out.
     await AuthStorage.clear();
     if (!mounted) return;
-    // Route back through the paywall gate (not straight to onboarding) so
-    // subscription status is re-checked rather than assumed.
     Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const AppEntryPoint()),
+      MaterialPageRoute(builder: (_) => const OnboardingScreen()),
       (route) => false,
     );
   }

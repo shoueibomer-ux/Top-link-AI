@@ -49,10 +49,6 @@ class _ProviderBusinessProfileScreenState extends State<ProviderBusinessProfileS
   bool _isAvailableNow = true;
   List<String> _photoUrls = [];
 
-  List<KnownProvider> _knownProviders = [];
-  KnownProvider? _selectedClaim;
-  String? _claimedPlaceId;
-
   @override
   void initState() {
     super.initState();
@@ -92,12 +88,10 @@ class _ProviderBusinessProfileScreenState extends State<ProviderBusinessProfileS
 
     try {
       final profile = await _apiClient.getProviderBusinessProfile(token);
-      final known = await _apiClient.getKnownProviders();
       if (!mounted) return;
       setState(() {
         _accessToken = token;
         _profile = profile;
-        _knownProviders = known;
         _applyProfile(profile);
       });
     } on ApiException catch (e) {
@@ -125,7 +119,6 @@ class _ProviderBusinessProfileScreenState extends State<ProviderBusinessProfileS
     _isInsured = profile.isInsured;
     _isAvailableNow = profile.isAvailableNow;
     _photoUrls = List.of(profile.photoUrls);
-    _claimedPlaceId = profile.placeId;
   }
 
   List<String> _splitCommaList(String text) =>
@@ -166,34 +159,6 @@ class _ProviderBusinessProfileScreenState extends State<ProviderBusinessProfileS
       setState(() => _error = e.message);
     } catch (_) {
       setState(() => _error = 'Could not save your profile — try again.');
-    } finally {
-      if (mounted) setState(() => _saving = false);
-    }
-  }
-
-  Future<void> _claimListing() async {
-    if (_accessToken == null || _selectedClaim == null) return;
-    setState(() {
-      _saving = true;
-      _error = null;
-    });
-    try {
-      final updated = await _apiClient.updateProviderBusinessProfile(
-        accessToken: _accessToken!,
-        fields: {'place_id': _selectedClaim!.placeId},
-      );
-      if (!mounted) return;
-      setState(() {
-        _profile = updated;
-        _claimedPlaceId = updated.placeId;
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Claimed "${_selectedClaim!.name}".')),
-      );
-    } on ApiException catch (e) {
-      setState(() => _error = e.message);
-    } catch (_) {
-      setState(() => _error = 'Could not claim that listing — try again.');
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -378,50 +343,6 @@ class _ProviderBusinessProfileScreenState extends State<ProviderBusinessProfileS
                         ),
                       ),
 
-                      const SizedBox(height: 28),
-                      const Divider(),
-                      const SizedBox(height: 12),
-                      const _SectionLabel('Claim your Google listing'),
-                      Text(
-                        _claimedPlaceId != null
-                            ? 'This profile is linked to a real listing.'
-                            : "If your business already shows up in customer search results, claim it so leads and reviews attach to this account. Unclaimed listings keep appearing in search — they just can't receive a lead.",
-                        style: TextStyle(fontSize: 13, color: AppColors.muted),
-                      ),
-                      const SizedBox(height: 10),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        decoration: BoxDecoration(
-                          color: AppColors.white,
-                          borderRadius: BorderRadius.circular(kRadius),
-                          boxShadow: kCardShadow,
-                        ),
-                        child: DropdownButtonHideUnderline(
-                          child: DropdownButton<KnownProvider>(
-                            isExpanded: true,
-                            hint: const Text('Choose your business'),
-                            value: _selectedClaim,
-                            items: [
-                              for (final provider in _knownProviders)
-                                DropdownMenuItem(value: provider, child: Text(provider.name)),
-                            ],
-                            onChanged: (value) => setState(() => _selectedClaim = value),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      SizedBox(
-                        width: double.infinity,
-                        child: OutlinedButton(
-                          onPressed: (_saving || _selectedClaim == null) ? null : _claimListing,
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: AppColors.navy,
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(kRadius)),
-                          ),
-                          child: const Text('Claim listing', style: TextStyle(fontWeight: FontWeight.w600)),
-                        ),
-                      ),
                     ],
                   ),
       ),

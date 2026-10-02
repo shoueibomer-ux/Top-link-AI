@@ -3,6 +3,21 @@ AI performs the operational work of the platform end to end. Humans approve deci
 involving money, trust, or legal responsibility. Autonomy is enforced in code
 (tool permissions), never only in prompts.
 
+> **Implementation note (Phase 0, when the old Google-listings/provider-
+> response-loop code was removed):** this doc's own "Evaluation and rollout"
+> section below is not the order actually being followed — the agreed plan
+> validates demand first with lightweight, Celery-free manual tooling before
+> any of this agent system gets built. That plan's step 3, "minimal
+> marketplace model: ServiceRequest + LeadOffer only," will reimplement a
+> lead's accept/decline/timeout lifecycle — close to what the removed
+> provider-response-loop feature already did (`ProviderIncomingRequestListView`
+> / `ProviderRequestRespondView` in `provider_search/views.py`: a provider's
+> queue of pending items, accept/decline with an optional message, scoped to
+> the authenticated provider, a client notification on response). That code
+> is fully intact on the `archive/provider-response-loop` branch (commit
+> `21ca79e`) — reuse/adapt it there rather than rebuilding the same mechanics
+> from scratch.
+
 ## Architecture
 - Five specialized agents in the Django backend, sharing one tool registry and using
   the LLM provider already used by ai_categorize:
