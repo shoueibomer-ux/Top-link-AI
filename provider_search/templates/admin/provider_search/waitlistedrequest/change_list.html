@@ -1,0 +1,32 @@
+{% extends "admin/change_list.html" %}
+
+{% block result_list %}
+  {% if demand %}
+    <div class="module" style="margin-bottom: 20px;">
+      <table style="width: 100%;">
+        <caption>Demand by service (follows the filters on the right)</caption>
+        <thead>
+          <tr>
+            <th>Service</th>
+            <th>Waitlisted requests</th>
+            <th>Distinct devices</th>
+            <th>Latest request</th>
+            <th>Launched?</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in demand %}
+            <tr>
+              <td>{{ row.service_name }}</td>
+              <td>{{ row.requests }}</td>
+              <td>{{ row.devices }}</td>
+              <td>{{ row.latest|date:"Y-m-d H:i" }}</td>
+              <td>{% if row.launched %}yes{% else %}no{% endif %}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endif %}
+  {{ block.super }}
+{% endblock %}

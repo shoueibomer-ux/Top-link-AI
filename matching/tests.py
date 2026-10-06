@@ -93,6 +93,9 @@ class CategorySuggestViewTests(TestCase):
     def _get(self, q, **extra):
         return self.client.get("/api/categories/suggest/", {"q": q}, **{**self.headers, **extra})
 
+    def _get_all(self, q):
+        return self.client.get("/api/categories/suggest/", {"q": q, "include_unlaunched": "true"}, **self.headers)
+
     def test_free_text_resolves_to_a_category(self):
         body = self._get("leaking pipe").json()
         self.assertEqual(body["categories"][0], "plumbing")
@@ -120,6 +123,18 @@ class CategorySuggestViewTests(TestCase):
         self.assertEqual(self._get("mowing").json()["keywords"], [])
         Service.objects.filter(slug="lawn-care").update(is_launched=True)
         self.assertEqual(self._get("mow my lawn").json()["categories"], ["lawn-care"])
+
+    def test_the_flag_adds_unlaunched_services_to_the_suggestions(self):
+        body = self._get_all("mow my lawn").json()
+        self.assertEqual(body["categories"], ["lawn-care"])
+        keywords = self._get_all("mowing").json()["keywords"]
+        self.assertIn({"keyword": "mowing", "category": "lawn-care"}, keywords)
+        # ...and launched ones are still there with it.
+        self.assertEqual(self._get_all("leaking pipe").json()["categories"][0], "plumbing")
+
+    def test_inactive_services_are_never_suggested_even_with_the_flag(self):
+        Service.objects.filter(slug="lawn-care").update(is_active=False)
+        self.assertEqual(self._get_all("mow my lawn").json()["categories"], [])
 
     def test_it_requires_the_api_key(self):
         response = self.client.get("/api/categories/suggest/", {"q": "pipe"})

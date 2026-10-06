@@ -83,9 +83,17 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
       if (!mounted) return;
       if (submission.isWaitlisted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(submission.message ?? 'Coming soon in your area')),
+        await showDialog<void>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: const Text('Coming soon'),
+            content: Text(submission.message ?? kWaitlistedMessage),
+            actions: [
+              TextButton(onPressed: () => Navigator.of(dialogContext).pop(), child: const Text('OK')),
+            ],
+          ),
         );
+        if (!mounted) return;
       }
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
@@ -162,6 +170,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                           descriptionController: _descriptionController,
                           consentGiven: _consentGiven,
                           onConsentChanged: (value) => setState(() => _consentGiven = value),
+                          waitlisted: _selectedCategory?.isLaunched == false,
                         ),
                     },
                   ),

@@ -63,7 +63,10 @@ class ServiceRequestCreateView(APIView):
     silently created without sharing.
     """
 
-    COMING_SOON_MESSAGE = "Coming soon in your area"
+    COMING_SOON_MESSAGE = (
+        "This service is coming soon in your area. We saved your request and "
+        "will contact you when it opens."
+    )
     REQUIRED_CONSENT_MESSAGE = (
         "You must consent to share your request details, including your phone "
         "number, with service providers before submitting a request."

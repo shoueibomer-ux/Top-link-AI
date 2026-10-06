@@ -147,7 +147,11 @@ class ApiClient {
   /// See matching.views.CategorySuggestView — the category search bar's
   /// keyword lookup. Never an AI call, so it is fine to run as the user types.
   Future<RemoteCategorySuggestions> suggestCategories(String query) async {
-    final uri = Uri.parse('$baseUrl/categories/suggest/').replace(queryParameters: {'q': query});
+    final uri = Uri.parse('$baseUrl/categories/suggest/').replace(
+      // The app offers a waitlist for services that aren't open yet, so it
+      // wants those suggested too.
+      queryParameters: {'q': query, 'include_unlaunched': 'true'},
+    );
     final response = await http.get(uri, headers: _headers);
     if (response.statusCode != 200) {
       throw ApiException('Could not load suggestions (${response.statusCode}).');
@@ -314,6 +318,7 @@ class ApiClient {
           whatWeCover: serviceJson['what_we_cover'] as String? ?? '',
           workerNoun: serviceJson['worker_noun'] as String? ?? '',
           slug: serviceJson['slug'] as String? ?? '',
+          isLaunched: serviceJson['is_launched'] as bool? ?? true,
         );
       }).toList();
       return ServiceCategoryGroup(

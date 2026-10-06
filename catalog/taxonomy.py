@@ -14,6 +14,13 @@ def active_service_names() -> dict:
     return dict(_live_services().values_list("slug", "name"))
 
 
+def wants_unlaunched(request) -> bool:
+    """True when the caller passed ?include_unlaunched=true (or 1). Off by
+    default so app builds already installed, which only know launched
+    services, keep working."""
+    return request.query_params.get("include_unlaunched", "").lower() in ("1", "true")
+
+
 def launched_slugs() -> set:
     """Slugs of active services we can actually serve right now."""
     return set(_live_services().filter(is_launched=True).values_list("slug", flat=True))

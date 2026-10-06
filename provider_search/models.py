@@ -150,3 +150,14 @@ class ServiceRequest(models.Model):
 
     def __str__(self):
         return f"{self.device_id} -> {self.category} ({self.status})"
+
+
+class WaitlistedRequest(ServiceRequest):
+    """Admin-only lens on ServiceRequest: just the waitlisted ones, with a
+    demand-per-service summary (see WaitlistDemandAdmin). A proxy, so it has
+    no table of its own."""
+
+    class Meta:
+        proxy = True
+        verbose_name = "waitlist demand"
+        verbose_name_plural = "waitlist demand"

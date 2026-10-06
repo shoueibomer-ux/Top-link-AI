@@ -4,7 +4,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 
-from catalog.taxonomy import launched_slugs
+from catalog.taxonomy import active_service_names, launched_slugs, wants_unlaunched
 
 from .models import Profile, MatchRequest, Category
 from .serializers import (
@@ -138,23 +138,25 @@ class CategorySuggestView(APIView):
     """GET /api/categories/suggest/?q=<partly typed text>
 
     Search-as-you-type for the app's category search bar: which categories the
-    text points at (`categories`, best first, launched catalog services only —
-    the same keyword classifier ai_categorize() falls back to) and which
+    text points at (`categories`, best first, the same keyword classifier
+    ai_categorize() falls back to) and which
     taxonomy keywords the text is heading toward (`keywords`).
 
     Like CategoryProvidersView this deliberately never calls the Claude API:
     it runs on every pause in typing, and free-form requests that need real
     understanding belong to Ask AI (ChatRefineView), not to a search box.
+
+    Launched services only by default; `?include_unlaunched=true` adds every
+    other active service so the app can offer its waitlist flow for them.
     """
 
     MAX_QUERY_LENGTH = 100
 
     def get(self, request):
         query = " ".join(request.query_params.get("q", "").split())[: self.MAX_QUERY_LENGTH]
-        # The app only offers launched services, so only suggest those.
-        launched = launched_slugs()
+        slugs = set(active_service_names()) if wants_unlaunched(request) else launched_slugs()
         return Response({
             "query": query,
-            "categories": rank_keyword_categories(query, launched) if query else [],
-            "keywords": keyword_suggestions(query, slugs=launched),
+            "categories": rank_keyword_categories(query, slugs) if query else [],
+            "keywords": keyword_suggestions(query, slugs=slugs),
         })
