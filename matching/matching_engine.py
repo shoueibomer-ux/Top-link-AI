@@ -159,11 +159,17 @@ if __name__ == "__main__":
 
 
 # ---------- AI categorization layer ----------
-# ai_categorize() classifies free text into this module's fixed category
-# taxonomy using the Claude API. If the call fails for any reason (missing
-# API key, network error, timeout, unrecognized response), it falls back to
-# keyword matching rather than raising — callers can always rely on getting
-# a (possibly empty) set of category slugs back.
+# ai_categorize() classifies free text into the catalog's services
+# (catalog.Service — the single source of truth for which slugs and display
+# names exist) using the Claude API. If the call fails for any reason
+# (missing API key, network error, timeout, unrecognized response), it falls
+# back to keyword matching rather than raising — callers can always rely on
+# getting a (possibly empty) set of category slugs back.
+#
+# CATEGORY_TAXONOMY below holds only the *keywords* for the fallback and the
+# search bar. A slug there that is not an active catalog service is ignored,
+# and a catalog service with no entry here is simply invisible to keyword
+# matching (website/tests.py checks both directions stay in sync).
 
 CATEGORY_TAXONOMY = {
     "plumbing": ["plumber", "plumbing", "pipe", "leak", "faucet", "drain", "sink", "toilet", "water heater"],
@@ -212,61 +218,22 @@ CATEGORY_TAXONOMY = {
     "landscaping": ["landscaping", "landscaper", "garden design", "sod", "retaining wall"],
 }
 
-# The category names shown to the AI classifier, mapped to this module's
-# internal slugs (the same slugs used by CATEGORY_TAXONOMY, Category rows,
-# and match scoring everywhere else).
-CATEGORY_DISPLAY_NAMES = {
-    "plumbing": "Plumbing",
-    "electrical": "Electrical",
-    "carpentry": "Carpentry",
-    "hvac": "HVAC (heating/cooling)",
-    "painting": "Painting",
-    "general-maintenance": "General maintenance",
-    "construction-finishing": "Construction/finishing",
-    "drywall-decor": "Drywall and decor installation",
-    "metalwork-aluminum": "Metalwork/aluminum work",
-    "glass-mirrors": "Glass and mirrors",
-    "cleaning-services": "Cleaning services",
-    "moving-services": "Moving services",
-    "furniture-assembly": "Furniture assembly",
-    "home-repair": "Home repair",
-    "mechanic-services": "Mechanic services",
-    "car-wash": "Car wash",
-    "tire-repair": "Tire repair",
-    "towing-services": "Towing services",
-    "accounting-services": "Accounting services",
-    "marketing-services": "Marketing services",
-    "website-design": "Website design",
-    "it-services": "IT services",
-    "photography": "Photography",
-    "event-decoration": "Event decoration",
-    "event-planning": "Event planning",
-    "sound-lighting": "Sound and lighting services",
-    "barber-services": "Barber services",
-    "beauty-services": "Beauty services",
-    "personal-training": "Personal training",
-    "tutoring": "Tutoring",
-    "flooring": "Flooring",
-    "roofing": "Roofing",
-    "concrete-work": "Concrete work",
-    "kitchen-renovation": "Kitchen renovation",
-    "bathroom-renovation": "Bathroom renovation",
-    "delivery-services": "Delivery services",
-    "storage-services": "Storage services",
-    "legal-services": "Legal services",
-    "catering": "Catering",
-    "security-services": "Security services",
-    "lawn-care": "Lawn care",
-    "snow-removal": "Snow removal",
-    "tree-services": "Tree services",
-    "landscaping": "Landscaping",
-}
-_DISPLAY_NAME_TO_SLUG = {name: slug for slug, name in CATEGORY_DISPLAY_NAMES.items()}
 _CLAUDE_MODEL = "claude-sonnet-4-6"
 
 
-def rank_keyword_categories(text: str) -> list:
+def _catalog_slugs(slugs):
+    if slugs is not None:
+        return slugs
+    from catalog.taxonomy import active_service_names
+
+    return set(active_service_names())
+
+
+def rank_keyword_categories(text: str, slugs=None) -> list:
     """Keyword-matching classifier, best match first.
+
+    Only slugs in `slugs` can be returned — by default every active catalog
+    service; callers that serve the app pass the launched subset.
 
     A category matches when any of its keywords appears in `text`. Ranking is
     deterministic — more distinct keyword hits first, then the longer (more
@@ -274,8 +241,11 @@ def rank_keyword_categories(text: str) -> list:
     answer ("leaking pipe" -> plumbing) don't depend on set iteration order.
     """
     text_lower = text.lower()
+    allowed = _catalog_slugs(slugs)
     scored = []
     for order, (category, keywords) in enumerate(CATEGORY_TAXONOMY.items()):
+        if category not in allowed:
+            continue
         hits = [kw for kw in keywords if kw in text_lower]
         if hits:
             scored.append((-len(hits), -max(len(kw) for kw in hits), order, category))
@@ -287,7 +257,7 @@ def _keyword_categorize(text: str) -> set:
     return set(rank_keyword_categories(text))
 
 
-def keyword_suggestions(query: str, limit: int = 8) -> list:
+def keyword_suggestions(query: str, limit: int = 8, slugs=None) -> list:
     """Taxonomy keywords a partly-typed `query` could be heading toward, for
     search-as-you-type: [{"keyword": "faucet", "category": "plumbing"}, ...].
 
@@ -301,8 +271,11 @@ def keyword_suggestions(query: str, limit: int = 8) -> list:
         return []
     last_word = text.rsplit(" ", 1)[-1]
 
+    allowed = _catalog_slugs(slugs)
     prefix_hits, word_hits = [], []
     for category, keywords in CATEGORY_TAXONOMY.items():
+        if category not in allowed:
+            continue
         for kw in keywords:
             kw = kw.strip()
             entry = {"keyword": kw, "category": category}
@@ -314,7 +287,7 @@ def keyword_suggestions(query: str, limit: int = 8) -> list:
 
 
 def _ai_categorize_llm(text: str) -> set:
-    """Classify `text` into exactly one of the 9 fixed categories via Claude.
+    """Classify `text` into exactly one active catalog service via Claude.
 
     Raises on any failure (no API key, network/timeout error, unrecognized
     reply) so `ai_categorize` can fall back to keyword matching.
@@ -325,7 +298,10 @@ def _ai_categorize_llm(text: str) -> set:
     if not api_key:
         raise RuntimeError("ANTHROPIC_API_KEY is not set")
 
-    category_list = "\n".join(f"- {name}" for name in CATEGORY_DISPLAY_NAMES.values())
+    from catalog.taxonomy import active_service_names
+
+    names = active_service_names()
+    category_list = "\n".join(f"- {name}" for name in names.values())
     client = anthropic.Anthropic(api_key=api_key)
     response = client.with_options(timeout=10.0).messages.create(
         model=_CLAUDE_MODEL,
@@ -340,14 +316,14 @@ def _ai_categorize_llm(text: str) -> set:
     )
 
     reply = "".join(block.text for block in response.content if block.type == "text").strip()
-    slug = _DISPLAY_NAME_TO_SLUG.get(reply)
+    slug = next((s for s, name in names.items() if name == reply), None)
     if slug is None:
         raise ValueError(f"unrecognized category from model: {reply!r}")
     return {slug}
 
 
 def ai_categorize(text: str) -> set:
-    """Classify free text into the fixed category taxonomy.
+    """Classify free text into the catalog's active services.
 
     Uses the Claude API when available; falls back to keyword matching on
     any failure so this function never raises.
@@ -360,6 +336,13 @@ def ai_categorize(text: str) -> set:
 
 
 if __name__ == "__main__":
+    # The classifier reads the catalog, so the demo needs Django set up
+    # (run it as `python -m matching.matching_engine` from the project root).
+    import django
+
+    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
+    django.setup()
+
     print("\n--- AI categorization demo ---\n")
 
     business_description = "We're a plumber serving the Edmonton area, specializing in leaks, pipes, and faucet repair."

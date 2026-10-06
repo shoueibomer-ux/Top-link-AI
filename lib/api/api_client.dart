@@ -61,7 +61,7 @@ class ApiClient {
   /// form. `consent` must be true: explicit, per-request agreement to share
   /// the request (including `phone`) with providers — there is no default,
   /// callers must have actually shown the consent copy and had it checked.
-  Future<int> createServiceRequest({
+  Future<ServiceRequestSubmission> createServiceRequest({
     required String deviceId,
     required String category,
     required String phone,
@@ -84,7 +84,7 @@ class ApiClient {
     if (response.statusCode != 201) {
       throw ApiException(_firstErrorMessage(response.body) ?? 'Could not submit your request.');
     }
-    return (jsonDecode(response.body) as Map<String, dynamic>)['request_id'] as int;
+    return ServiceRequestSubmission.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
   }
 
   /// See provider_search.views.ServiceRequestListView — "Your requests".
@@ -291,8 +291,15 @@ class ApiClient {
   /// 1B). Returns the parsed groups directly; callers that just need the
   /// flat, cached list should go through `loadCatalogFromApi` in
   /// onboarding/service_category.dart instead of calling this repeatedly.
-  Future<List<ServiceCategoryGroup>> getCatalog() async {
-    final response = await http.get(Uri.parse('$baseUrl/catalog/categories/'), headers: _headers);
+  ///
+  /// By default only launched services come back (what clients see); pass
+  /// [includeUnlaunched] for every active service — the provider pickers use
+  /// it so providers can register in upcoming categories.
+  Future<List<ServiceCategoryGroup>> getCatalog({bool includeUnlaunched = false}) async {
+    final uri = Uri.parse('$baseUrl/catalog/categories/').replace(
+      queryParameters: includeUnlaunched ? {'include_unlaunched': 'true'} : null,
+    );
+    final response = await http.get(uri, headers: _headers);
     if (response.statusCode != 200) {
       throw ApiException('Could not load categories (${response.statusCode}).');
     }

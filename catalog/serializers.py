@@ -17,5 +17,6 @@ class CategorySerializer(serializers.ModelSerializer):
         fields = ["id", "name", "slug", "icon_name", "services"]
 
     def get_services(self, obj):
-        active_services = [s for s in obj.services.all() if s.is_active]
-        return ServiceSerializer(active_services, many=True).data
+        include_unlaunched = self.context.get("include_unlaunched", False)
+        services = [s for s in obj.services.all() if s.is_active and (include_unlaunched or s.is_launched)]
+        return ServiceSerializer(services, many=True).data

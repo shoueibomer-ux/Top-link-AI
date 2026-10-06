@@ -53,6 +53,9 @@ class _ProviderBusinessProfileScreenState extends State<ProviderBusinessProfileS
   void initState() {
     super.initState();
     _load();
+    loadProviderCatalogFromApi().then((_) {
+      if (mounted) setState(() {});
+    });
   }
 
   @override
@@ -223,7 +226,7 @@ class _ProviderBusinessProfileScreenState extends State<ProviderBusinessProfileS
                         spacing: 8,
                         runSpacing: 8,
                         children: [
-                          for (final category in serviceCategories)
+                          for (final category in providerServiceCategories)
                             _SelectableChip(
                               label: category.label,
                               selected: _selectedCategories.contains(category.slug),

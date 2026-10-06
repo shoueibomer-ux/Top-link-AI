@@ -37,19 +37,50 @@ class ServiceRequestRecord {
 /// Response from ChatRefineView — a classification only, no request created
 /// yet (see ApiClient.createServiceRequest for that).
 class ChatRefineResult {
-  const ChatRefineResult({required this.category, required this.urgency, required this.notes});
+  const ChatRefineResult({
+    required this.category,
+    required this.urgency,
+    required this.notes,
+    this.launched = true,
+  });
 
   factory ChatRefineResult.fromJson(Map<String, dynamic> json) {
     return ChatRefineResult(
       category: json['category'] as String?,
       urgency: json['urgency'] as String? ?? 'exploring',
       notes: json['notes'] as String? ?? '',
+      launched: json['launched'] as bool? ?? true,
     );
   }
 
   // Null means neither the AI call nor keyword matching could identify a
-  // supported category — the UI should ask the client to rephrase.
+  // service — the UI should ask the client to rephrase.
   final String? category;
   final String urgency;
   final String notes;
+
+  // False when the service exists but isn't launched yet — the UI says
+  // "coming soon" instead of continuing into the request flow.
+  final bool launched;
+}
+
+/// What ServiceRequestCreateView answered when a request was submitted.
+class ServiceRequestSubmission {
+  const ServiceRequestSubmission({required this.requestId, required this.status, this.message});
+
+  factory ServiceRequestSubmission.fromJson(Map<String, dynamic> json) {
+    return ServiceRequestSubmission(
+      requestId: json['request_id'] as int,
+      status: json['status'] as String? ?? 'new',
+      message: json['message'] as String?,
+    );
+  }
+
+  final int requestId;
+  final String status;
+
+  // Set when the service isn't launched yet ("Coming soon in your area").
+  final String? message;
+
+  bool get isWaitlisted => status == 'waitlisted';
 }

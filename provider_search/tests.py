@@ -2,6 +2,8 @@ from unittest.mock import patch
 
 from django.test import TestCase, override_settings
 
+from catalog.models import Service
+
 from .models import ProviderOnboarding, ServiceRequest
 
 TEST_API_KEY = "test-key"
@@ -38,6 +40,13 @@ class ChatRefineViewTests(TestCase):
             response = self._refine(message="zzzz qqqq", device_id="dev-1")
         self.assertEqual(response.status_code, 200)
         self.assertIsNone(response.json()["category"])
+
+    def test_reports_whether_the_category_is_launched(self):
+        launched = self._refine(message="my kitchen sink is leaking", device_id="dev-1").json()
+        self.assertTrue(launched["launched"])
+        coming_soon = self._refine(message="need someone to mow my lawn", device_id="dev-1").json()
+        self.assertEqual(coming_soon["category"], "lawn-care")
+        self.assertFalse(coming_soon["launched"])
 
     def test_never_creates_a_service_request(self):
         self._refine(message="my kitchen sink is leaking", device_id="dev-1")
@@ -107,6 +116,45 @@ class ServiceRequestCreateViewTests(TestCase):
         response = self.client.post("/api/requests/", body, content_type="application/json", **self.headers)
         self.assertEqual(response.status_code, 201)
         self.assertEqual(ServiceRequest.objects.get().city, "Edmonton")
+
+    # ---- The category must be a real catalog service; launch state decides status ----
+
+    def test_a_launched_service_is_created_as_new(self):
+        body = self._create().json()
+        self.assertEqual(body["status"], ServiceRequest.STATUS_NEW)
+        self.assertNotIn("message", body)
+        self.assertEqual(ServiceRequest.objects.get().status, ServiceRequest.STATUS_NEW)
+
+    def test_a_not_yet_launched_service_is_waitlisted_with_a_coming_soon_message(self):
+        response = self._create(category="lawn-care")
+        self.assertEqual(response.status_code, 201)
+        body = response.json()
+        self.assertEqual(body["status"], ServiceRequest.STATUS_WAITLISTED)
+        self.assertEqual(body["message"], "Coming soon in your area")
+        request = ServiceRequest.objects.get(id=body["request_id"])
+        self.assertEqual(request.status, ServiceRequest.STATUS_WAITLISTED)
+        self.assertEqual(request.category, "lawn-care")
+        self.assertTrue(request.consent_given)
+
+    def test_launching_the_service_makes_new_requests_normal(self):
+        Service.objects.filter(slug="lawn-care").update(is_launched=True)
+        self.assertEqual(self._create(category="lawn-care").json()["status"], ServiceRequest.STATUS_NEW)
+
+    def test_an_unknown_category_is_rejected(self):
+        for bad in ("not-a-service", "Plumbing", ["plumbing"], 7):
+            with self.subTest(category=bad):
+                self.assertEqual(self._create(category=bad).status_code, 400)
+        self.assertEqual(ServiceRequest.objects.count(), 0)
+
+    def test_an_inactive_service_is_rejected_not_waitlisted(self):
+        Service.objects.filter(slug="plumbing").update(is_active=False)
+        self.assertEqual(self._create().status_code, 400)
+        self.assertEqual(ServiceRequest.objects.count(), 0)
+
+    def test_waitlisted_requests_still_need_phone_and_consent(self):
+        self.assertEqual(self._create(category="lawn-care", consent=False).status_code, 400)
+        self.assertEqual(self._create(category="lawn-care", phone="").status_code, 400)
+        self.assertEqual(ServiceRequest.objects.count(), 0)
 
     # ---- Explicit consent is mandatory — never defaulted, never inferred ----
 

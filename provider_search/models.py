@@ -97,11 +97,17 @@ class ServiceRequest(models.Model):
     """
 
     STATUS_NEW = "new"
+    # The service is active in the catalog but not launched yet (see
+    # catalog.Service.is_launched): the request is kept as demand signal and
+    # the client is told it is coming soon, rather than being rejected.
+    STATUS_WAITLISTED = "waitlisted"
     STATUS_CHOICES = [
         (STATUS_NEW, "New"),
+        (STATUS_WAITLISTED, "Waitlisted"),
     ]
 
     device_id = models.CharField(max_length=64, db_index=True)
+    # catalog.Service.slug (validated against the catalog on creation).
     category = models.CharField(max_length=50)
     city = models.CharField(max_length=100)
     problem_description = models.TextField(blank=True)

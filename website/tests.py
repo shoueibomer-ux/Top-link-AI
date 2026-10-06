@@ -1,8 +1,7 @@
 from django.test import TestCase, override_settings
 
 from catalog.models import Category, Service
-from matching.matching_engine import CATEGORY_DISPLAY_NAMES, CATEGORY_TAXONOMY
-from provider_search.chat_service import _CATEGORY_DISPLAY_NAMES
+from matching.matching_engine import CATEGORY_TAXONOMY
 
 from . import selectors
 from .content.seo_pages import SEO_PAGES
@@ -129,14 +128,10 @@ class TaxonomyIntegrityTests(TestCase):
         )
         self.assertEqual(sectors, {"home-services", "outdoor-services"})
 
-    def test_every_service_is_covered_by_classification(self):
+    def test_keyword_table_and_catalog_cover_exactly_the_same_services(self):
         slugs = set(Service.objects.values_list("slug", flat=True))
-        for name, mapping in [
-            ("CATEGORY_TAXONOMY", CATEGORY_TAXONOMY),
-            ("CATEGORY_DISPLAY_NAMES", CATEGORY_DISPLAY_NAMES),
-            ("chat display names", _CATEGORY_DISPLAY_NAMES),
-        ]:
-            self.assertEqual(slugs - set(mapping), set(), name)
+        self.assertEqual(slugs - set(CATEGORY_TAXONOMY), set(), "service with no keywords")
+        self.assertEqual(set(CATEGORY_TAXONOMY) - slugs, set(), "keywords for a service not in the catalog")
 
 
 @override_settings(API_KEY="test-key")
@@ -148,7 +143,11 @@ class ExistingRoutesStillWorkTests(TestCase):
         self.assertIn(self.client.get("/api/catalog/categories/").status_code, (401, 403))
         response = self.client.get("/api/catalog/categories/", HTTP_X_API_KEY="test-key")
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(len(response.json()), 7)
+        # The app's catalog lists launched services only: the 9 launch
+        # services all sit in one group.
+        groups = response.json()
+        self.assertEqual([g["slug"] for g in groups], ["trades-professional"])
+        self.assertEqual(len(groups[0]["services"]), 9)
 
 
 class VisualIdentityTests(TestCase):

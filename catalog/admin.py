@@ -6,7 +6,7 @@ from .models import Category, Service
 class ServiceInline(admin.TabularInline):
     model = Service
     extra = 0
-    fields = ["name", "slug", "icon_name", "worker_noun", "google_places_query", "display_order", "is_active"]
+    fields = ["name", "slug", "icon_name", "worker_noun", "google_places_query", "display_order", "is_active", "is_launched"]
 
 
 @admin.register(Category)
@@ -19,6 +19,7 @@ class CategoryAdmin(admin.ModelAdmin):
 
 @admin.register(Service)
 class ServiceAdmin(admin.ModelAdmin):
-    list_display = ["name", "slug", "category", "display_order", "is_active"]
-    list_filter = ["category", "is_active"]
+    list_display = ["name", "slug", "category", "display_order", "is_active", "is_launched"]
+    list_filter = ["category", "is_active", "is_launched"]
+    list_editable = ["is_launched"]
     search_fields = ["name", "slug"]

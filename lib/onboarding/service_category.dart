@@ -206,6 +206,30 @@ Future<void> _loadCatalog(ApiClient client) async {
   }
 }
 
+/// What the provider service pickers offer: every active service, launched
+/// or not, so providers can register in upcoming categories. Client-facing
+/// screens keep reading `serviceCategories` (launched only).
+List<ServiceCategory> providerServiceCategories = List.of(_fallbackServiceCategories);
+
+Future<void>? _providerCatalogLoadFuture;
+
+Future<void> loadProviderCatalogFromApi([ApiClient? client]) {
+  return _providerCatalogLoadFuture ??= _loadProviderCatalog(client ?? ApiClient());
+}
+
+Future<void> _loadProviderCatalog(ApiClient client) async {
+  try {
+    final groups = await client.getCatalog(includeUnlaunched: true);
+    if (groups.isEmpty) {
+      _providerCatalogLoadFuture = null;
+      return;
+    }
+    providerServiceCategories = [for (final group in groups) ...group.services];
+  } catch (_) {
+    _providerCatalogLoadFuture = null;
+  }
+}
+
 /// The pre-Phase-1B static list of 9 trade categories — used to seed
 /// `serviceCategories` immediately (so the app has something to render
 /// before the first network round trip) and as the permanent fallback if
@@ -301,8 +325,8 @@ const _fallbackServiceCategories = [
   ),
 ];
 
-/// The flat list every existing screen reads (category grids, the provider
-/// profile's service picker, notification/history lookups). Starts as the
+/// The flat list every client-facing screen reads (category grids,
+/// notification/history lookups). Starts as the
 /// static fallback and is replaced wholesale once `loadCatalogFromApi`
 /// resolves. Mutable (not const) so that replacement can happen in place.
 List<ServiceCategory> serviceCategories = List.of(_fallbackServiceCategories);

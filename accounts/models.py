@@ -71,10 +71,8 @@ class ProviderBusinessProfile(models.Model):
     )
     business_name = models.CharField(max_length=200, blank=True)
     description = models.TextField(blank=True)
-    # List of category slugs — mirrors provider_search.services.CATEGORY_QUERIES
-    # keys / ProviderOnboarding.services, kept as plain JSON rather than a
-    # FK to matching.models.Category since nothing else in the app treats
-    # that table as the source of truth for categories.
+    # List of catalog.Service slugs, kept as plain JSON rather than an FK
+    # (see ServiceRequest.category, which uses the same slugs).
     categories = models.JSONField(default=list, blank=True)
     # One of provider_search.services.CITIES — kept as a plain string (not a
     # FK) for the same reason: cities are a configured list, not a DB table,

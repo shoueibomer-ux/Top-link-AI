@@ -1,6 +1,9 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 
+from catalog.models import Service
+from catalog.taxonomy import launched_slugs
+
 from .chat_service import refine_request
 from .models import ProviderOnboarding, ServiceRequest
 from .serializers import ProviderOnboardingSerializer, ServiceRequestSerializer
@@ -27,8 +30,12 @@ class ChatRefineView(APIView):
             return Response({"detail": "device_id is required."}, status=400)
 
         refined = refine_request(text)
+        category = refined["category"]
         return Response({
-            "category": refined["category"],
+            "category": category,
+            # False when the service exists but isn't launched yet — the app
+            # shows "coming soon" instead of continuing into the request flow.
+            "launched": category in launched_slugs() if category else False,
             "urgency": refined["urgency"],
             "notes": refined["notes"],
         })
@@ -45,12 +52,18 @@ class ServiceRequestCreateView(APIView):
     for where that's headed); a human currently reads these from the Django
     admin.
 
+    `category` must be the slug of an active catalog.Service, otherwise 400.
+    If that service is not launched yet (Service.is_launched) the request is
+    still saved, with status "waitlisted", and the response carries
+    COMING_SOON_MESSAGE for the client to show.
+
     `consent` must be exactly `true` — explicit, per-request, opt-in consent
     to share the request (including the phone number) with providers. There
     is no default or inferred consent; a request without it is rejected, not
     silently created without sharing.
     """
 
+    COMING_SOON_MESSAGE = "Coming soon in your area"
     REQUIRED_CONSENT_MESSAGE = (
         "You must consent to share your request details, including your phone "
         "number, with service providers before submitting a request."
@@ -68,6 +81,13 @@ class ServiceRequestCreateView(APIView):
             return Response({"detail": "device_id is required."}, status=400)
         if not category:
             return Response({"detail": "category is required."}, status=400)
+        service = (
+            Service.objects.filter(slug=category, is_active=True, category__is_active=True).first()
+            if isinstance(category, str)
+            else None
+        )
+        if service is None:
+            return Response({"detail": "category must be an active service."}, status=400)
         if not phone:
             return Response({"detail": "phone is required."}, status=400)
         if city not in CITIES:
@@ -77,20 +97,22 @@ class ServiceRequestCreateView(APIView):
 
         service_request = ServiceRequest.objects.create(
             device_id=device_id,
-            category=category,
+            category=service.slug,
             city=city,
             problem_description=description,
             phone=phone,
             consent_given=True,
+            status=ServiceRequest.STATUS_NEW if service.is_launched else ServiceRequest.STATUS_WAITLISTED,
         )
-        return Response(
-            {
-                "request_id": service_request.id,
-                "category": service_request.category,
-                "urgency": urgency,
-            },
-            status=201,
-        )
+        body = {
+            "request_id": service_request.id,
+            "category": service_request.category,
+            "status": service_request.status,
+            "urgency": urgency,
+        }
+        if service_request.status == ServiceRequest.STATUS_WAITLISTED:
+            body["message"] = self.COMING_SOON_MESSAGE
+        return Response(body, status=201)
 
 
 class ServiceRequestListView(APIView):

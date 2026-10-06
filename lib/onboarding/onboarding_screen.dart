@@ -73,7 +73,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
     try {
       final deviceId = await getDeviceId();
-      await _apiClient.createServiceRequest(
+      final submission = await _apiClient.createServiceRequest(
         deviceId: deviceId,
         category: category.slug,
         phone: _phoneController.text.trim(),
@@ -82,6 +82,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       );
 
       if (!mounted) return;
+      if (submission.isWaitlisted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(submission.message ?? 'Coming soon in your area')),
+        );
+      }
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
           builder: (_) => HomeScreen(category: category, urgency: urgency),
