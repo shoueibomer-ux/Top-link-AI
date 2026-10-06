@@ -59,9 +59,11 @@ class _ChatScreenState extends State<ChatScreen> {
       final deviceId = await getDeviceId();
       final result = await _apiClient.refineChatMessage(message: text, deviceId: deviceId);
       final category = result.category == null ? null : findCategoryBySlug(result.category!);
-      final reply = category == null
-          ? "I couldn't quite tell what kind of service you need — try naming a trade, like plumbing or electrical."
-          : "Got it — sounds like ${category.label.toLowerCase()}, ${_urgencyPhrase(result.urgency)}.";
+      final reply = result.category != null && !result.launched
+          ? "Coming soon in your area — we aren't taking requests for that service just yet."
+          : category == null
+              ? "I couldn't quite tell what kind of service you need — try naming a trade, like plumbing or electrical."
+              : "Got it — sounds like ${category.label.toLowerCase()}, ${_urgencyPhrase(result.urgency)}.";
       setState(() => _messages.add(_ChatMessage.assistant(reply, result)));
     } catch (_) {
       setState(() => _messages.add(
@@ -207,10 +209,10 @@ class _MessageBubble extends StatelessWidget {
               ),
               child: Text(message.text, style: const TextStyle(color: AppColors.navy, fontSize: 14)),
             ),
-            if (result?.category != null) ...[
+            if (result?.category != null && result!.launched) ...[
               const SizedBox(height: 10),
               OutlinedButton(
-                onPressed: () => onContinue(result!.category!),
+                onPressed: () => onContinue(result.category!),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: AppColors.turquoise,
                   side: const BorderSide(color: AppColors.turquoise),

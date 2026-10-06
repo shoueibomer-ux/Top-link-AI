@@ -45,57 +45,6 @@ _BLANK_CLASSIFICATION = {
     "required_qualifications": [],
 }
 
-# Mirrors matching.matching_engine.CATEGORY_DISPLAY_NAMES — kept as its own
-# copy rather than imported so this module's prompt wording can evolve
-# independently of the business-onboarding classifier.
-_CATEGORY_DISPLAY_NAMES = {
-    "plumbing": "Plumbing",
-    "electrical": "Electrical",
-    "carpentry": "Carpentry",
-    "hvac": "HVAC (heating/cooling)",
-    "painting": "Painting",
-    "general-maintenance": "General maintenance",
-    "construction-finishing": "Construction/finishing",
-    "drywall-decor": "Drywall and decor installation",
-    "metalwork-aluminum": "Metalwork/aluminum work",
-    "glass-mirrors": "Glass and mirrors",
-    "cleaning-services": "Cleaning services",
-    "moving-services": "Moving services",
-    "furniture-assembly": "Furniture assembly",
-    "home-repair": "Home repair",
-    "mechanic-services": "Mechanic services",
-    "car-wash": "Car wash",
-    "tire-repair": "Tire repair",
-    "towing-services": "Towing services",
-    "accounting-services": "Accounting services",
-    "marketing-services": "Marketing services",
-    "website-design": "Website design",
-    "it-services": "IT services",
-    "photography": "Photography",
-    "event-decoration": "Event decoration",
-    "event-planning": "Event planning",
-    "sound-lighting": "Sound and lighting services",
-    "barber-services": "Barber services",
-    "beauty-services": "Beauty services",
-    "personal-training": "Personal training",
-    "tutoring": "Tutoring",
-    "flooring": "Flooring",
-    "roofing": "Roofing",
-    "concrete-work": "Concrete work",
-    "kitchen-renovation": "Kitchen renovation",
-    "bathroom-renovation": "Bathroom renovation",
-    "delivery-services": "Delivery services",
-    "storage-services": "Storage services",
-    "legal-services": "Legal services",
-    "catering": "Catering",
-    "security-services": "Security services",
-    "lawn-care": "Lawn care",
-    "snow-removal": "Snow removal",
-    "tree-services": "Tree services",
-    "landscaping": "Landscaping",
-}
-_DISPLAY_NAME_TO_SLUG = {name: slug for slug, name in _CATEGORY_DISPLAY_NAMES.items()}
-
 _URGENCY_KEYWORDS = {
     "today": ["today", "asap", "urgent", "emergency", "right now", "immediately", " now"],
     "this_week": ["this week", "few days", "weekend", "soon", "tomorrow"],
@@ -110,7 +59,10 @@ def _refine_with_llm(text: str) -> dict:
     if not api_key:
         raise RuntimeError("ANTHROPIC_API_KEY is not set")
 
-    category_list = "\n".join(f"- {name}" for name in _CATEGORY_DISPLAY_NAMES.values())
+    from catalog.taxonomy import active_service_names
+
+    names = active_service_names()
+    category_list = "\n".join(f"- {name}" for name in names.values())
     client = anthropic.Anthropic(api_key=api_key)
     response = client.with_options(timeout=10.0).messages.create(
         model=_CLAUDE_MODEL,
@@ -140,7 +92,7 @@ def _refine_with_llm(text: str) -> dict:
 
     reply = "".join(block.text for block in response.content if block.type == "text").strip()
     parsed = json.loads(reply)
-    slug = _DISPLAY_NAME_TO_SLUG.get(parsed.get("category"))
+    slug = next((s for s, name in names.items() if name == parsed.get("category")), None)
     urgency = parsed.get("urgency")
     job_size = parsed.get("job_size")
     job_complexity = parsed.get("job_complexity")
@@ -196,7 +148,7 @@ def refine_request(text: str) -> dict:
     "required_qualifications": list}.
 
     `category` is None only when neither the AI call nor keyword matching
-    could identify one of the 9 supported categories — callers should treat
+    could identify an active catalog service — callers should treat
     that as "ask the client to rephrase or pick a category manually" rather
     than guessing. The job-classification fields are blank/empty on the
     keyword-fallback path (see _BLANK_CLASSIFICATION) rather than guessed —

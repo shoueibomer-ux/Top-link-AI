@@ -4,6 +4,8 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 
+from catalog.taxonomy import launched_slugs
+
 from .models import Profile, MatchRequest, Category
 from .serializers import (
     ProfileCreateSerializer, MatchRequestCreateSerializer, MatchResultSerializer,
@@ -136,7 +138,7 @@ class CategorySuggestView(APIView):
     """GET /api/categories/suggest/?q=<partly typed text>
 
     Search-as-you-type for the app's category search bar: which categories the
-    text points at (`categories`, best first, slugs from CATEGORY_TAXONOMY —
+    text points at (`categories`, best first, launched catalog services only —
     the same keyword classifier ai_categorize() falls back to) and which
     taxonomy keywords the text is heading toward (`keywords`).
 
@@ -149,8 +151,10 @@ class CategorySuggestView(APIView):
 
     def get(self, request):
         query = " ".join(request.query_params.get("q", "").split())[: self.MAX_QUERY_LENGTH]
+        # The app only offers launched services, so only suggest those.
+        launched = launched_slugs()
         return Response({
             "query": query,
-            "categories": rank_keyword_categories(query) if query else [],
-            "keywords": keyword_suggestions(query),
+            "categories": rank_keyword_categories(query, launched) if query else [],
+            "keywords": keyword_suggestions(query, slugs=launched),
         })

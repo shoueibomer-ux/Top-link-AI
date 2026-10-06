@@ -26,7 +26,7 @@
 #     Leave all three blank to skip this and create an admin login some
 #     other way (e.g. the Render shell).
 #
-# Known limits of the `free` plans below, worth reading before relying on
+# Known limits of the plans below, worth reading before relying on
 # this for anything real:
 #   - Postgres is on a paid plan (0.1c-256mb — Render's smallest paid tier,
 #     same 256MB size as the free one), specifically so it does NOT expire
@@ -35,8 +35,10 @@
 #   - Key Value: free instances don't persist to disk, so a restart empties
 #     the cache (cached Google Places results, rate-limit counters) — not
 #     data loss in the important sense, just cache misses right after.
-#   - Web service: free services spin down after 15 minutes idle and take
-#     roughly a minute to wake back up on the next request.
+#   - Web service: on the paid `starter` plan, so it stays running instead of
+#     spinning down when idle. A Blueprint sync applies the plan written
+#     here, so keep it in step with what the Render dashboard shows —
+#     otherwise the next sync silently moves the service to the written plan.
 
 databases:
   - name: toplinkai-db
@@ -60,7 +62,7 @@ services:
   - type: web
     name: toplinkai-backend
     runtime: python
-    plan: free
+    plan: starter
     region: oregon
     buildCommand: ./build.sh
     startCommand: gunicorn config.wsgi:application

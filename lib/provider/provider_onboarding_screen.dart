@@ -37,6 +37,9 @@ class _ProviderOnboardingScreenState extends State<ProviderOnboardingScreen>
   void initState() {
     super.initState();
     _load();
+    loadProviderCatalogFromApi().then((_) {
+      if (mounted) setState(() {});
+    });
   }
 
   Future<void> _load() async {
@@ -441,7 +444,7 @@ class _ServicesTabState extends State<_ServicesTab> {
           spacing: 8,
           runSpacing: 8,
           children: [
-            for (final category in serviceCategories)
+            for (final category in providerServiceCategories)
               _SelectableChip(
                 label: category.label,
                 selected: _selected.contains(category.slug),
