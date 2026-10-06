@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../app_colors.dart';
 import '../app_styles.dart';
+import '../widgets/coming_soon_badge.dart';
 import '../widgets/pressable.dart';
 import 'category_detail_page.dart';
 import 'service_category.dart';
@@ -72,27 +73,35 @@ class _ServiceTile extends StatelessWidget {
           borderRadius: BorderRadius.circular(kRadius),
           boxShadow: kCardShadow,
         ),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            borderRadius: BorderRadius.circular(kRadius),
-            onTap: onTap,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 16),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(service.icon, size: 30, color: AppColors.navy),
-                  const SizedBox(height: 10),
-                  Text(
-                    service.label,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.navy),
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(kRadius),
+                  onTap: onTap,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 16),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(service.icon, size: 30, color: AppColors.navy),
+                        const SizedBox(height: 10),
+                        Text(
+                          service.label,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.navy),
+                        ),
+                      ],
+                    ),
                   ),
-                ],
+                ),
               ),
             ),
-          ),
+            if (!service.isLaunched)
+              const Positioned(top: 6, right: 6, child: IgnorePointer(child: ComingSoonBadge(compact: true))),
+          ],
         ),
       ),
     );

@@ -10,6 +10,7 @@ import '../chat/chat_screen.dart';
 import '../onboarding/category_detail_page.dart';
 import '../onboarding/category_search.dart';
 import '../onboarding/service_category.dart';
+import 'coming_soon_badge.dart';
 import 'pressable.dart';
 
 /// Looks up the backend's keyword suggestions for partly-typed text. A
@@ -376,6 +377,10 @@ class _SuggestionTile extends StatelessWidget {
                       ],
                     ),
                   ),
+                  if (!suggestion.category.isLaunched) ...[
+                    const ComingSoonBadge(compact: true),
+                    const SizedBox(width: 6),
+                  ],
                   const Icon(Icons.chevron_right, color: AppColors.mutedText),
                 ],
               ),

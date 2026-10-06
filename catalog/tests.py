@@ -106,6 +106,23 @@ class CatalogApiTests(TestCase):
             services = {s["slug"] for g in response.json() for s in g["services"]}
             self.assertEqual(services, LAUNCH_SLUGS, value)
 
+    def test_every_service_says_whether_it_is_launched(self):
+        launched_only = {s["slug"]: s["is_launched"] for g in self._get().json() for s in g["services"]}
+        self.assertEqual(set(launched_only.values()), {True})
+
+        response = self.client.get(
+            "/api/catalog/categories/", {"include_unlaunched": "true"}, HTTP_X_API_KEY="test-key"
+        )
+        everything = {s["slug"]: s["is_launched"] for g in response.json() for s in g["services"]}
+        self.assertEqual({slug for slug, launched in everything.items() if launched}, LAUNCH_SLUGS)
+        self.assertFalse(everything["lawn-care"])
+
+    def test_the_full_view_has_all_seven_sectors(self):
+        response = self.client.get(
+            "/api/catalog/categories/", {"include_unlaunched": "true"}, HTTP_X_API_KEY="test-key"
+        )
+        self.assertEqual(len(response.json()), 7)
+
     def test_a_deactivated_launched_service_is_hidden(self):
         Service.objects.filter(slug="plumbing").update(is_active=False)
         services = {s["slug"] for g in self._get().json() for s in g["services"]}

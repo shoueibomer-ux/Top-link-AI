@@ -37,7 +37,7 @@ class _ProviderOnboardingScreenState extends State<ProviderOnboardingScreen>
   void initState() {
     super.initState();
     _load();
-    loadProviderCatalogFromApi().then((_) {
+    loadCatalogFromApi().then((_) {
       if (mounted) setState(() {});
     });
   }
@@ -444,7 +444,7 @@ class _ServicesTabState extends State<_ServicesTab> {
           spacing: 8,
           runSpacing: 8,
           children: [
-            for (final category in providerServiceCategories)
+            for (final category in serviceCategories)
               _SelectableChip(
                 label: category.label,
                 selected: _selected.contains(category.slug),

@@ -130,7 +130,10 @@ class ServiceRequestCreateViewTests(TestCase):
         self.assertEqual(response.status_code, 201)
         body = response.json()
         self.assertEqual(body["status"], ServiceRequest.STATUS_WAITLISTED)
-        self.assertEqual(body["message"], "Coming soon in your area")
+        self.assertEqual(
+            body["message"],
+            "This service is coming soon in your area. We saved your request and will contact you when it opens.",
+        )
         request = ServiceRequest.objects.get(id=body["request_id"])
         self.assertEqual(request.status, ServiceRequest.STATUS_WAITLISTED)
         self.assertEqual(request.category, "lawn-care")
@@ -329,3 +332,78 @@ class RequestEndpointAuthTests(TestCase):
                 response = self.client.get(path, HTTP_X_API_KEY="not-the-key")
                 self.assertEqual(response.status_code, 401)
                 self.assertEqual(response.json(), {"detail": "Missing or invalid API key."})
+
+
+class WaitlistDemandAdminTests(TestCase):
+    """The admin's "Waitlist demand" page: waitlisted requests only, with a
+    demand-per-service summary."""
+
+    URL = "/admin/provider_search/waitlistedrequest/"
+
+    @classmethod
+    def setUpTestData(cls):
+        from django.contrib.auth import get_user_model
+
+        cls.admin_user = get_user_model().objects.create_superuser("boss", "boss@example.com", "pw-for-tests-123")
+
+    def setUp(self):
+        self.client.force_login(self.admin_user)
+
+        def make(category, device, status=ServiceRequest.STATUS_WAITLISTED, city="Edmonton"):
+            return ServiceRequest.objects.create(
+                device_id=device, category=category, city=city, phone="1", consent_given=True, status=status
+            )
+
+        # lawn-care: 3 requests from 2 devices; tree-services: 1; plumbing is launched ("new").
+        make("lawn-care", "dev-a")
+        make("lawn-care", "dev-a")
+        make("lawn-care", "dev-b", city="Calgary")
+        make("tree-services", "dev-c")
+        make("plumbing", "dev-d", status=ServiceRequest.STATUS_NEW)
+
+    def _demand(self, query=""):
+        response = self.client.get(self.URL + query)
+        self.assertEqual(response.status_code, 200)
+        return response, {row["category"]: row for row in response.context_data["demand"]}
+
+    def test_it_lists_only_waitlisted_requests_never_new_ones(self):
+        response, demand = self._demand()
+        self.assertEqual(set(demand), {"lawn-care", "tree-services"})
+        self.assertEqual(response.context_data["cl"].result_count, 4)
+
+    def test_it_counts_requests_and_distinct_devices_per_service_most_wanted_first(self):
+        response, demand = self._demand()
+        self.assertEqual([row["category"] for row in response.context_data["demand"]], ["lawn-care", "tree-services"])
+        self.assertEqual((demand["lawn-care"]["requests"], demand["lawn-care"]["devices"]), (3, 2))
+        self.assertEqual((demand["tree-services"]["requests"], demand["tree-services"]["devices"]), (1, 1))
+
+    def test_it_names_the_service_and_says_whether_it_is_launched(self):
+        _, demand = self._demand()
+        self.assertEqual(demand["lawn-care"]["service_name"], Service.objects.get(slug="lawn-care").name)
+        self.assertFalse(demand["lawn-care"]["launched"])
+        # Once you open a service the table says so, and the requests stay listed.
+        Service.objects.filter(slug="lawn-care").update(is_launched=True)
+        _, demand = self._demand()
+        self.assertTrue(demand["lawn-care"]["launched"])
+
+    def test_the_summary_follows_the_filters(self):
+        _, by_city = self._demand("?city=Calgary")
+        self.assertEqual(set(by_city), {"lawn-care"})
+        self.assertEqual(by_city["lawn-care"]["requests"], 1)
+        _, by_service = self._demand("?category=tree-services")
+        self.assertEqual(set(by_service), {"tree-services"})
+
+    def test_the_page_renders_the_table_and_rows_show_service_names(self):
+        response = self.client.get(self.URL)
+        self.assertContains(response, "Demand by service")
+        self.assertContains(response, Service.objects.get(slug="lawn-care").name)
+
+    def test_nothing_can_be_added_there_and_it_needs_an_admin_login(self):
+        self.assertEqual(self.client.get(self.URL + "add/").status_code, 403)
+        self.client.logout()
+        self.assertEqual(self.client.get(self.URL).status_code, 302)
+
+    def test_service_is_launched_is_editable_straight_from_the_service_list(self):
+        response = self.client.get("/admin/catalog/service/")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("is_launched", response.context_data["cl"].list_editable)

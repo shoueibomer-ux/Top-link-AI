@@ -9,10 +9,16 @@ class ServiceCategory {
     required this.whatWeCover,
     required this.workerNoun,
     required this.slug,
+    this.isLaunched = true,
   });
 
   final String label;
   final IconData icon;
+
+  // False for a service that exists but isn't open yet (catalog.Service.
+  // is_launched): it shows a "Coming soon" badge and a request for it goes on
+  // a waitlist. The static fallback list is all launched services.
+  final bool isLaunched;
 
   // What kinds of jobs/issues this category handles — shown on the category
   // detail page above the "how it works" explanation.
@@ -180,6 +186,15 @@ List<ServiceCategoryGroup> serviceCategoryGroups = [];
 
 Future<void>? _catalogLoadFuture;
 
+/// Puts the catalog back to its just-launched state (static fallback list, no
+/// cached load) so one widget test's catalog request can't leak into the next.
+@visibleForTesting
+void resetCatalogForTests() {
+  _catalogLoadFuture = null;
+  serviceCategoryGroups = [];
+  serviceCategories = List.of(_fallbackServiceCategories);
+}
+
 /// Fetches the admin-managed category/service tree and, on success, expands
 /// `serviceCategories`/`serviceCategoryGroups` to match it. Safe to call
 /// from multiple widgets — only the first call actually hits the network;
@@ -192,7 +207,7 @@ Future<void> loadCatalogFromApi([ApiClient? client]) {
 
 Future<void> _loadCatalog(ApiClient client) async {
   try {
-    final groups = await client.getCatalog();
+    final groups = await client.getCatalog(includeUnlaunched: true);
     if (groups.isEmpty) {
       _catalogLoadFuture = null;
       return;
@@ -203,30 +218,6 @@ Future<void> _loadCatalog(ApiClient client) async {
     // Keep the static fallback, and clear the cached future so the next
     // caller retries instead of being stuck with a failure forever.
     _catalogLoadFuture = null;
-  }
-}
-
-/// What the provider service pickers offer: every active service, launched
-/// or not, so providers can register in upcoming categories. Client-facing
-/// screens keep reading `serviceCategories` (launched only).
-List<ServiceCategory> providerServiceCategories = List.of(_fallbackServiceCategories);
-
-Future<void>? _providerCatalogLoadFuture;
-
-Future<void> loadProviderCatalogFromApi([ApiClient? client]) {
-  return _providerCatalogLoadFuture ??= _loadProviderCatalog(client ?? ApiClient());
-}
-
-Future<void> _loadProviderCatalog(ApiClient client) async {
-  try {
-    final groups = await client.getCatalog(includeUnlaunched: true);
-    if (groups.isEmpty) {
-      _providerCatalogLoadFuture = null;
-      return;
-    }
-    providerServiceCategories = [for (final group in groups) ...group.services];
-  } catch (_) {
-    _providerCatalogLoadFuture = null;
   }
 }
 
@@ -325,8 +316,9 @@ const _fallbackServiceCategories = [
   ),
 ];
 
-/// The flat list every client-facing screen reads (category grids,
-/// notification/history lookups). Starts as the
+/// The flat list every screen reads (category grids, the provider service
+/// picker, notification/history lookups) — every active service, launched or
+/// not; check [ServiceCategory.isLaunched]. Starts as the
 /// static fallback and is replaced wholesale once `loadCatalogFromApi`
 /// resolves. Mutable (not const) so that replacement can happen in place.
 List<ServiceCategory> serviceCategories = List.of(_fallbackServiceCategories);

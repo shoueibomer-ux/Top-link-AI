@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../app_colors.dart';
 import '../app_styles.dart';
+import '../widgets/coming_soon_badge.dart';
 import '../widgets/pressable.dart';
 import 'service_category.dart';
 
@@ -44,9 +45,9 @@ class CategoryDetailPage extends StatelessWidget {
                       elevation: 0,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(kRadius)),
                     ),
-                    child: const Text(
-                      'Select this category',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                    child: Text(
+                      category.isLaunched ? 'Select this category' : 'Join the waitlist',
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                     ),
                   ),
                 ),
@@ -94,6 +95,7 @@ class _CategoryHeader extends StatelessWidget {
                   style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.navy),
                 ),
               ),
+              if (!category.isLaunched) const ComingSoonBadge(),
             ],
           ),
           const SizedBox(height: 18),
@@ -104,10 +106,13 @@ class _CategoryHeader extends StatelessWidget {
             style: const TextStyle(fontSize: 14, height: 1.5, color: AppColors.navy),
           ),
           const SizedBox(height: 16),
-          _SectionLabel('How it works'),
+          _SectionLabel(category.isLaunched ? 'How it works' : 'Coming soon'),
           const SizedBox(height: 6),
           Text(
-            category.howItWorks,
+            category.isLaunched
+                ? category.howItWorks
+                : "This service isn't open in your area yet. Join the waitlist and "
+                    "we'll save your request and contact you when it opens.",
             style: const TextStyle(fontSize: 14, height: 1.5, color: AppColors.navy),
           ),
         ],

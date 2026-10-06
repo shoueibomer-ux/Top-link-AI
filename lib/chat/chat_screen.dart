@@ -58,11 +58,15 @@ class _ChatScreenState extends State<ChatScreen> {
     try {
       final deviceId = await getDeviceId();
       final result = await _apiClient.refineChatMessage(message: text, deviceId: deviceId);
+      // The catalog (all services, launched or not) may still be loading; don't
+      // let a slow catalog request hold up the reply for long.
+      await loadCatalogFromApi().timeout(const Duration(seconds: 5), onTimeout: () {});
       final category = result.category == null ? null : findCategoryBySlug(result.category!);
-      final reply = result.category != null && !result.launched
-          ? "Coming soon in your area — we aren't taking requests for that service just yet."
-          : category == null
-              ? "I couldn't quite tell what kind of service you need — try naming a trade, like plumbing or electrical."
+      final reply = category == null
+          ? "I couldn't quite tell what kind of service you need — try naming a trade, like plumbing or electrical."
+          : !result.launched
+              ? "That sounds like ${category.label.toLowerCase()}, which is coming soon in your area. "
+                  "Join the waitlist and we'll save your request and contact you when it opens."
               : "Got it — sounds like ${category.label.toLowerCase()}, ${_urgencyPhrase(result.urgency)}.";
       setState(() => _messages.add(_ChatMessage.assistant(reply, result)));
     } catch (_) {
@@ -209,7 +213,7 @@ class _MessageBubble extends StatelessWidget {
               ),
               child: Text(message.text, style: const TextStyle(color: AppColors.navy, fontSize: 14)),
             ),
-            if (result?.category != null && result!.launched) ...[
+            if (result != null && result.category != null) ...[
               const SizedBox(height: 10),
               OutlinedButton(
                 onPressed: () => onContinue(result.category!),
@@ -218,7 +222,10 @@ class _MessageBubble extends StatelessWidget {
                   side: const BorderSide(color: AppColors.turquoise),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(kRadius)),
                 ),
-                child: const Text('Continue', style: TextStyle(fontWeight: FontWeight.w600)),
+                child: Text(
+                  result.launched ? 'Continue' : 'Join the waitlist',
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
               ),
             ],
           ],

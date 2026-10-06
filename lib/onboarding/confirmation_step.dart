@@ -11,6 +11,19 @@ const kServiceRequestConsentText =
     'I consent to Top-Link AI sharing the details of this request, including '
     'my phone number, with service providers who may be able to help.';
 
+/// Shown instead of [kServiceRequestConsentText] for a service that isn't
+/// open yet — the request is saved and only shared once it is.
+const kWaitlistConsentText =
+    'I consent to Top-Link AI saving this request and sharing it, including '
+    'my phone number, with suitable service providers once this service is '
+    'available in my area.';
+
+/// What the app says after a waitlisted request is saved (the server sends
+/// the same sentence; this is the fallback).
+const kWaitlistedMessage =
+    'This service is coming soon in your area. We saved your request and will '
+    'contact you when it opens.';
+
 /// The final onboarding step: review the category, add an optional note,
 /// enter a phone number, and give explicit consent — then "Continue" (see
 /// OnboardingScreen) submits the request. Replaces the old static "We found
@@ -23,6 +36,7 @@ class ConfirmationStep extends StatelessWidget {
     required this.descriptionController,
     required this.consentGiven,
     required this.onConsentChanged,
+    this.waitlisted = false,
   });
 
   final String categoryLabel;
@@ -30,6 +44,9 @@ class ConfirmationStep extends StatelessWidget {
   final TextEditingController descriptionController;
   final bool consentGiven;
   final ValueChanged<bool> onConsentChanged;
+
+  // The chosen service isn't open yet: different consent wording and copy.
+  final bool waitlisted;
 
   @override
   Widget build(BuildContext context) {
@@ -49,7 +66,9 @@ class ConfirmationStep extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         Text(
-          "We'll share these details with providers once you submit.",
+          waitlisted
+              ? "This service isn't open yet. We'll save your request and contact you when it opens."
+              : "We'll share these details with providers once you submit.",
           style: TextStyle(fontSize: 14, color: AppColors.muted),
         ),
         const SizedBox(height: 24),
@@ -82,7 +101,11 @@ class ConfirmationStep extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 18),
-        _ConsentCheckbox(value: consentGiven, onChanged: onConsentChanged),
+        _ConsentCheckbox(
+          value: consentGiven,
+          onChanged: onConsentChanged,
+          text: waitlisted ? kWaitlistConsentText : kServiceRequestConsentText,
+        ),
       ],
     );
   }
@@ -118,10 +141,11 @@ class _InputBox extends StatelessWidget {
 }
 
 class _ConsentCheckbox extends StatelessWidget {
-  const _ConsentCheckbox({required this.value, required this.onChanged});
+  const _ConsentCheckbox({required this.value, required this.onChanged, required this.text});
 
   final bool value;
   final ValueChanged<bool> onChanged;
+  final String text;
 
   @override
   Widget build(BuildContext context) {
@@ -147,7 +171,7 @@ class _ConsentCheckbox extends StatelessWidget {
                 child: Padding(
                   padding: const EdgeInsets.only(top: 12),
                   child: Text(
-                    kServiceRequestConsentText,
+                    text,
                     style: const TextStyle(fontSize: 13, color: AppColors.navy, height: 1.4),
                   ),
                 ),
