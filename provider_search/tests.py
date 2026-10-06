@@ -275,3 +275,57 @@ class ProviderOnboardingViewTests(TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(ProviderOnboarding.objects.get(provider_id="prov-1").city, "Calgary")
+
+
+@override_settings(API_KEY=TEST_API_KEY)
+class RequestEndpointAuthTests(TestCase):
+    """POST /api/requests/ is gated by the shared API key and nothing else —
+    there are no user accounts, so it must never ask for a login — and a
+    rejected key says so (it used to answer "Authentication credentials were
+    not provided.", which sounds like a missing login)."""
+
+    BODY = {"device_id": "dev-1", "category": "plumbing", "phone": "+1 780-555-0100", "consent": True}
+
+    def _post(self, **headers):
+        return self.client.post("/api/requests/", self.BODY, content_type="application/json", **headers)
+
+    def test_the_api_key_alone_is_enough_no_login_needed(self):
+        response = self._post(HTTP_X_API_KEY=TEST_API_KEY)
+        self.assertEqual(response.status_code, 201)
+        self.assertNotIn("HTTP_AUTHORIZATION", response.wsgi_request.META)
+
+    def test_it_uses_the_project_wide_auth_defaults_and_adds_nothing(self):
+        from rest_framework.settings import api_settings
+
+        from .views import ServiceRequestCreateView
+
+        self.assertEqual(ServiceRequestCreateView.permission_classes, api_settings.DEFAULT_PERMISSION_CLASSES)
+        self.assertEqual(ServiceRequestCreateView.authentication_classes, api_settings.DEFAULT_AUTHENTICATION_CLASSES)
+
+    def test_a_missing_or_wrong_key_is_rejected_and_names_the_key(self):
+        cases = {
+            "no key": {},
+            "wrong key": {"HTTP_X_API_KEY": "not-the-key"},
+            "key with a trailing newline": {"HTTP_X_API_KEY": TEST_API_KEY + chr(10)},
+            "key with a leading space": {"HTTP_X_API_KEY": " " + TEST_API_KEY},
+            "empty key": {"HTTP_X_API_KEY": ""},
+        }
+        for name, headers in cases.items():
+            with self.subTest(name):
+                response = self._post(**headers)
+                self.assertEqual(response.status_code, 401)
+                self.assertEqual(response.json(), {"detail": "Missing or invalid API key."})
+        self.assertEqual(ServiceRequest.objects.count(), 0)
+
+    def test_a_non_ascii_key_is_rejected_not_a_server_error(self):
+        response = self._post(HTTP_X_API_KEY="kéy")
+        self.assertEqual(response.status_code, 401)
+
+    def test_a_bad_key_is_rejected_the_same_way_on_the_endpoints_that_work(self):
+        # The app's other calls go through the same gate, so a key problem
+        # shows up everywhere, not only on submit.
+        for path in ("/api/requests/mine/?device_id=d", "/api/catalog/categories/"):
+            with self.subTest(path):
+                response = self.client.get(path, HTTP_X_API_KEY="not-the-key")
+                self.assertEqual(response.status_code, 401)
+                self.assertEqual(response.json(), {"detail": "Missing or invalid API key."})

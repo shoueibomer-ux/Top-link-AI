@@ -33,7 +33,10 @@ SECRET_KEY = _env("DJANGO_SECRET_KEY", "dev-only-secret-key-do-not-use-in-produc
 # Shared secret required on every API request (see matching.permissions.HasApiKey).
 # The app has no user accounts, so this isn't per-user auth — it's a gate that
 # keeps the open internet off the Claude-backed endpoints.
-API_KEY = _env("API_KEY", "dev-local-shared-key")
+# Stripped because the app strips the key it sends (lib/api/api_config.dart): a
+# trailing space or newline pasted into the host's env var would otherwise make
+# every request fail with a key that looks identical.
+API_KEY = _env("API_KEY", "dev-local-shared-key").strip()
 
 ALLOWED_HOSTS = [h.strip() for h in os.environ.get("DJANGO_ALLOWED_HOSTS", "").split(",") if h.strip()]
 
