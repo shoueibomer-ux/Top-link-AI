@@ -56,9 +56,32 @@ class ApiConfig {
   /// fails immediately and visibly, instead of every request quietly failing
   /// inside a screen's catch-all.
   static void validate() {
-    baseUrl();
-    apiKey();
+    final url = baseUrl();
+    final key = apiKey();
+    if (kDebugMode) {
+      debugPrint('[api] ${describeApiConfig(baseUrl: url, apiKey: key)}');
+      final warning = apiConfigWarning(baseUrlOverride: _baseUrlDefine, apiKey: key);
+      if (warning != null) debugPrint('[api] WARNING: $warning');
+    }
   }
+}
+
+/// One line that is safe to log: where this build talks, and what kind of
+/// key it carries (never the key itself).
+String describeApiConfig({required String baseUrl, required String apiKey}) {
+  final keyKind = apiKey == ApiConfig.devApiKey ? 'dev placeholder' : '${apiKey.length} characters';
+  return 'talking to $baseUrl with API key: $keyKind';
+}
+
+/// A real key but no `API_BASE_URL` means a debug build is aimed at the local
+/// dev server (localhost / 10.0.2.2), whose own API_KEY will not match that
+/// key — every request then fails with "Missing or invalid API key". Null
+/// when nothing looks off.
+String? apiConfigWarning({required String baseUrlOverride, required String apiKey}) {
+  if (baseUrlOverride.trim().isNotEmpty || apiKey == ApiConfig.devApiKey) return null;
+  return 'API_KEY is set but API_BASE_URL is not, so this build talks to the local dev server, '
+      'not the deployed backend. Add --dart-define=API_BASE_URL=https://<your-backend>/api, '
+      'or make the local server use the same API_KEY.';
 }
 
 /// The API base URL for this build. See [ApiConfig].
