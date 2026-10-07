@@ -97,7 +97,7 @@ class ServiceRequestCreateViewTests(TestCase):
         self.assertEqual(request.device_id, "dev-1")
         self.assertEqual(request.category, "plumbing")
         self.assertEqual(request.city, "Edmonton")
-        self.assertEqual(request.phone, "+1 780-555-0100")
+        self.assertEqual(request.phone, "+17805550100")  # stored as E.164
         self.assertTrue(request.consent_given)
 
     def test_optional_description_is_stored_as_problem_description(self):
@@ -201,6 +201,57 @@ class ServiceRequestCreateViewTests(TestCase):
 
     def test_phone_is_required(self):
         response = self._create(phone="")
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(ServiceRequest.objects.count(), 0)
+
+    # ---- The client's phone must be a Canadian / North American number ----
+
+    INVALID_PHONE = "Enter a valid Canadian or North American phone number, for example 780 555 0100."
+
+    def test_valid_numbers_are_stored_as_e164_whatever_the_formatting(self):
+        for raw in ("780 555 0100", "(780) 555-0100", "780.555.0100", "1-780-555-0100",
+                    "17805550100", "+1 780 555 0100", "+17805550100", "  780-555-0100  "):
+            with self.subTest(phone=raw):
+                response = self._create(phone=raw, device_id=f"dev-{raw}")
+                self.assertEqual(response.status_code, 201)
+                self.assertEqual(ServiceRequest.objects.get(id=response.json()["request_id"]).phone, "+17805550100")
+
+    def test_an_eleven_digit_number_not_starting_with_1_is_rejected(self):
+        response = self._create(phone="58792199587")
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {"detail": self.INVALID_PHONE})
+        self.assertEqual(ServiceRequest.objects.count(), 0)
+
+    def test_numbers_that_are_not_north_american_are_rejected(self):
+        bad = {
+            "too short": "555 0100",
+            "nine digits": "780555010",
+            "twelve digits": "178055501001",
+            "another country": "+44 20 7946 0958",
+            "area code starts with 1": "1234567890",
+            "area code starts with 0": "0805550100",
+            "exchange starts with 1": "7801550100",
+            "letters": "780-555-CALL",
+            "an extension": "780 555 0100 ext 5",
+            "two plus signs": "++17805550100",
+            "plus in the middle": "780+5550100",
+            "punctuation only": "()-.",
+        }
+        for label, raw in bad.items():
+            with self.subTest(label):
+                response = self._create(phone=raw, device_id=f"dev-{label}")
+                self.assertEqual(response.status_code, 400, raw)
+                self.assertEqual(response.json(), {"detail": self.INVALID_PHONE})
+        self.assertEqual(ServiceRequest.objects.count(), 0)
+
+    def test_a_phone_that_is_not_a_string_is_rejected_not_a_server_error(self):
+        for value in (7805550100, ["780 555 0100"], {"n": "780 555 0100"}, True):
+            with self.subTest(phone=value):
+                self.assertEqual(self._create(phone=value, device_id=f"dev-{value}").status_code, 400)
+        self.assertEqual(ServiceRequest.objects.count(), 0)
+
+    def test_a_bad_phone_is_rejected_for_waitlisted_services_too(self):
+        response = self._create(category="lawn-care", phone="58792199587")
         self.assertEqual(response.status_code, 400)
         self.assertEqual(ServiceRequest.objects.count(), 0)
 

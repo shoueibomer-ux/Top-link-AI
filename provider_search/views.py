@@ -3,6 +3,7 @@ from rest_framework.response import Response
 
 from catalog.models import Service
 from catalog.taxonomy import launched_slugs
+from leads.phone import normalize_north_american_phone
 
 from .chat_service import refine_request
 from .models import ProviderOnboarding, ServiceRequest
@@ -52,6 +53,9 @@ class ServiceRequestCreateView(APIView):
     for where that's headed); a human currently reads these from the Django
     admin.
 
+    `phone` must be a Canadian / North American number (10 digits, or 11
+    starting with 1); it is stored as +1XXXXXXXXXX. Anything else is a 400.
+
     `category` must be the slug of an active catalog.Service, otherwise 400.
     If that service is not launched yet (Service.is_launched) the request is
     still saved, with status "waitlisted", and the response carries
@@ -67,6 +71,7 @@ class ServiceRequestCreateView(APIView):
         "This service is coming soon in your area. We saved your request and "
         "will contact you when it opens."
     )
+    INVALID_PHONE_MESSAGE = "Enter a valid Canadian or North American phone number, for example 780 555 0100."
     REQUIRED_CONSENT_MESSAGE = (
         "You must consent to share your request details, including your phone "
         "number, with service providers before submitting a request."
@@ -75,7 +80,7 @@ class ServiceRequestCreateView(APIView):
     def post(self, request):
         device_id = request.data.get("device_id")
         category = request.data.get("category")
-        phone = (request.data.get("phone") or "").strip()
+        raw_phone = request.data.get("phone")
         city = request.data.get("city") or "Edmonton"
         description = (request.data.get("description") or "").strip()
         urgency = request.data.get("urgency") or ""
@@ -93,8 +98,11 @@ class ServiceRequestCreateView(APIView):
         )
         if service is None:
             return Response({"detail": "category must be an active service."}, status=400)
-        if not phone:
+        if raw_phone is None or (isinstance(raw_phone, str) and not raw_phone.strip()):
             return Response({"detail": "phone is required."}, status=400)
+        phone = normalize_north_american_phone(raw_phone)
+        if not phone:
+            return Response({"detail": self.INVALID_PHONE_MESSAGE}, status=400)
         if city not in CITIES:
             return Response({"detail": f"city must be one of {CITIES}."}, status=400)
         if request.data.get("consent") is not True:
