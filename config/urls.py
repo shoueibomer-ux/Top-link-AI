@@ -1,6 +1,7 @@
 from django.contrib import admin
 from django.urls import include, path
 
+from leads.views import twilio_sms_webhook
 from notifications.views import NotificationListView, NotificationMarkReadView
 from provider_search.views import (
     ChatRefineView,
@@ -18,6 +19,7 @@ urlpatterns = [
     path("api/requests/mine/", ServiceRequestListView.as_view(), name="service-request-list"),
     path("api/provider-onboarding/", ProviderOnboardingView.as_view(), name="provider-onboarding"),
     path("api/chat/refine/", ChatRefineView.as_view(), name="chat-refine"),
+    path("api/twilio/sms/", twilio_sms_webhook, name="twilio-sms-webhook"),
     path("api/notifications/", NotificationListView.as_view(), name="notification-list"),
     path("api/notifications/mark-read/", NotificationMarkReadView.as_view(), name="notification-mark-read"),
     # Marketing website — keep last so admin/ and api/ always take precedence.

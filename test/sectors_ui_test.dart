@@ -261,6 +261,8 @@ void main() {
       final post = server.requests.firstWhere((r) => r.method == 'POST' && r.url.path.endsWith('/requests/'));
       expect(jsonDecode(post.body), containsPair('category', 'lawn-care'));
       expect(jsonDecode(post.body), containsPair('consent', true));
+      // Today was the urgency picked in _toConfirmation.
+      expect(jsonDecode(post.body), containsPair('urgency', 'today'));
     });
 
     testWidgets('a launched request goes straight Home with no dialog', (tester) async {

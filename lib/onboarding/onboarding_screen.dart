@@ -79,6 +79,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         phone: _phoneController.text.trim(),
         consent: _consentGiven,
         description: _descriptionController.text.trim(),
+        urgency: urgency.apiValue,
       );
 
       if (!mounted) return;

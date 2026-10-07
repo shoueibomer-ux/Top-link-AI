@@ -68,6 +68,7 @@ class ApiClient {
     required bool consent,
     String city = ApiClient.demoCity,
     String description = '',
+    String urgency = '',
   }) async {
     final response = await http.post(
       Uri.parse('$baseUrl/requests/'),
@@ -79,6 +80,7 @@ class ApiClient {
         'consent': consent,
         'city': city,
         'description': description,
+        'urgency': urgency,
       }),
     );
     if (response.statusCode != 201) {

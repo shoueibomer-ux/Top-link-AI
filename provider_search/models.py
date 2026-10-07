@@ -144,7 +144,22 @@ class ServiceRequest(models.Model):
     required_equipment = models.JSONField(default=list, blank=True)
     required_qualifications = models.JSONField(default=list, blank=True)
 
+    URGENCY_TODAY = "today"
+    URGENCY_THIS_WEEK = "this_week"
+    URGENCY_EXPLORING = "exploring"
+    URGENCY_CHOICES = [
+        (URGENCY_TODAY, "Today"),
+        (URGENCY_THIS_WEEK, "This week"),
+        (URGENCY_EXPLORING, "Just exploring"),
+    ]
+    # What the client picked on the urgency step; blank for requests made
+    # before this was stored.
+    urgency = models.CharField(max_length=20, choices=URGENCY_CHOICES, blank=True)
+
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_NEW)
+    # Set once the "no YES after 2 hours" email has gone out for this request
+    # (see leads.jobs), so it is only sent once.
+    no_yes_alert_sent_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

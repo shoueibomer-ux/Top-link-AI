@@ -105,6 +105,19 @@ class ServiceRequestCreateViewTests(TestCase):
         request = ServiceRequest.objects.get(id=response.json()["request_id"])
         self.assertEqual(request.problem_description, "Leaking under the sink")
 
+    def test_urgency_is_stored_so_it_can_go_in_the_message_to_providers(self):
+        for value in ("today", "this_week", "exploring"):
+            with self.subTest(urgency=value):
+                response = self._create(urgency=value, device_id=f"dev-{value}")
+                self.assertEqual(ServiceRequest.objects.get(id=response.json()["request_id"]).urgency, value)
+
+    def test_a_missing_or_unknown_urgency_is_stored_blank_not_rejected(self):
+        for value in (None, "", "yesterday", 5):
+            with self.subTest(urgency=value):
+                response = self._create(urgency=value, device_id=f"dev-{value}")
+                self.assertEqual(response.status_code, 201)
+                self.assertEqual(ServiceRequest.objects.get(id=response.json()["request_id"]).urgency, "")
+
     def test_description_is_optional(self):
         response = self._create()
         self.assertEqual(response.status_code, 201)

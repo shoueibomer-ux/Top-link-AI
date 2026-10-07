@@ -79,6 +79,8 @@ class ServiceRequestCreateView(APIView):
         city = request.data.get("city") or "Edmonton"
         description = (request.data.get("description") or "").strip()
         urgency = request.data.get("urgency") or ""
+        if not isinstance(urgency, str) or urgency not in dict(ServiceRequest.URGENCY_CHOICES):
+            urgency = ""
 
         if not device_id:
             return Response({"detail": "device_id is required."}, status=400)
@@ -105,6 +107,7 @@ class ServiceRequestCreateView(APIView):
             problem_description=description,
             phone=phone,
             consent_given=True,
+            urgency=urgency,
             status=ServiceRequest.STATUS_NEW if service.is_launched else ServiceRequest.STATUS_WAITLISTED,
         )
         body = {
