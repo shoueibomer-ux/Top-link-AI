@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../app_colors.dart';
 import '../app_styles.dart';
+import 'phone_validation.dart';
 
 /// The exact consent copy shown on this step and recorded (as `consent:
 /// true`) with the request — see ApiClient.createServiceRequest /
@@ -79,11 +80,27 @@ class ConfirmationStep extends StatelessWidget {
             controller: phoneController,
             keyboardType: TextInputType.phone,
             decoration: const InputDecoration(
-              hintText: 'e.g. +1 780 555 0100',
+              hintText: 'e.g. 780 555 0100',
               border: InputBorder.none,
               contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             ),
           ),
+        ),
+        // Only once something is typed: an empty field just keeps Continue off.
+        ValueListenableBuilder<TextEditingValue>(
+          valueListenable: phoneController,
+          builder: (context, value, _) {
+            final typed = value.text.trim().isNotEmpty;
+            if (!typed || normalizeNorthAmericanPhone(value.text) != null) return const SizedBox.shrink();
+            return const Padding(
+              padding: EdgeInsets.only(top: 6, left: 4),
+              child: Text(
+                kInvalidPhoneMessage,
+                key: Key('phone-error'),
+                style: TextStyle(fontSize: 12, color: Color(0xFFBA1A1A)),
+              ),
+            );
+          },
         ),
         const SizedBox(height: 18),
         _FieldLabel('Anything else to add? (optional)'),

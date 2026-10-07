@@ -10,6 +10,7 @@ import '../widgets/app_logo.dart';
 import '../widgets/pressable.dart';
 import 'category_step.dart';
 import 'confirmation_step.dart';
+import 'phone_validation.dart';
 import 'location_step.dart';
 import 'service_category.dart';
 import 'urgency_step.dart';
@@ -41,6 +42,15 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   bool _isSubmitting = false;
 
   @override
+  void initState() {
+    super.initState();
+    // Continue depends on the phone being valid, so it has to follow every keystroke.
+    _phoneController.addListener(() {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
   void dispose() {
     _phoneController.dispose();
     _descriptionController.dispose();
@@ -54,7 +64,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       case 1:
         return _selectedUrgency != null;
       case 3:
-        return !_isSubmitting && _phoneController.text.trim().isNotEmpty && _consentGiven;
+        return !_isSubmitting && normalizeNorthAmericanPhone(_phoneController.text) != null && _consentGiven;
       default:
         return !_isSubmitting;
     }
@@ -76,7 +86,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       final submission = await _apiClient.createServiceRequest(
         deviceId: deviceId,
         category: category.slug,
-        phone: _phoneController.text.trim(),
+        phone: normalizeNorthAmericanPhone(_phoneController.text)!,
         consent: _consentGiven,
         description: _descriptionController.text.trim(),
         urgency: urgency.apiValue,

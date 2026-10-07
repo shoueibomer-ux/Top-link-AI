@@ -16,7 +16,7 @@ from provider_search.models import ServiceRequest
 
 from . import jobs, services, sms
 from .models import DailySummaryLog, LeadOffer, Provider
-from .phone import normalize_phone
+from .phone import normalize_north_american_phone, normalize_phone
 
 TOKEN = "test-auth-token"
 SMS_ON = dict(
@@ -76,6 +76,30 @@ class PhoneTests(TestCase):
     def test_garbage_is_rejected(self):
         for raw in ("", "abc", "555-0100", "12345"):
             self.assertEqual(normalize_phone(raw), "", raw)
+
+
+class NorthAmericanPhoneTests(TestCase):
+    def test_every_common_way_of_writing_a_number_becomes_e164(self):
+        for raw in ("780 555 0100", "(780) 555-0100", "780.555.0100", "780-555-0100", "1-780-555-0100",
+                    "17805550100", "+1 780 555 0100", "+1 (780) 555-0100", "+17805550100", "  7805550100 "):
+            self.assertEqual(normalize_north_american_phone(raw), "+17805550100", raw)
+
+    def test_eleven_digits_must_start_with_1(self):
+        self.assertEqual(normalize_north_american_phone("58792199587"), "")
+        self.assertEqual(normalize_north_american_phone("15872199587"), "+15872199587")
+
+    def test_what_is_not_a_north_american_number_is_rejected(self):
+        for raw in ("", "   ", "abc", "555 0100", "780555010", "178055501001", "+44 20 7946 0958", "+380 44 123 4567",
+                    "1234567890", "0805550100", "7801550100", "780-555-CALL", "780 555 0100 ext 5", "++17805550100",
+                    "780+5550100", "7805550100+", "()-."):
+            self.assertEqual(normalize_north_american_phone(raw), "", raw)
+
+    def test_non_strings_are_rejected(self):
+        for value in (None, 7805550100, ["7805550100"], True):
+            self.assertEqual(normalize_north_american_phone(value), "")
+
+    def test_provider_phones_still_accept_other_formats_through_the_looser_helper(self):
+        self.assertEqual(normalize_phone("+44 20 7946 0958"), "+442079460958")
 
 
 class ProviderTests(TestCase):
