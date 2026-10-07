@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:toplinkai_app/api/api_client.dart';
 import 'package:toplinkai_app/api/api_config.dart';
+import 'package:toplinkai_app/onboarding/urgency_step.dart';
 
 // The backend gates every endpoint on the shared X-API-Key header. These tests
 // pin that the request calls send it — including the POST that submits a
@@ -42,6 +43,7 @@ void main() {
           category: 'plumbing',
           phone: '+1 780 555 0100',
           consent: true,
+          urgency: Urgency.today.apiValue,
         );
         expect(submission.requestId, 7);
       },
@@ -55,6 +57,7 @@ void main() {
     final body = jsonDecode(seen.single.body) as Map<String, dynamic>;
     expect(body, containsPair('consent', true));
     expect(body, containsPair('category', 'plumbing'));
+    expect(body, containsPair('urgency', 'today'));
     // Anonymous app: no login, so no Authorization header.
     expect(seen.single.headers.containsKey('Authorization'), isFalse);
   });

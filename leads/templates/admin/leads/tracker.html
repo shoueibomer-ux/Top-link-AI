@@ -1,0 +1,116 @@
+{% extends "admin/base_site.html" %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">Home</a> &rsaquo;
+  <a href="{% url 'admin:provider_search_servicerequest_changelist' %}">Service requests</a> &rsaquo;
+  Offers for request #{{ service_request.pk }}
+</div>
+{% endblock %}
+
+{% block extrastyle %}{{ block.super }}
+<style>
+  .offer { border: 1px solid var(--hairline-color, #ddd); border-radius: 6px; padding: 14px; margin-bottom: 16px; }
+  .offer h2 { margin: 0 0 6px; font-size: 16px; }
+  .offer textarea { width: 100%; box-sizing: border-box; min-height: 74px; font-family: inherit; }
+  .offer .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 8px 0; }
+  .offer form { display: inline; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; background: #eee; font-size: 12px; }
+  .badge.accepted { background: #d4f4dd; }
+  .badge.declined, .badge.expired { background: #f6dede; }
+  .err { color: #ba2121; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div id="content-main">
+  <p>
+    <strong>{{ service_name }}</strong> in {{ service_request.city }} &middot; {{ urgency }}
+    &middot; client phone: {{ service_request.phone }}
+  </p>
+  <p>{% if sms_enabled %}SMS is <strong>on</strong>.{% else %}SMS is <strong>off</strong>: send each message
+    yourself from your phone, then click the buttons.{% endif %}
+    <a href="{% url 'admin:leads_send_to_providers' service_request.pk %}">Add more providers</a>
+    &middot; <a href="{% url 'admin:leads_leadoffer_changelist' %}">All offers (tick hired / job completed there)</a></p>
+
+  {% for row in rows %}
+    {% with offer=row.offer %}
+    <div class="offer">
+      <h2>
+        {{ offer.provider.business_name }}
+        <span class="badge {{ offer.status }}">{{ offer.get_status_display }}</span>
+      </h2>
+      <div>
+        {{ offer.provider.contact_name }} &middot; {{ offer.provider.phone }} &middot; offer number {{ offer.ref }}
+        {% if offer.sent_at %}&middot; sent {{ offer.sent_at|date:"M j, H:i" }} UTC{% endif %}
+        {% if row.response_minutes is not None %}&middot; replied after {{ row.response_minutes }} min{% endif %}
+        {% if offer.hired %}&middot; <strong>hired</strong>{% endif %}
+      </div>
+      {% if offer.send_error %}<div class="err">Send error: {{ offer.send_error }}</div>{% endif %}
+
+      {% if row.pending %}
+        <textarea readonly id="m{{ offer.pk }}">{{ row.first_message }}</textarea>
+        <div class="row">
+          <button type="button" class="copy" data-target="m{{ offer.pk }}">Copy message</button>
+          <a href="{{ row.first_sms_link }}">Open in Messages</a>
+          <a href="{{ row.tel_link }}">Call</a>
+          {% if sms_enabled %}
+            <form method="post" action="{% url 'admin:leads_offer_act' offer.pk %}">{% csrf_token %}
+              <input type="hidden" name="action" value="retry_send"><button type="submit">Send SMS now</button></form>
+          {% else %}
+            <form method="post" action="{% url 'admin:leads_offer_act' offer.pk %}">{% csrf_token %}
+              <input type="hidden" name="action" value="mark_sent"><button type="submit" class="default">Mark as sent</button></form>
+          {% endif %}
+        </div>
+      {% endif %}
+
+      {% if row.awaiting %}
+        <div class="row">
+          Record their reply:
+          <form method="post" action="{% url 'admin:leads_offer_act' offer.pk %}">{% csrf_token %}
+            <input type="hidden" name="action" value="yes"><button type="submit" class="default">Yes</button></form>
+          <form method="post" action="{% url 'admin:leads_offer_act' offer.pk %}">{% csrf_token %}
+            <input type="hidden" name="action" value="no"><button type="submit">No</button></form>
+          <form method="post" action="{% url 'admin:leads_offer_act' offer.pk %}">{% csrf_token %}
+            <input type="hidden" name="action" value="no_answer"><button type="submit">No answer</button></form>
+        </div>
+      {% endif %}
+
+      {% if row.accepted %}
+        <div>
+          {% if offer.client_phone_shared_at %}
+            The client's phone was shared {{ offer.client_phone_shared_at|date:"M j, H:i" }} UTC.
+          {% else %}
+            They said YES. Send them the client's phone:
+            <textarea readonly id="f{{ offer.pk }}">{{ row.followup_message }}</textarea>
+            <div class="row">
+              <button type="button" class="copy" data-target="f{{ offer.pk }}">Copy message</button>
+              <a href="{{ row.followup_sms_link }}">Open in Messages</a>
+              <a href="{{ row.tel_link }}">Call</a>
+              {% if sms_enabled %}
+                <form method="post" action="{% url 'admin:leads_offer_act' offer.pk %}">{% csrf_token %}
+                  <input type="hidden" name="action" value="send_followup"><button type="submit">Send SMS now</button></form>
+              {% endif %}
+              <form method="post" action="{% url 'admin:leads_offer_act' offer.pk %}">{% csrf_token %}
+                <input type="hidden" name="action" value="followup_sent"><button type="submit">Mark as shared</button></form>
+            </div>
+          {% endif %}
+        </div>
+      {% endif %}
+    </div>
+    {% endwith %}
+  {% empty %}
+    <p>No offers yet. <a href="{% url 'admin:leads_send_to_providers' service_request.pk %}">Pick providers</a>.</p>
+  {% endfor %}
+</div>
+<script>
+  document.querySelectorAll('.copy').forEach(function (button) {
+    button.addEventListener('click', function () {
+      var box = document.getElementById(button.dataset.target);
+      box.select();
+      if (navigator.clipboard) { navigator.clipboard.writeText(box.value); } else { document.execCommand('copy'); }
+      button.textContent = 'Copied';
+    });
+  });
+</script>
+{% endblock %}

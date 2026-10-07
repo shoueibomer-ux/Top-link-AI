@@ -1,5 +1,8 @@
-from django.contrib import admin
+from django.contrib import admin, messages
 from django.db.models import Count, Max
+from django.http import HttpResponseRedirect
+from django.urls import reverse
+from django.utils.html import format_html
 
 from catalog.models import Service
 
@@ -10,11 +13,28 @@ from .models import ProviderOnboarding, ServiceRequest, WaitlistedRequest
 class ServiceRequestAdmin(admin.ModelAdmin):
     list_display = (
         "id", "device_id", "category", "city", "phone", "consent_given",
-        "job_size", "job_complexity", "estimated_team_size", "status", "created_at",
+        "urgency", "job_size", "job_complexity", "estimated_team_size", "status", "created_at", "offers_link",
     )
-    list_filter = ("category", "city", "consent_given", "job_size", "job_complexity", "status")
+    list_filter = ("category", "city", "consent_given", "urgency", "job_size", "job_complexity", "status")
     search_fields = ("device_id", "phone", "problem_description")
     date_hierarchy = "created_at"
+    actions = ["send_to_providers"]
+
+    @admin.display(description="Offers")
+    def offers_link(self, obj):
+        count = obj.offers.count()
+        if not count:
+            return "-"
+        return format_html('<a href="{}">{} offer{}</a>', reverse("admin:leads_tracker", args=[obj.pk]), count, "" if count == 1 else "s")
+
+    @admin.action(description="Send to providers...")
+    def send_to_providers(self, request, queryset):
+        """Opens the provider-picking page for one request. Nothing is sent
+        from here: that needs a click on the next page."""
+        if queryset.count() != 1:
+            self.message_user(request, "Select exactly one request to send to providers.", messages.ERROR)
+            return None
+        return HttpResponseRedirect(reverse("admin:leads_send_to_providers", args=[queryset.get().pk]))
 
 
 @admin.register(ProviderOnboarding)

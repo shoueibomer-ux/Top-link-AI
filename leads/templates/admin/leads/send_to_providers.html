@@ -1,0 +1,87 @@
+{% extends "admin/base_site.html" %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">Home</a> &rsaquo;
+  <a href="{% url 'admin:provider_search_servicerequest_changelist' %}">Service requests</a> &rsaquo;
+  Send to providers
+</div>
+{% endblock %}
+
+{% block content %}
+<div id="content-main">
+  <p>
+    <strong>{{ service_name }}</strong> in {{ service_request.city }} &middot; {{ urgency }}
+    &middot; status: {{ service_request.get_status_display }}
+  </p>
+
+  {% if problem %}
+    <p class="errornote">{{ problem }}</p>
+  {% else %}
+    {% if sms_enabled %}
+      <p><strong>SMS is on.</strong> Clicking the button below texts each selected provider straight away.</p>
+    {% else %}
+      <p><strong>SMS is off.</strong> Clicking the button creates the offers and shows you a message to copy and send
+        yourself. Nothing is sent.</p>
+    {% endif %}
+
+    {% if candidates %}
+      <form method="post" id="send-form">
+        {% csrf_token %}
+        <table style="width: 100%;">
+          <thead>
+            <tr><th></th><th>Provider</th><th>Contact</th><th>Phone</th><th>Past YES</th><th>Avg reply</th><th>Note</th></tr>
+          </thead>
+          <tbody>
+            {% for c in candidates %}
+              <tr>
+                <td>
+                  <input type="checkbox" name="providers" value="{{ c.provider.pk }}" class="pick"
+                         {% if c.reason or c.already_offered %}disabled{% endif %}>
+                </td>
+                <td><a href="{% url 'admin:leads_provider_change' c.provider.pk %}">{{ c.provider.business_name }}</a></td>
+                <td>{{ c.provider.contact_name }}</td>
+                <td>{{ c.provider.phone }}</td>
+                <td>{{ c.accepted }}</td>
+                <td>{% if c.avg_response %}{{ c.avg_response }}{% else %}&ndash;{% endif %}</td>
+                <td>
+                  {% if c.already_offered %}already has an offer for this request
+                  {% elif c.reason %}can't be contacted: {{ c.reason }}
+                  {% elif c.area_note %}{{ c.area_note }}{% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        <p style="margin-top: 14px;">
+          Pick up to {{ max_offers }}.
+          <input type="submit" class="default"
+                 value="{% if sms_enabled %}Send SMS to selected providers{% else %}Create offers (nothing is sent){% endif %}">
+        </p>
+      </form>
+      <script>
+        (function () {
+          var picks = document.querySelectorAll('.pick');
+          function limit() {
+            var checked = document.querySelectorAll('.pick:checked').length;
+            picks.forEach(function (box) {
+              if (!box.checked && !box.hasAttribute('data-blocked')) { box.disabled = checked >= {{ max_offers }}; }
+            });
+          }
+          picks.forEach(function (box) {
+            if (box.disabled) { box.setAttribute('data-blocked', '1'); }
+            box.addEventListener('change', limit);
+          });
+        })();
+      </script>
+    {% else %}
+      <p>No providers offer this service in {{ service_request.city }} yet.
+        <a href="{% url 'admin:leads_provider_add' %}">Add one</a>, with this service ticked.</p>
+    {% endif %}
+  {% endif %}
+
+  {% if service_request.offers.exists %}
+    <p><a href="{% url 'admin:leads_tracker' service_request.pk %}">Open the offers already created for this request</a></p>
+  {% endif %}
+</div>
+{% endblock %}

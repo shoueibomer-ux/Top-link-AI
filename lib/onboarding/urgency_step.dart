@@ -14,6 +14,13 @@ enum Urgency {
   final String label;
   final String description;
   final IconData icon;
+
+  // The value ServiceRequestCreateView stores (provider_search.models.ServiceRequest.URGENCY_CHOICES).
+  String get apiValue => switch (this) {
+        Urgency.today => 'today',
+        Urgency.thisWeek => 'this_week',
+        Urgency.exploring => 'exploring',
+      };
 }
 
 class UrgencyStep extends StatelessWidget {

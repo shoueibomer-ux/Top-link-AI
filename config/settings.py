@@ -38,6 +38,42 @@ SECRET_KEY = _env("DJANGO_SECRET_KEY", "dev-only-secret-key-do-not-use-in-produc
 # every request fail with a key that looks identical.
 API_KEY = _env("API_KEY", "dev-local-shared-key").strip()
 
+def _env_flag(name, default=False):
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return value.strip().lower() in ("1", "true", "yes", "on")
+
+
+# --- Lead validation tooling (the leads app) ------------------------------
+# SMS_ENABLED is off by default: with it off, "Send to providers" only
+# creates the offers and shows ready-to-copy messages to send by hand, and
+# nothing here talks to Twilio. Twilio credentials come only from the
+# environment, never from the repo, and are not required to start the app.
+SMS_ENABLED = _env_flag("SMS_ENABLED", False)
+TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID", "").strip()
+TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN", "").strip()
+TWILIO_FROM_NUMBER = os.environ.get("TWILIO_FROM_NUMBER", "").strip()
+# Only needed if the public URL Twilio calls differs from what Django sees
+# behind the proxy (the signature is computed over that exact URL).
+TWILIO_WEBHOOK_URL = os.environ.get("TWILIO_WEBHOOK_URL", "").strip()
+
+# Email (Gmail SMTP with an app password for now). Without EMAIL_HOST_USER,
+# mail goes to the console instead of failing.
+EMAIL_HOST = os.environ.get("EMAIL_HOST", "smtp.gmail.com")
+EMAIL_PORT = int(os.environ.get("EMAIL_PORT", "587"))
+EMAIL_USE_TLS = _env_flag("EMAIL_USE_TLS", True)
+EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "").strip()
+EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "").strip()
+EMAIL_BACKEND = (
+    "django.core.mail.backends.smtp.EmailBackend"
+    if EMAIL_HOST_USER
+    else "django.core.mail.backends.console.EmailBackend"
+)
+DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "").strip() or EMAIL_HOST_USER or "noreply@localhost"
+# Where the 2-hour "no YES" alert and the daily summary are sent.
+ADMIN_ALERT_EMAIL = os.environ.get("ADMIN_ALERT_EMAIL", "").strip()
+
 ALLOWED_HOSTS = [h.strip() for h in os.environ.get("DJANGO_ALLOWED_HOSTS", "").split(",") if h.strip()]
 
 # Render sets this for every service automatically (its *.onrender.com
@@ -62,6 +98,7 @@ INSTALLED_APPS = [
     "notifications",
     "accounts",
     "catalog",
+    "leads",
     "website",
 ]
 
