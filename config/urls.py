@@ -13,6 +13,7 @@ from provider_search.views import (
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/accounts/", include("accounts.urls")),
+    path("api/provider/", include("providers.urls")),
     path("api/catalog/", include("catalog.urls")),
     path("api/", include("matching.urls")),
     path("api/requests/", ServiceRequestCreateView.as_view(), name="service-request-create"),

@@ -1,3 +1,4 @@
+import '../role/app_role.dart';
 import 'package:flutter/material.dart';
 
 import '../app_colors.dart';
@@ -48,6 +49,15 @@ class AppDrawer extends StatelessWidget {
             icon: Icons.assignment_outlined,
             label: 'Provider Sign-Up (demo)',
             onTap: () => _navigateTo(context, const ProviderOnboardingScreen()),
+          ),
+          const Divider(height: 24),
+          _DrawerItem(
+            icon: Icons.swap_horiz,
+            label: 'Switch role',
+            onTap: () {
+              Navigator.of(context).pop();
+              switchRole(context);
+            },
           ),
         ],
       ),

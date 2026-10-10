@@ -58,6 +58,16 @@ TWILIO_FROM_NUMBER = os.environ.get("TWILIO_FROM_NUMBER", "").strip()
 # behind the proxy (the signature is computed over that exact URL).
 TWILIO_WEBHOOK_URL = os.environ.get("TWILIO_WEBHOOK_URL", "").strip()
 
+# Provider sign-in with Google (the providers app). The Flutter app sends a
+# Google ID token; the server only accepts one issued for one of these OAuth
+# client IDs (comma-separated; use the Web client ID the app passes as its
+# serverClientId). Unset means Google sign-in answers 503.
+GOOGLE_OAUTH_CLIENT_IDS = [c.strip() for c in os.environ.get("GOOGLE_OAUTH_CLIENT_IDS", "").split(",") if c.strip()]
+# Local development only: accept "dev-fake:<email>" instead of a real Google
+# token so the sign-in flow can be tried without a Google Cloud project. The
+# app refuses to start with this on and DEBUG off (providers.E001).
+GOOGLE_DEV_FAKE_AUTH = _env_flag("GOOGLE_DEV_FAKE_AUTH", False)
+
 # Email (Gmail SMTP with an app password for now). Without EMAIL_HOST_USER,
 # mail goes to the console instead of failing.
 EMAIL_HOST = os.environ.get("EMAIL_HOST", "smtp.gmail.com")
@@ -99,6 +109,7 @@ INSTALLED_APPS = [
     "accounts",
     "catalog",
     "leads",
+    "providers",
     "website",
 ]
 

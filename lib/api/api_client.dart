@@ -8,6 +8,7 @@ import 'app_notification.dart';
 import 'auth_models.dart';
 import 'category_suggestions.dart';
 import 'provider_onboarding.dart';
+import 'provider_profile.dart';
 import 'service_request.dart';
 
 class ApiException implements Exception {
@@ -335,6 +336,90 @@ class ApiClient {
   // DRF validation errors come back as {"field": ["message"], ...} or
   // {"detail": "message"} — this pulls out something readable for either
   // shape rather than surfacing a raw status code to the user.
+  // ---- Provider self-registration (the providers app) ----------------------
+
+  /// See providers.views.GoogleSignInView: trades a Google ID token for this
+  /// provider's own tokens and, if they've registered, their profile.
+  Future<ProviderSignIn> signInProviderWithGoogle(String idToken) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/provider/auth/google/'),
+      headers: _headers,
+      body: jsonEncode({'id_token': idToken}),
+    );
+    if (response.statusCode != 200) {
+      throw ApiException(_firstErrorMessage(response.body) ?? 'Could not sign in (${response.statusCode}).');
+    }
+    return ProviderSignIn.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
+  /// See providers.views.ProviderProfileView. Null until they've registered.
+  Future<ProviderProfileData?> getMyProviderProfile(String accessToken) async {
+    final response = await http.get(Uri.parse('$baseUrl/provider/profile/'), headers: _authHeaders(accessToken));
+    if (response.statusCode == 404) return null;
+    _throwForAuthProblems(response);
+    if (response.statusCode != 200) {
+      throw ApiException(_firstErrorMessage(response.body) ?? 'Could not load your profile (${response.statusCode}).');
+    }
+    return ProviderProfileData.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
+  /// Registers the profile; it starts as pending review.
+  Future<ProviderProfileData> registerProviderProfile(String accessToken, ProviderProfileData data) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/provider/profile/'),
+      headers: _authHeaders(accessToken),
+      body: jsonEncode(data.toJson()),
+    );
+    _throwForAuthProblems(response);
+    if (response.statusCode != 201) {
+      throw ApiException(_firstErrorMessage(response.body) ?? 'Could not submit your details (${response.statusCode}).');
+    }
+    return ProviderProfileData.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
+  Future<ProviderProfileData> updateMyProviderProfile(String accessToken, ProviderProfileData data) async {
+    final response = await http.patch(
+      Uri.parse('$baseUrl/provider/profile/'),
+      headers: _authHeaders(accessToken),
+      body: jsonEncode(data.toJson()),
+    );
+    _throwForAuthProblems(response);
+    if (response.statusCode != 200) {
+      throw ApiException(_firstErrorMessage(response.body) ?? 'Could not save your changes (${response.statusCode}).');
+    }
+    return ProviderProfileData.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
+  /// SimpleJWT's refresh: a new access token (and, since refresh tokens
+  /// rotate, usually a new refresh token) for a still-valid refresh token.
+  Future<AuthTokens> refreshTokens(String refreshToken) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/accounts/token/refresh/'),
+      headers: _headers,
+      body: jsonEncode({'refresh': refreshToken}),
+    );
+    if (response.statusCode == 401) throw SessionExpiredException();
+    if (response.statusCode != 200) {
+      throw ApiException('Could not renew your session (${response.statusCode}).');
+    }
+    final json = jsonDecode(response.body) as Map<String, dynamic>;
+    return AuthTokens(access: json['access'] as String, refresh: json['refresh'] as String? ?? refreshToken);
+  }
+
+  /// A 401 normally means the access token expired, but it is also how the
+  /// server rejects a wrong API key. Only the first is something signing in
+  /// again would fix.
+  void _throwForAuthProblems(http.Response response) {
+    if (response.statusCode == 401) {
+      final message = _firstErrorMessage(response.body) ?? '';
+      if (message.toLowerCase().contains('api key')) throw ApiException(message);
+      throw SessionExpiredException();
+    }
+    if (response.statusCode == 403) {
+      throw ApiException(_firstErrorMessage(response.body) ?? 'This account cannot do that.');
+    }
+  }
+
   String? _firstErrorMessage(String body) {
     try {
       final decoded = jsonDecode(body);
