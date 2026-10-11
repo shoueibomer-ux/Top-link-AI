@@ -1,3 +1,4 @@
+from django.utils import timezone
 from rest_framework import serializers
 
 from catalog.models import Service
@@ -7,6 +8,7 @@ from provider_search.services import CITIES
 from .models import ProviderProfile
 
 INVALID_PHONE_MESSAGE = "Enter a valid Canadian or North American phone number, for example 780 555 0100."
+SMS_CONSENT_MESSAGE = "You must agree to be texted about client requests to register."
 
 
 class ProviderProfileSerializer(serializers.ModelSerializer):
@@ -24,11 +26,15 @@ class ProviderProfileSerializer(serializers.ModelSerializer):
     cities = serializers.ListField(child=serializers.ChoiceField(choices=CITIES), allow_empty=False)
     email = serializers.EmailField(required=False)
     bio = serializers.CharField(max_length=1000, required=False, allow_blank=True)
+    # The explicit CASL consent checkbox. Required (and must be true) when
+    # registering; only the time it was given is stored, and it can't be
+    # changed by editing the profile afterwards.
+    sms_consent = serializers.BooleanField(write_only=True, required=False)
 
     class Meta:
         model = ProviderProfile
         fields = [
-            "business_name", "phone", "email", "categories", "cities", "bio",
+            "business_name", "phone", "email", "categories", "cities", "bio", "sms_consent",
             "status", "review_note", "reviewed_at", "created_at",
         ]
         read_only_fields = ["status", "review_note", "reviewed_at", "created_at"]
@@ -47,6 +53,19 @@ class ProviderProfileSerializer(serializers.ModelSerializer):
 
     def validate_cities(self, value):
         return list(dict.fromkeys(value))  # no repeats, order kept
+
+    def validate(self, attrs):
+        if self.instance is None and attrs.get("sms_consent") is not True:
+            raise serializers.ValidationError({"sms_consent": SMS_CONSENT_MESSAGE})
+        return attrs
+
+    def create(self, validated_data):
+        validated_data.pop("sms_consent", None)
+        return super().create({**validated_data, "sms_consent_at": timezone.now()})
+
+    def update(self, instance, validated_data):
+        validated_data.pop("sms_consent", None)
+        return super().update(instance, validated_data)
 
 
 class PublicProviderSerializer(serializers.ModelSerializer):

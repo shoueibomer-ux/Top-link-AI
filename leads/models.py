@@ -1,66 +1,5 @@
-from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
-
-from .phone import normalize_phone
-
-
-class Provider(models.Model):
-    """A service provider added by hand in the Django admin, for forwarding
-    client requests during manual validation. Deliberately separate from
-    accounts.ProviderBusinessProfile, which belongs to a provider who has a
-    login; these are businesses we contact by phone before they use the app.
-    """
-
-    business_name = models.CharField(max_length=200)
-    contact_name = models.CharField(max_length=200, blank=True)
-    # Stored as E.164 (+17805550100) so an inbound SMS `From` matches it.
-    phone = models.CharField(max_length=32)
-    services = models.ManyToManyField("catalog.Service", blank=True, related_name="providers")
-    # List of city names (provider_search.services.CITIES).
-    service_areas = models.JSONField(default=list, blank=True)
-    sms_opt_out = models.BooleanField(
-        default=False,
-        help_text="Set automatically when they reply STOP. Never text a provider who is opted out.",
-    )
-    sms_consent_confirmed = models.BooleanField(
-        default=False,
-        help_text="Tick once this provider has agreed to be messaged about client requests "
-        "(CASL). Providers without it can't be sent offers.",
-    )
-    is_active = models.BooleanField(default=True)
-    notes = models.TextField(blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        ordering = ["business_name"]
-
-    def __str__(self):
-        return self.business_name
-
-    def clean(self):
-        if not normalize_phone(self.phone):
-            raise ValidationError({"phone": "Enter a valid phone number, e.g. 780 555 0100 or +17805550100."})
-
-    def save(self, *args, **kwargs):
-        self.phone = normalize_phone(self.phone) or self.phone
-        super().save(*args, **kwargs)
-
-    @property
-    def cannot_text_reason(self) -> str:
-        """Why this provider can't be sent an offer, or "" if they can."""
-        if not self.is_active:
-            return "inactive"
-        if self.sms_opt_out:
-            return "opted out (STOP)"
-        if not self.sms_consent_confirmed:
-            return "no SMS consent recorded"
-        return ""
-
-    @property
-    def can_text(self) -> bool:
-        return not self.cannot_text_reason
 
 
 class LeadOffer(models.Model):
@@ -95,7 +34,7 @@ class LeadOffer(models.Model):
     CHANNEL_MANUAL = "manual"
 
     service_request = models.ForeignKey("provider_search.ServiceRequest", on_delete=models.CASCADE, related_name="offers")
-    provider = models.ForeignKey(Provider, on_delete=models.PROTECT, related_name="offers")
+    provider = models.ForeignKey("providers.ProviderProfile", on_delete=models.PROTECT, related_name="offers")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING)
 
     created_at = models.DateTimeField(auto_now_add=True)

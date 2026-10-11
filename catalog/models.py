@@ -25,7 +25,7 @@ class Category(models.Model):
 class Service(models.Model):
     """A bookable leaf service inside a Category (e.g. "Plumbing" inside
     "Trades & Professional Services"). `slug` is what the rest of the app
-    calls "category" — ServiceRequest.category, ProviderBusinessProfile.
+    calls "category" — ServiceRequest.category, ProviderProfile.
     categories, and the keyword table matching_engine.CATEGORY_TAXONOMY all
     key on this same string. Which slugs exist is decided here and nowhere
     else (see catalog.taxonomy).

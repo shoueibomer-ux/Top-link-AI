@@ -13,6 +13,7 @@ import 'package:toplinkai_app/onboarding/service_category.dart';
 import 'package:toplinkai_app/provider/auth_storage.dart';
 import 'package:toplinkai_app/provider/google_sign_in_service.dart';
 import 'package:toplinkai_app/provider/provider_gate.dart';
+import 'package:toplinkai_app/provider/provider_registration_screen.dart';
 import 'package:toplinkai_app/provider/provider_sign_in_screen.dart';
 import 'package:toplinkai_app/provider/provider_widgets.dart';
 import 'package:toplinkai_app/role/app_role.dart';
@@ -121,11 +122,12 @@ Future<void> _signIn(WidgetTester tester) async {
   await _settle(tester);
 }
 
-Future<void> _fillForm(WidgetTester tester) async {
+Future<void> _fillForm(WidgetTester tester, {bool consent = true}) async {
   await tester.enterText(find.byKey(const Key('field-business-name')), 'Ace Plumbing');
   await tester.enterText(find.byKey(const Key('field-phone')), '(780) 555-0100');
   await tester.tap(find.byKey(const Key('service-plumbing')));
   await tester.tap(find.byKey(const Key('city-Edmonton')));
+  if (consent) await tester.tap(find.byKey(const Key('sms-consent')));
   await tester.pump();
 }
 
@@ -272,6 +274,7 @@ void main() {
         'categories': ['plumbing'],
         'cities': ['Edmonton'],
         'bio': '',
+        'sms_consent': true,
       });
       expect(post.headers['Authorization'], 'Bearer access-1');
     });
@@ -349,6 +352,42 @@ void main() {
         expect(find.byType(Scaffold), findsWidgets);
       }, backend.client);
       expect(jsonDecode(backend.requests.firstWhere((r) => r.method == 'PATCH').body), containsPair('bio', 'Licence 12345'));
+    });
+
+    testWidgets('registering is refused until the SMS consent box is ticked', (tester) async {
+      _bigScreen(tester);
+      final backend = FakeBackend();
+      await http.runWithClient(() async {
+        await _pumpGate(tester);
+        await _signIn(tester);
+        await _fillForm(tester, consent: false);
+        expect(find.text(kProviderSmsConsentText), findsOneWidget);
+        await tester.tap(find.text('Submit for review'));
+        await _settle(tester);
+
+        expect(find.byKey(const Key('consent-error')), findsOneWidget);
+        expect(find.text('Submit for review'), findsOneWidget);
+
+        await tester.tap(find.byKey(const Key('sms-consent')));
+        await tester.pump();
+        expect(find.byKey(const Key('consent-error')), findsNothing);
+      }, backend.client);
+      expect(backend.requests.where((r) => r.method == 'POST' && r.url.path.endsWith('/provider/profile/')), isEmpty);
+    });
+
+    testWidgets('editing a profile does not ask for the consent again', (tester) async {
+      _bigScreen(tester);
+      await AuthStorage.save(access: 'access-1', refresh: 'refresh-1');
+      final backend = FakeBackend()..profile = _profileJson(status: 'rejected', note: 'Please add your licence number.');
+      await http.runWithClient(() async {
+        await _pumpGate(tester);
+        await tester.tap(find.text('Edit and resubmit'));
+        await _settle(tester);
+        expect(find.byKey(const Key('sms-consent')), findsNothing);
+        await tester.tap(find.text('Save changes'));
+        await _settle(tester);
+      }, backend.client);
+      expect(jsonDecode(backend.requests.firstWhere((r) => r.method == 'PATCH').body), isNot(contains('sms_consent')));
     });
 
     testWidgets('a server error on save is shown on the form and the form stays', (tester) async {
@@ -521,6 +560,14 @@ void main() {
       expect(data.status, ProviderStatus.approved);
       expect(data.toJson().keys, containsAll(['business_name', 'phone', 'email', 'categories', 'cities', 'bio']));
       expect(data.toJson().containsKey('status'), isFalse);
+      expect(data.toJson().containsKey('sms_consent'), isFalse); // only sent when registering
+      expect(
+        ProviderProfileData(
+          businessName: 'A', phone: '+17805550100', email: 'a@b.co', categories: const ['plumbing'],
+          cities: const ['Edmonton'], smsConsent: true,
+        ).toJson(),
+        containsPair('sms_consent', true),
+      );
       expect(ProviderStatus.parse('bogus'), ProviderStatus.pending);
     });
   });

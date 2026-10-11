@@ -12,6 +12,13 @@ import 'provider_widgets.dart';
 
 final _emailPattern = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
 
+/// The consent a new provider gives to be texted (CASL). The server records
+/// when it was given; without it they can't be sent client requests.
+const kProviderSmsConsentText =
+    'I agree that Tabmatch may text me about client requests that match my services. '
+    'Message and data rates may apply. I can reply STOP at any time to opt out.';
+const kProviderSmsConsentRequired = 'Please agree to be texted about client requests to register.';
+
 /// The provider registration form, also used to edit an existing profile.
 /// Saving a new profile sends it for review; saving edits keeps its status
 /// (except a rejected profile, which goes back for review).
@@ -55,6 +62,7 @@ class _ProviderRegistrationScreenState
   late final Set<String> _categories = {...?widget.initial?.categories};
   late final Set<String> _cities = {...?widget.initial?.cities};
 
+  bool _smsConsent = false;
   bool _submitted = false;
   bool _saving = false;
   String? _error;
@@ -100,7 +108,11 @@ class _ProviderRegistrationScreenState
   String? get _cityError =>
       _cities.isEmpty ? 'Choose at least one city.' : null;
 
+  // Consent is given once, when registering; editing a profile doesn't ask again.
+  String? get _consentError => widget.isEditing || _smsConsent ? null : kProviderSmsConsentRequired;
+
   bool get _valid =>
+      _consentError == null &&
       _nameError == null &&
       _phoneError == null &&
       _phone.text.trim().isNotEmpty &&
@@ -125,6 +137,7 @@ class _ProviderRegistrationScreenState
           if (_cities.contains(city)) city,
       ],
       bio: _bio.text.trim(),
+      smsConsent: !widget.isEditing && _smsConsent,
     );
     try {
       final saved = await widget.session.authorized(
@@ -261,6 +274,23 @@ class _ProviderRegistrationScreenState
               maxLines: 6,
               maxLength: 1000,
             ),
+            if (!widget.isEditing) ...[
+              const SizedBox(height: 18),
+              CheckboxListTile(
+                key: const Key('sms-consent'),
+                value: _smsConsent,
+                onChanged: (checked) => setState(() => _smsConsent = checked ?? false),
+                activeColor: AppColors.turquoise,
+                controlAffinity: ListTileControlAffinity.leading,
+                contentPadding: EdgeInsets.zero,
+                title: const Text(
+                  kProviderSmsConsentText,
+                  style: TextStyle(fontSize: 13, height: 1.4, color: AppColors.navy),
+                ),
+              ),
+              if (showErrors && _consentError != null) _ErrorText(_consentError!, key: const Key('consent-error')),
+              const SizedBox(height: 12),
+            ],
             if (_error != null) ...[
               _ErrorText(_error!, key: const Key('save-error')),
               const SizedBox(height: 12),

@@ -7,9 +7,10 @@ from django.db.models import Avg, Count, Q
 from django.utils import timezone
 
 from catalog.models import Service
+from providers.models import ProviderProfile
 
 from . import sms
-from .models import LeadOffer, Provider
+from .models import LeadOffer
 from .phone import normalize_phone
 
 MAX_OFFERS_PER_SEND = 3
@@ -93,7 +94,7 @@ def forwarding_problem(service_request) -> str:
 
 @dataclass
 class Candidate:
-    provider: Provider
+    provider: ProviderProfile
     reason: str  # "" if eligible, else why not
     already_offered: bool
     area_note: str
@@ -102,12 +103,12 @@ class Candidate:
 
 
 def suggest_providers(service_request) -> list:
-    """Providers offering this request's service in its city, eligible ones
-    first, best past responders first among them. Providers with no service
-    area set are included (flagged) rather than hidden."""
+    """Approved providers offering this request's service in its city, eligible
+    ones first, best past responders first among them. Providers with no
+    cities set are included (flagged) rather than hidden."""
     already = set(service_request.offers.values_list("provider_id", flat=True))
     providers = (
-        Provider.objects.filter(services__slug=service_request.category)
+        ProviderProfile.objects.approved().filter(categories__slug=service_request.category)
         .annotate(
             accepted=Count("offers", filter=Q(offers__status=LeadOffer.STATUS_ACCEPTED), distinct=True),
             avg_response=Avg("offers__response_time"),
@@ -116,7 +117,7 @@ def suggest_providers(service_request) -> list:
     )
     candidates = []
     for provider in providers:
-        areas = provider.service_areas or []
+        areas = provider.cities or []
         if areas and service_request.city not in areas:
             continue
         candidates.append(
@@ -166,7 +167,7 @@ def _send_and_record(offer: LeadOffer, body: str):
     try:
         return sms.send_sms(offer.provider.phone, body)
     except sms.SmsOptedOut as exc:
-        Provider.objects.filter(pk=offer.provider_id).update(sms_opt_out=True)
+        ProviderProfile.objects.filter(pk=offer.provider_id).update(sms_opt_out=True)
         offer.send_error = str(exc)
         offer.save(update_fields=["send_error"])
         raise
@@ -226,7 +227,7 @@ def handle_inbound_sms(from_phone: str, body: str) -> str:
     """Applies a provider's reply. Returns text to send back in the webhook's
     response, or "" for none."""
     phone = normalize_phone(from_phone)
-    providers = Provider.objects.filter(phone=phone) if phone else Provider.objects.none()
+    providers = ProviderProfile.objects.filter(phone=phone) if phone else ProviderProfile.objects.none()
     if not providers.exists():
         return ""  # not a provider we know: ignore
 

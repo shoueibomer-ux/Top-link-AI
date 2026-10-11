@@ -1,4 +1,3 @@
-from django import forms
 from django.contrib import admin, messages
 from django.core.exceptions import PermissionDenied
 from django.http import HttpResponseRedirect
@@ -6,38 +5,10 @@ from django.shortcuts import get_object_or_404, render
 from django.urls import path, reverse
 
 from provider_search.models import ServiceRequest
-from provider_search.services import CITIES
+from providers.models import ProviderProfile
 
 from . import services, sms
-from .models import LeadOffer, Provider
-
-
-class ProviderForm(forms.ModelForm):
-    service_areas = forms.MultipleChoiceField(
-        choices=[(city, city) for city in CITIES],
-        required=False,
-        widget=forms.CheckboxSelectMultiple,
-        help_text="Leave empty if unknown; they'll still be suggested, flagged as having no area set.",
-    )
-
-    class Meta:
-        model = Provider
-        fields = "__all__"
-
-
-@admin.register(Provider)
-class ProviderAdmin(admin.ModelAdmin):
-    form = ProviderForm
-    list_display = (
-        "business_name", "contact_name", "phone", "is_active", "sms_consent_confirmed", "sms_opt_out", "service_list",
-    )
-    list_filter = ("is_active", "sms_consent_confirmed", "sms_opt_out", "services")
-    search_fields = ("business_name", "contact_name", "phone", "notes")
-    filter_horizontal = ("services",)
-
-    @admin.display(description="Services")
-    def service_list(self, obj):
-        return ", ".join(s.name for s in obj.services.all())
+from .models import LeadOffer
 
 
 @admin.register(LeadOffer)
@@ -81,7 +52,7 @@ class LeadOfferAdmin(admin.ModelAdmin):
         problem = services.forwarding_problem(service_request)
 
         if request.method == "POST" and not problem:
-            chosen = Provider.objects.filter(pk__in=request.POST.getlist("providers"))
+            chosen = ProviderProfile.objects.filter(pk__in=request.POST.getlist("providers")).order_by("business_name")
             try:
                 offers = services.create_offers(service_request, chosen)
             except ValueError as exc:

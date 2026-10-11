@@ -11,11 +11,13 @@ from django.utils import timezone
 from twilio.base.exceptions import TwilioRestException
 from twilio.request_validator import RequestValidator
 
+from accounts.models import UserProfile, UserRole
 from catalog.models import Service
 from provider_search.models import ServiceRequest
+from providers.models import ProviderProfile
 
 from . import jobs, services, sms
-from .models import DailySummaryLog, LeadOffer, Provider
+from .models import DailySummaryLog, LeadOffer
 from .phone import normalize_north_american_phone, normalize_phone
 
 TOKEN = "test-auth-token"
@@ -51,10 +53,20 @@ def make_request(category="plumbing", city="Edmonton", urgency="today", descript
     )
 
 
-def make_provider(name="Ace Plumbing", phone="780 555 0101", services_=("plumbing",), areas=("Edmonton",), **kw):
-    kw.setdefault("sms_consent_confirmed", True)
-    provider = Provider.objects.create(business_name=name, phone=phone, service_areas=list(areas), **kw)
-    provider.services.set(Service.objects.filter(slug__in=services_))
+def make_provider(
+    name="Ace Plumbing", phone="780 555 0101", services_=("plumbing",), areas=("Edmonton",), consent=True, **kw
+):
+    """An approved provider who has agreed to be texted, unless told otherwise."""
+    user_model = get_user_model()
+    email = f"owner{user_model.objects.count()}@example.com"
+    user = user_model.objects.create_user(username=email, email=email)
+    UserProfile.objects.create(user=user, role=UserRole.PROVIDER, full_name=f"Owner of {name}")
+    kw.setdefault("status", ProviderProfile.STATUS_APPROVED)
+    kw.setdefault("sms_consent_at", timezone.now() if consent else None)
+    provider = ProviderProfile.objects.create(
+        user=user, business_name=name, phone=phone, email=email, cities=list(areas), **kw
+    )
+    provider.categories.set(Service.objects.filter(slug__in=services_))
     return provider
 
 
@@ -109,16 +121,19 @@ class ProviderTests(TestCase):
     def test_an_unreadable_phone_fails_validation(self):
         from django.core.exceptions import ValidationError
 
-        with self.assertRaises(ValidationError):
-            Provider(business_name="x", phone="nope").full_clean()
+        with self.assertRaises(ValidationError) as caught:
+            ProviderProfile(business_name="x", phone="nope").clean()
+        self.assertIn("phone", caught.exception.message_dict)
 
     def test_who_can_be_texted(self):
         self.assertTrue(make_provider().can_text)
         self.assertEqual(make_provider("a", "780 555 0102", sms_opt_out=True).cannot_text_reason, "opted out (STOP)")
         self.assertEqual(
-            make_provider("b", "780 555 0103", sms_consent_confirmed=False).cannot_text_reason, "no SMS consent recorded"
+            make_provider("b", "780 555 0103", consent=False).cannot_text_reason, "no SMS consent recorded"
         )
-        self.assertEqual(make_provider("c", "780 555 0104", is_active=False).cannot_text_reason, "inactive")
+        for status in ("pending", "rejected"):
+            provider = make_provider("c", "780 555 0104", status=status)
+            self.assertEqual(provider.cannot_text_reason, "not approved", status)
 
 
 class LeadOfferModelTests(TestCase):
@@ -192,6 +207,11 @@ class MatchingTests(TestCase):
         names = [c.provider.business_name for c in services.suggest_providers(make_request())]
         self.assertEqual(names, [match.business_name])
 
+    def test_providers_who_are_not_approved_are_never_suggested(self):
+        make_provider("Waiting", "780 555 0102", status="pending")
+        make_provider("Turned down", "780 555 0103", status="rejected")
+        self.assertEqual(services.suggest_providers(make_request()), [])
+
     def test_a_provider_with_no_service_area_is_included_and_flagged(self):
         make_provider("Anywhere", areas=())
         (candidate,) = services.suggest_providers(make_request())
@@ -258,7 +278,7 @@ class CreateOffersTests(TwilioMocked):
 
     def test_a_provider_without_recorded_consent_is_refused(self):
         with self.assertRaisesMessage(ValueError, "consent"):
-            services.create_offers(make_request(), [make_provider(sms_consent_confirmed=False)])
+            services.create_offers(make_request(), [make_provider(consent=False)])
 
     def test_no_duplicate_offer_for_the_same_request(self):
         request, provider = make_request(), make_provider()
@@ -468,7 +488,7 @@ class ManualModeTests(AdminFlowBase):
         self.assertEqual(LeadOffer.objects.count(), 0)
 
     def test_an_opted_out_provider_cannot_be_picked_even_with_a_crafted_post(self):
-        Provider.objects.filter(pk=self.b.pk).update(sms_opt_out=True)
+        ProviderProfile.objects.filter(pk=self.b.pk).update(sms_opt_out=True)
         response = self.post_providers(self.a, self.b, follow=True)
         self.assertContains(response, "opted out")
         self.assertEqual(LeadOffer.objects.count(), 0)
@@ -540,16 +560,19 @@ class ManualModeTests(AdminFlowBase):
     def test_offers_cannot_be_added_by_hand_around_the_rules(self):
         self.assertEqual(self.client.get("/admin/leads/leadoffer/add/").status_code, 403)
 
-    def test_providers_can_be_added_in_the_admin(self):
-        response = self.client.post("/admin/leads/provider/add/", {
-            "business_name": "New Co", "contact_name": "Pat", "phone": "(780) 555 0177",
-            "services": [Service.objects.get(slug="plumbing").pk], "service_areas": ["Edmonton", "Calgary"],
-            "sms_consent_confirmed": "on", "is_active": "on", "notes": "met at a trade show",
+    def test_a_provider_can_be_added_by_hand_for_an_existing_account(self):
+        owner = get_user_model().objects.create_user(username="pat@example.com", email="pat@example.com")
+        UserProfile.objects.create(user=owner, role=UserRole.PROVIDER, full_name="Pat")
+        response = self.client.post("/admin/providers/providerprofile/add/", {
+            "user": owner.pk, "business_name": "New Co", "phone": "(780) 555 0177", "email": "pat@example.com",
+            "categories": [Service.objects.get(slug="plumbing").pk], "cities": ["Edmonton", "Calgary"],
+            "status": "approved", "sms_consent_at_0": "2026-10-01", "sms_consent_at_1": "09:00:00",
+            "notes": "met at a trade show",
         })
-        self.assertEqual(response.status_code, 302)
-        provider = Provider.objects.get(business_name="New Co")
+        self.assertEqual(response.status_code, 302, getattr(response, "context_data", None) and response.context_data["adminform"].form.errors)
+        provider = ProviderProfile.objects.get(business_name="New Co")
         self.assertEqual(provider.phone, "+17805550177")
-        self.assertEqual(provider.service_areas, ["Edmonton", "Calgary"])
+        self.assertEqual(provider.cities, ["Edmonton", "Calgary"])
         self.assertTrue(provider.can_text)
 
 
@@ -572,7 +595,7 @@ class SmsModeTests(AdminFlowBase):
         self.assertNotContains(self.client.get(self.tracker_url), "Mark as sent")
 
     def test_an_opted_out_provider_is_never_texted(self):
-        Provider.objects.filter(pk=self.b.pk).update(sms_opt_out=True)
+        ProviderProfile.objects.filter(pk=self.b.pk).update(sms_opt_out=True)
         self.post_providers(self.a, self.b)
         self.assertEqual(self.sent, [])
         self.assertEqual(LeadOffer.objects.count(), 0)
@@ -659,7 +682,7 @@ class WebhookTests(TwilioMocked):
 
     def test_the_other_stop_words_work_too(self):
         for word in ("stop", "STOPALL", "Unsubscribe", "cancel", "END", "quit"):
-            Provider.objects.filter(pk=self.provider.pk).update(sms_opt_out=False)
+            ProviderProfile.objects.filter(pk=self.provider.pk).update(sms_opt_out=False)
             self.post(word)
             self.provider.refresh_from_db()
             self.assertTrue(self.provider.sms_opt_out, word)
@@ -812,7 +835,7 @@ class ReminderTests(TwilioMocked):
 
     def test_opted_out_providers_are_skipped(self):
         offer = offer_sent_at(NOW - timedelta(hours=1))
-        Provider.objects.filter(pk=offer.provider_id).update(sms_opt_out=True)
+        ProviderProfile.objects.filter(pk=offer.provider_id).update(sms_opt_out=True)
         self.assertEqual(jobs.send_reminders(NOW), 0)
         self.assertEqual(self.sent, [])
 
