@@ -116,7 +116,7 @@ class ProviderProfileCard extends StatelessWidget {
           const SizedBox(height: 14),
           _Line(icon: Icons.phone_outlined, text: profile.phone),
           _Line(icon: Icons.email_outlined, text: profile.email),
-          _Line(icon: Icons.handyman_outlined, text: services.join(', ')),
+          _Line(icon: Icons.category_outlined, text: services.join(', ')),
           _Line(icon: Icons.location_on_outlined, text: profile.cities.join(', ')),
           if (profile.bio.trim().isNotEmpty) ...[
             const SizedBox(height: 6),

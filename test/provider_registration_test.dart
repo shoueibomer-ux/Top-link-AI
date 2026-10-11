@@ -13,6 +13,8 @@ import 'package:toplinkai_app/onboarding/service_category.dart';
 import 'package:toplinkai_app/provider/auth_storage.dart';
 import 'package:toplinkai_app/provider/google_sign_in_service.dart';
 import 'package:toplinkai_app/provider/provider_gate.dart';
+import 'package:toplinkai_app/provider/provider_sign_in_screen.dart';
+import 'package:toplinkai_app/provider/provider_widgets.dart';
 import 'package:toplinkai_app/role/app_role.dart';
 import 'package:toplinkai_app/role/role_choice_screen.dart';
 import 'package:toplinkai_app/role/root_gate.dart';
@@ -420,6 +422,39 @@ void main() {
         expect(find.text('Provider sign-in'), findsOneWidget);
         expect(await AuthStorage.isLoggedIn(), isFalse);
       }, backend.client);
+    });
+  });
+
+  group('provider icons are neutral, not repair-specific', () {
+    // Tabmatch connects clients with every kind of provider, so the provider
+    // side uses a briefcase rather than a hammer and screwdriver.
+    testWidgets('the provider sign-in screen shows a briefcase', (tester) async {
+      await tester.pumpWidget(MaterialApp(
+        home: ProviderSignInScreen(
+          api: ApiClient(),
+          idTokenProvider: () async => 'x',
+          onSignedIn: (_) {},
+          onSwitchRole: () {},
+        ),
+      ));
+      expect(find.byIcon(Icons.business_center_outlined), findsOneWidget);
+      expect(find.byIcon(Icons.handyman_outlined), findsNothing);
+      expect(find.byIcon(Icons.handyman), findsNothing);
+    });
+
+    testWidgets('the provider card on the role screen shows a briefcase', (tester) async {
+      await tester.pumpWidget(MaterialApp(home: RoleChoiceScreen(onChosen: (_) {})));
+      final card = find.byKey(const Key('role-provider'));
+      expect(find.descendant(of: card, matching: find.byIcon(Icons.business_center_outlined)), findsOneWidget);
+      expect(find.byIcon(Icons.handyman_outlined), findsNothing);
+    });
+
+    testWidgets('the profile card lists services with a neutral icon', (tester) async {
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(body: ProviderProfileCard(profile: ProviderProfileData.fromJson(_profileJson()))),
+      ));
+      expect(find.byIcon(Icons.category_outlined), findsOneWidget);
+      expect(find.byIcon(Icons.handyman_outlined), findsNothing);
     });
   });
 
