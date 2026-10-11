@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'api/api_config.dart';
 import 'app_colors.dart';
-import 'onboarding/onboarding_screen.dart';
+import 'role/root_gate.dart';
 import 'onboarding/service_category.dart';
 
 void main() {
@@ -44,7 +44,7 @@ class TopLinkApp extends StatelessWidget {
           foregroundColor: AppColors.white,
         ),
       ),
-      home: const OnboardingScreen(),
+      home: const RootGate(),
     );
   }
 }

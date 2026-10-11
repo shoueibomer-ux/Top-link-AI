@@ -20,8 +20,8 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
-    // Pumps OnboardingScreen directly — it's also the app's real entry point
-    // (see main.dart) now that there's no subscription gate in front of it.
+    // Pumps OnboardingScreen directly — it's the client flow's first screen
+    // (main.dart's RootGate opens it once "I need a service" has been chosen).
     await tester.pumpWidget(const MaterialApp(home: OnboardingScreen()));
 
     // Step 1: category selection is now a two-level drill-down (Phase 1B).

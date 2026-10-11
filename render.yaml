@@ -95,6 +95,12 @@ services:
         sync: false
       - key: DJANGO_SUPERUSER_EMAIL
         sync: false
+      # Provider sign-in with Google (the providers app): the Web OAuth client ID
+      # the app passes as GOOGLE_SERVER_CLIENT_ID, comma-separated if there are
+      # several. Without it provider sign-in answers 503. Never set
+      # GOOGLE_DEV_FAKE_AUTH here: the app refuses to start with it on outside DEBUG.
+      - key: GOOGLE_OAUTH_CLIENT_IDS
+        sync: false
       # Lead validation tooling (the leads app) — all optional, all set in the
       # Render dashboard, never committed. SMS_ENABLED defaults to off: "Send to
       # providers" then only creates the offers and shows messages to copy.
