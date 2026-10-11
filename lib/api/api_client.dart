@@ -190,45 +190,6 @@ class ApiClient {
     return ProviderOnboarding.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
   }
 
-  /// See accounts.views.RegisterView. Returns tokens immediately
-  /// (auto-login), same as login.
-  Future<AuthTokens> register({
-    required String email,
-    required String password,
-    required String role,
-    String fullName = '',
-    String businessName = '',
-  }) async {
-    final response = await http.post(
-      Uri.parse('$baseUrl/accounts/register/'),
-      headers: _headers,
-      body: jsonEncode({
-        'email': email,
-        'password': password,
-        'role': role,
-        'full_name': fullName,
-        'business_name': businessName,
-      }),
-    );
-    if (response.statusCode != 201) {
-      throw ApiException(_firstErrorMessage(response.body) ?? 'Could not create that account.');
-    }
-    return AuthTokens.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
-  }
-
-  /// See accounts.views.LoginView.
-  Future<AuthTokens> login({required String email, required String password}) async {
-    final response = await http.post(
-      Uri.parse('$baseUrl/accounts/login/'),
-      headers: _headers,
-      body: jsonEncode({'email': email, 'password': password}),
-    );
-    if (response.statusCode != 200) {
-      throw ApiException(_firstErrorMessage(response.body) ?? 'Incorrect email or password.');
-    }
-    return AuthTokens.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
-  }
-
   /// See accounts.views.MeView.
   Future<AccountProfile> getMe(String accessToken) async {
     final response = await http.get(
@@ -240,57 +201,6 @@ class ApiClient {
       throw ApiException('Could not load your account (${response.statusCode}).');
     }
     return AccountProfile.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
-  }
-
-  /// PATCH accounts.views.MeView — edits the signed-in user's own name and/or
-  /// sign-in email (never role or password). Pass only what should change.
-  /// Throws [ApiException] with the server's message for validation failures
-  /// (e.g. an email already in use) and [SessionExpiredException] on 401.
-  Future<AccountProfile> updateMe({
-    required String accessToken,
-    String? fullName,
-    String? email,
-  }) async {
-    final response = await http.patch(
-      Uri.parse('$baseUrl/accounts/me/'),
-      headers: _authHeaders(accessToken),
-      body: jsonEncode({
-        'full_name': ?fullName,
-        'email': ?email,
-      }),
-    );
-    if (response.statusCode == 401) throw SessionExpiredException();
-    if (response.statusCode != 200) {
-      throw ApiException(_firstErrorMessage(response.body) ?? 'Could not save your changes.');
-    }
-    return AccountProfile.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
-  }
-
-  /// See accounts.views.ProviderProfileView.
-  Future<ProviderBusinessProfile> getProviderBusinessProfile(String accessToken) async {
-    final response = await http.get(
-      Uri.parse('$baseUrl/accounts/provider-profile/'),
-      headers: _authHeaders(accessToken),
-    );
-    if (response.statusCode != 200) {
-      throw ApiException(_firstErrorMessage(response.body) ?? 'Could not load your business profile.');
-    }
-    return ProviderBusinessProfile.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
-  }
-
-  Future<ProviderBusinessProfile> updateProviderBusinessProfile({
-    required String accessToken,
-    required Map<String, dynamic> fields,
-  }) async {
-    final response = await http.patch(
-      Uri.parse('$baseUrl/accounts/provider-profile/'),
-      headers: _authHeaders(accessToken),
-      body: jsonEncode(fields),
-    );
-    if (response.statusCode != 200) {
-      throw ApiException(_firstErrorMessage(response.body) ?? 'Could not save your business profile.');
-    }
-    return ProviderBusinessProfile.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
   }
 
   /// See catalog.views.CategoryListView — the admin-managed

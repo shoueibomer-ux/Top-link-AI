@@ -1,6 +1,9 @@
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
+
+from leads.phone import normalize_phone
 
 
 class ProviderProfileQuerySet(models.QuerySet):
@@ -10,13 +13,12 @@ class ProviderProfileQuerySet(models.QuerySet):
 
 
 class ProviderProfile(models.Model):
-    """A service provider who registered themselves in the app (signed in with
-    Google) and is waiting for, or has passed, a human review.
+    """The one provider model: a business that registered itself in the app
+    (signed in with Google) and is waiting for, or has passed, a human review.
 
-    Separate from leads.Provider (a business you add by hand to forward
-    requests to) and from accounts.ProviderBusinessProfile (the older
-    email-and-password provider profile, which has no review step). Everything
-    clients see must come through ProviderProfile.objects.approved().
+    Client requests are offered to providers (leads.LeadOffer) and clients are
+    shown providers only through ProviderProfile.objects.approved(). Texting a
+    provider additionally needs their recorded SMS consent and no STOP.
     """
 
     STATUS_PENDING = "pending"
@@ -41,6 +43,14 @@ class ProviderProfile(models.Model):
     cities = models.JSONField(default=list, blank=True)
     bio = models.TextField(blank=True)
 
+    # When they ticked "you may text me about client requests" (CASL), or an
+    # admin recorded that they agreed. Without it they can't be sent offers.
+    sms_consent_at = models.DateTimeField(null=True, blank=True)
+    # Set when they reply STOP; never text a provider who is opted out.
+    sms_opt_out = models.BooleanField(default=False)
+    # Admin-only notes; never shown to the provider.
+    notes = models.TextField(blank=True)
+
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING, db_index=True)
     # Shown to the provider, e.g. why they weren't approved.
     review_note = models.TextField(blank=True)
@@ -54,7 +64,36 @@ class ProviderProfile(models.Model):
         ordering = ["-created_at"]
 
     def __str__(self):
-        return f"{self.business_name} ({self.status})"
+        return self.business_name
+
+    def clean(self):
+        if not normalize_phone(self.phone):
+            raise ValidationError({"phone": "Enter a valid phone number, e.g. 780 555 0100 or +17805550100."})
+
+    def save(self, *args, **kwargs):
+        # Stored as E.164 so an inbound SMS `From` matches it.
+        self.phone = normalize_phone(self.phone) or self.phone
+        super().save(*args, **kwargs)
+
+    @property
+    def contact_name(self) -> str:
+        profile = getattr(self.user, "profile", None)
+        return profile.full_name if profile else ""
+
+    @property
+    def cannot_text_reason(self) -> str:
+        """Why this provider can't be sent an offer, or "" if they can."""
+        if self.status != self.STATUS_APPROVED:
+            return "not approved"
+        if self.sms_opt_out:
+            return "opted out (STOP)"
+        if self.sms_consent_at is None:
+            return "no SMS consent recorded"
+        return ""
+
+    @property
+    def can_text(self) -> bool:
+        return not self.cannot_text_reason
 
     def _review(self, status, note=None):
         self.status = status

@@ -6,9 +6,6 @@ import '../app_styles.dart';
 import '../pages/about_us_page.dart';
 import '../pages/mission_vision_page.dart';
 import '../pages/settings_page.dart';
-import '../provider/auth_storage.dart';
-import '../provider/provider_auth_screen.dart';
-import '../provider/provider_business_profile_screen.dart';
 import '../provider/provider_onboarding_screen.dart';
 import 'app_logo.dart';
 import 'pressable.dart';
@@ -41,11 +38,6 @@ class AppDrawer extends StatelessWidget {
             onTap: () => _navigateTo(context, const SettingsPage()),
           ),
           _DrawerItem(
-            icon: Icons.business_center_outlined,
-            label: 'Business Profile',
-            onTap: () => _openBusinessProfile(context),
-          ),
-          _DrawerItem(
             icon: Icons.assignment_outlined,
             label: 'Provider Sign-Up (demo)',
             onTap: () => _navigateTo(context, const ProviderOnboardingScreen()),
@@ -67,14 +59,6 @@ class AppDrawer extends StatelessWidget {
   void _navigateTo(BuildContext context, Widget page) {
     Navigator.of(context).pop();
     Navigator.of(context).push(MaterialPageRoute(builder: (_) => page));
-  }
-
-  // The real, authenticated path (build plan Phase 1A) — goes straight to
-  // the profile if already logged in, otherwise to login/register first.
-  Future<void> _openBusinessProfile(BuildContext context) async {
-    final loggedIn = await AuthStorage.isLoggedIn();
-    if (!context.mounted) return;
-    _navigateTo(context, loggedIn ? const ProviderBusinessProfileScreen() : const ProviderAuthScreen());
   }
 }
 

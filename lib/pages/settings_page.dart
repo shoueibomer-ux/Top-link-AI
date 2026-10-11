@@ -5,7 +5,6 @@ import '../app_styles.dart';
 import '../onboarding/onboarding_screen.dart';
 import '../provider/auth_storage.dart';
 import '../widgets/app_drawer.dart';
-import 'account_page.dart';
 
 const _appVersion = '1.0.0';
 
@@ -99,17 +98,6 @@ class _SettingsBodyState extends State<SettingsBody> {
     return ListView(
       padding: const EdgeInsets.symmetric(vertical: 12),
       children: [
-        const _SectionHeader('Account'),
-        _SettingsCard(
-          children: [
-            _SettingsTile(
-              icon: Icons.person_outline,
-              title: 'Account',
-              subtitle: 'Edit profile and email',
-              onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AccountPage())),
-            ),
-          ],
-        ),
         const _SectionHeader('Preferences'),
         _SettingsCard(
           children: [
@@ -225,7 +213,6 @@ class _SettingsTile extends StatelessWidget {
   const _SettingsTile({
     required this.icon,
     required this.title,
-    this.subtitle,
     this.trailingText,
     this.showChevron = true,
     required this.onTap,
@@ -233,7 +220,6 @@ class _SettingsTile extends StatelessWidget {
 
   final IconData icon;
   final String title;
-  final String? subtitle;
   final String? trailingText;
   final bool showChevron;
   final VoidCallback onTap;
@@ -244,9 +230,6 @@ class _SettingsTile extends StatelessWidget {
       contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
       leading: Icon(icon, color: AppColors.navy),
       title: Text(title, style: const TextStyle(color: AppColors.navy, fontWeight: FontWeight.w500)),
-      subtitle: subtitle != null
-          ? Text(subtitle!, style: TextStyle(color: AppColors.muted, fontSize: 13))
-          : null,
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [

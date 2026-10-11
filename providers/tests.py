@@ -3,6 +3,7 @@ from unittest.mock import patch
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.test import TestCase, override_settings
+from rest_framework_simplejwt.tokens import RefreshToken
 
 from accounts.models import UserProfile, UserRole
 from catalog.models import Service
@@ -30,6 +31,7 @@ GOOD_PROFILE = {
     "categories": ["plumbing", "hvac"],
     "cities": ["Edmonton", "Calgary"],
     "bio": "Family-run since 2005.",
+    "sms_consent": True,
 }
 
 
@@ -296,6 +298,34 @@ class RegisterAndEditProfileTests(ProviderApiCase):
         response = self.post_profile(headers, cities=cities)
         self.assertEqual(response.json()["cities"], ["Edmonton", "Calgary", "Fort McMurray", "Red Deer"])
 
+    def test_registering_without_the_sms_consent_is_refused(self):
+        headers = self.authed()
+        for payload in ({"sms_consent": False}, {"sms_consent": None}):
+            response = self.post_profile(headers, **payload)
+            self.assertEqual(response.status_code, 400, payload)
+            self.assertIn("sms_consent", response.json())
+        body = {k: v for k, v in GOOD_PROFILE.items() if k != "sms_consent"}
+        response = self.client.post(PROFILE, body, content_type="application/json", **headers)
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(ProviderProfile.objects.exists())
+
+    def test_registering_with_the_consent_records_when_it_was_given(self):
+        profile_response = self.post_profile(self.authed())
+        self.assertEqual(profile_response.status_code, 201)
+        profile = ProviderProfile.objects.get()
+        self.assertIsNotNone(profile.sms_consent_at)
+        self.assertFalse(profile.sms_opt_out)
+        self.assertNotIn("sms_consent", profile_response.json())  # write-only
+
+    def test_editing_the_profile_cannot_change_the_consent(self):
+        headers = self.authed()
+        self.post_profile(headers)
+        given = ProviderProfile.objects.get().sms_consent_at
+        self.assertEqual(self.patch_profile(headers, sms_consent=False, bio="New bio").status_code, 200)
+        profile = ProviderProfile.objects.get()
+        self.assertEqual(profile.sms_consent_at, given)
+        self.assertEqual(profile.bio, "New bio")
+
     def test_you_cannot_register_twice(self):
         headers = self.authed()
         self.post_profile(headers)
@@ -360,11 +390,8 @@ class RegisterAndEditProfileTests(ProviderApiCase):
 
         customer = User.objects.create_user(username="c@example.com", email="c@example.com", password="x-pass-123")
         UserProfile.objects.create(user=customer, role=UserRole.CUSTOMER)
-        login = self.client.post(
-            "/api/accounts/login/", {"email": "c@example.com", "password": "x-pass-123"},
-            content_type="application/json", **KEY,
-        )
-        customer_headers = {**KEY, "HTTP_AUTHORIZATION": f"Bearer {login.json()['access']}"}
+        token = RefreshToken.for_user(customer).access_token
+        customer_headers = {**KEY, "HTTP_AUTHORIZATION": f"Bearer {token}"}
         self.assertEqual(self.client.get(PROFILE, **customer_headers).status_code, 403)
         self.assertEqual(self.post_profile(customer_headers).status_code, 403)
 

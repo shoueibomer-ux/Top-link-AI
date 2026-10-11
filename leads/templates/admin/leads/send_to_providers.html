@@ -39,7 +39,7 @@
                   <input type="checkbox" name="providers" value="{{ c.provider.pk }}" class="pick"
                          {% if c.reason or c.already_offered %}disabled{% endif %}>
                 </td>
-                <td><a href="{% url 'admin:leads_provider_change' c.provider.pk %}">{{ c.provider.business_name }}</a></td>
+                <td><a href="{% url 'admin:providers_providerprofile_change' c.provider.pk %}">{{ c.provider.business_name }}</a></td>
                 <td>{{ c.provider.contact_name }}</td>
                 <td>{{ c.provider.phone }}</td>
                 <td>{{ c.accepted }}</td>

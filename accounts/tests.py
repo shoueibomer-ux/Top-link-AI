@@ -16,19 +16,13 @@ _PASSWORD = "S3cure-Passphrase-2026"
 
 @override_settings(
     API_KEY=TEST_API_KEY,
-    # Django's real password hasher is deliberately slow (authenticate()
-    # hashes the submitted password even on a wrong guess, to avoid a
-    # timing leak) — slow enough that 5-6 sequential login attempts can
-    # cross django-ratelimit's window boundary mid-test (its windows are
-    # time-jittered per key) and silently reset the counter, making these
-    # tests flaky through no fault of the rate-limiting logic itself. A
-    # fast hasher is the standard fix for exactly this in Django tests.
+    # A fast hasher keeps the test users cheap to create.
     PASSWORD_HASHERS=["django.contrib.auth.hashers.MD5PasswordHasher"],
 )
 class AuthRateLimitTests(TestCase):
-    """Security audit finding H2: /register/, /login/, and /token/refresh/
-    previously had no rate limiting at all — unlimited password-guessing
-    against a real account, and unlimited automated account creation."""
+    """Security audit finding H2: /token/refresh/ previously had no rate
+    limiting at all. (Email/password register and login no longer exist:
+    providers sign in with Google.)"""
 
     def setUp(self):
         self.headers = {"HTTP_X_API_KEY": TEST_API_KEY}
@@ -49,22 +43,6 @@ class AuthRateLimitTests(TestCase):
         UserProfile.objects.create(user=user, role=role, full_name="Test User")
         return user
 
-    def _register(self, email):
-        return self.client.post(
-            "/api/accounts/register/",
-            {"email": email, "password": _PASSWORD, "role": UserRole.CUSTOMER},
-            content_type="application/json",
-            **self.headers,
-        )
-
-    def _login(self, email, password=_PASSWORD):
-        return self.client.post(
-            "/api/accounts/login/",
-            {"email": email, "password": password},
-            content_type="application/json",
-            **self.headers,
-        )
-
     def _refresh(self, token):
         return self.client.post(
             "/api/accounts/token/refresh/",
@@ -72,52 +50,6 @@ class AuthRateLimitTests(TestCase):
             content_type="application/json",
             **self.headers,
         )
-
-    # ---- login: capped per targeted account ----
-
-    def test_login_is_rate_limited_per_account_after_five_attempts(self):
-        self._make_user("victim@example.com")
-
-        for _ in range(5):
-            response = self._login("victim@example.com", password="wrong-guess")
-            self.assertEqual(response.status_code, 401)  # ordinary invalid-credentials response
-
-        sixth = self._login("victim@example.com", password="wrong-guess")
-        self.assertEqual(sixth.status_code, 429)
-
-    def test_login_rate_limit_is_scoped_per_account_not_global(self):
-        self._make_user("target@example.com")
-        self._make_user("bystander@example.com")
-
-        for _ in range(5):
-            self._login("target@example.com", password="wrong-guess")
-        self.assertEqual(self._login("target@example.com", password="wrong-guess").status_code, 429)
-
-        # A different account, hit from the same source, is unaffected —
-        # this is the whole point of keying on the submitted email rather
-        # than only the IP.
-        response = self._login("bystander@example.com", password="wrong-guess")
-        self.assertEqual(response.status_code, 401)
-
-    def test_a_correct_login_still_succeeds_under_the_cap(self):
-        self._make_user("real-user@example.com")
-        response = self._login("real-user@example.com")
-        self.assertEqual(response.status_code, 200)
-        self.assertIn("access", response.json())
-        self.assertIn("refresh", response.json())
-
-    # ---- register: capped per source ----
-
-    def test_register_is_rate_limited_per_source_after_five_attempts(self):
-        for i in range(5):
-            response = self._register(f"user{i}@example.com")
-            self.assertEqual(response.status_code, 201)
-
-        sixth = self._register("user5@example.com")
-        self.assertEqual(sixth.status_code, 429)
-        # And the 6th attempt's email must not have been created either —
-        # a 429 has to mean "rejected", not "rejected but still applied".
-        self.assertFalse(User.objects.filter(email="user5@example.com").exists())
 
     # ---- token refresh: capped per source ----
 
@@ -166,7 +98,7 @@ class AccountEditTests(TestCase):
         self.user.profile.refresh_from_db()
         self.assertEqual(self.user.profile.full_name, "Olive Q. Owner")
 
-    def test_an_email_change_updates_the_username_too_so_login_keeps_working(self):
+    def test_an_email_change_updates_the_username_too(self):
         response = self._patch({"email": "new-address@example.com"})
 
         self.assertEqual(response.status_code, 200)
@@ -174,15 +106,6 @@ class AccountEditTests(TestCase):
         self.user.refresh_from_db()
         self.assertEqual(self.user.email, "new-address@example.com")
         self.assertEqual(self.user.username, "new-address@example.com")
-
-        login = lambda email: self.client.post(  # noqa: E731
-            "/api/accounts/login/", {"email": email, "password": _PASSWORD},
-            content_type="application/json", **self.headers,
-        )
-        self.assertEqual(login("new-address@example.com").status_code, 200)
-        old = login("owner@example.com")  # the old address no longer signs in
-        self.assertEqual(old.status_code, 400)  # unknown email -> "Invalid email or password."
-        self.assertNotIn("access", old.json())
 
     def test_changing_only_the_name_leaves_the_email_alone(self):
         self._patch({"full_name": "Someone Else"})

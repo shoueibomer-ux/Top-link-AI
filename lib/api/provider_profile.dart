@@ -24,6 +24,7 @@ class ProviderProfileData {
     required this.categories,
     required this.cities,
     this.bio = '',
+    this.smsConsent = false,
     this.status = ProviderStatus.pending,
     this.reviewNote = '',
   });
@@ -47,6 +48,10 @@ class ProviderProfileData {
   final List<String> categories;
   final List<String> cities;
   final String bio;
+
+  /// The "you may text me about client requests" checkbox. Only sent when
+  /// registering; the server never returns it and ignores it on edits.
+  final bool smsConsent;
   final ProviderStatus status;
   final String reviewNote;
 
@@ -58,6 +63,7 @@ class ProviderProfileData {
         'categories': categories,
         'cities': cities,
         'bio': bio,
+        if (smsConsent) 'sms_consent': true,
       };
 }
 
