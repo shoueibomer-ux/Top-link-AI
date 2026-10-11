@@ -1,5 +1,5 @@
 """
-Top Link AI — Matching Engine (prototype)
+Tabmatch — Matching Engine (prototype)
 
 Core idea: two profile types (BUSINESS / INDIVIDUAL) submit a request,
 the engine searches the profile database and returns ranked matches

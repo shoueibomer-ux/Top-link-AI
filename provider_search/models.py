@@ -90,7 +90,7 @@ class ServiceRequest(models.Model):
     real one.
 
     `phone` and `consent_given` back the explicit consent the request form
-    collects: "I consent to Top-Link AI sharing the details of this request,
+    collects: "I consent to Tabmatch sharing the details of this request,
     including my phone number, with service providers who may be able to
     help." (see ServiceRequestCreateView) — consent_given is only ever set
     True by that checkbox, never defaulted or inferred.

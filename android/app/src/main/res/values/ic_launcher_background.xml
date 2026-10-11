@@ -1,5 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <!-- The roundel's navy (AppColors.navy) — the adaptive icon's background layer. -->
-    <color name="ic_launcher_background">#0B1F3A</color>
-</resources>

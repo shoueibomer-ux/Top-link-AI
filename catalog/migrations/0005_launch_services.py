@@ -2,7 +2,7 @@ from importlib import import_module
 
 from django.db import migrations
 
-# The 9 services Top-Link AI launches with. Every one was already seeded by
+# The 9 services Tabmatch launches with. Every one was already seeded by
 # 0002, so on an existing database this only flips is_launched; the
 # get_or_create is the safety net for a database where one was deleted. It
 # never overwrites an existing row's admin edits, and never reactivates a

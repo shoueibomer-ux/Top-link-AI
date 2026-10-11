@@ -278,7 +278,7 @@ class MessageTests(TestCase):
 
     def test_the_first_text_identifies_us_summarises_the_request_and_asks_for_yes_or_no(self):
         text = services.offer_message(self.offer)
-        self.assertTrue(text.startswith("Top-Link AI"))
+        self.assertTrue(text.startswith("Tabmatch"))
         self.assertIn("Plumbing", text)
         self.assertIn("Edmonton", text)
         self.assertIn("needed today", text)
@@ -450,7 +450,7 @@ class ManualModeTests(AdminFlowBase):
         offer = LeadOffer.objects.get()
         page = self.client.get(self.tracker_url)
         self.assertContains(page, "Copy message")
-        self.assertContains(page, "Top-Link AI: new client request.")
+        self.assertContains(page, "Tabmatch: new client request.")
         self.assertContains(page, f"YES {offer.ref}")
         self.assertContains(page, "sms:+17805550101?")
         self.assertContains(page, "tel:+17805550101")
@@ -561,7 +561,7 @@ class SmsModeTests(AdminFlowBase):
         self.assertEqual({m["to"] for m in self.sent}, {"+17805550101", "+17805550102"})
         for message in self.sent:
             self.assertEqual(message["from_"], "+18005550000")
-            self.assertIn("Top-Link AI", message["body"])
+            self.assertIn("Tabmatch", message["body"])
             self.assertNotIn(CLIENT_PHONE, message["body"])
         offers = LeadOffer.objects.all()
         self.assertEqual({o.status for o in offers}, {LeadOffer.STATUS_SENT})

@@ -227,12 +227,12 @@ void main() {
     test('the waitlist consent is exactly the agreed wording', () {
       expect(
         kWaitlistConsentText,
-        'I consent to Top-Link AI saving this request and sharing it, including my phone number, '
+        'I consent to Tabmatch saving this request and sharing it, including my phone number, '
         'with suitable service providers once this service is available in my area.',
       );
       expect(
         kServiceRequestConsentText,
-        'I consent to Top-Link AI sharing the details of this request, including my phone number, '
+        'I consent to Tabmatch sharing the details of this request, including my phone number, '
         'with service providers who may be able to help.',
       );
     });

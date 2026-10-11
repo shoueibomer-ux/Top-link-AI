@@ -146,7 +146,7 @@ def build_daily_summary(now=None) -> str:
     waitlist_line = ", ".join(f"{names.get(row['category'], row['category'])} ({row['n']})" for row in top_waitlist)
 
     lines = [
-        f"Top-Link AI daily summary, last 24 hours to {now:%Y-%m-%d %H:%M} UTC",
+        f"Tabmatch daily summary, last 24 hours to {now:%Y-%m-%d %H:%M} UTC",
         "",
         f"New requests:          {new_requests.count()} ({waitlisted} waitlisted)",
         f"Offers sent:           {sent_count}",
@@ -166,7 +166,7 @@ def send_daily_summary_if_due(now=None) -> bool:
     today = now.date()
     if now.hour < SUMMARY_HOUR_UTC or DailySummaryLog.objects.filter(date=today).exists():
         return False
-    if not notify_admin(f"Top-Link AI daily summary {today}", build_daily_summary(now)):
+    if not notify_admin(f"Tabmatch daily summary {today}", build_daily_summary(now)):
         return False
     DailySummaryLog.objects.get_or_create(date=today)
     return True

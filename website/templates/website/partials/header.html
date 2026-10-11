@@ -1,9 +1,9 @@
 {% load static %}
 <header class="site-header">
   <div class="wrap header-row">
-    <a class="brand" href="{% url 'website:home' %}" aria-label="Top-Link AI home">
-      <span class="brand-mark"><img src="{% static 'website/images/logo-roundel.svg' %}" alt="" width="36" height="36"></span>
-      <span class="brand-text"><strong>Top-Link AI</strong><small>{{ site.tagline }}</small></span>
+    <a class="brand" href="{% url 'website:home' %}" aria-label="Tabmatch home">
+      <span class="brand-mark"><img src="{% static 'website/images/logo-mark.svg' %}" alt="" width="36" height="36"></span>
+      <span class="brand-text"><strong class="wordmark"><span class="wm-tab">tab</span><span class="wm-match">match</span></strong><small>{{ site.tagline }}</small></span>
     </a>
     <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="site-nav" data-nav-toggle>
       <span class="sr">Menu</span><span class="bars" aria-hidden="true"></span>
