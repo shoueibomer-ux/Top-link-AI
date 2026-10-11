@@ -47,7 +47,7 @@ class RoleChoiceScreen extends StatelessWidget {
               const SizedBox(height: 16),
               _RoleCard(
                 key: const Key('role-provider'),
-                icon: Icons.handyman_outlined,
+                icon: Icons.business_center_outlined,
                 title: "I'm a service provider",
                 subtitle: 'Register your business and get matched with clients in your city.',
                 filled: true,

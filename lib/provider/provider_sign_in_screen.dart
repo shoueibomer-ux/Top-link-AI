@@ -78,7 +78,7 @@ class _ProviderSignInScreenState extends State<ProviderSignInScreen> {
                 width: 64,
                 height: 64,
                 decoration: const BoxDecoration(color: AppColors.turquoise, shape: BoxShape.circle),
-                child: const Icon(Icons.handyman_outlined, color: AppColors.white, size: 32),
+                child: const Icon(Icons.business_center_outlined, color: AppColors.white, size: 32),
               ),
               const SizedBox(height: 24),
               const Text(
