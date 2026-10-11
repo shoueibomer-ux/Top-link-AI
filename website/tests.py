@@ -19,7 +19,7 @@ class PageTests(TestCase):
     def test_home_has_required_copy_and_buttons(self):
         html = self.client.get("/").content.decode()
         self.assertIn(
-            "Top-Link AI connects customers with trusted local service providers including "
+            "Tabmatch connects customers with trusted local service providers including "
             "electricians, plumbers, cleaners, contractors, and other professionals.",
             html,
         )
@@ -46,7 +46,7 @@ class PageTests(TestCase):
                 self.assertIn(page["description"], html)
                 self.assertIn('rel="canonical"', html)
                 self.assertIn("application/ld+json", html)
-                self.assertIn("How Top-Link AI works", html)
+                self.assertIn("How Tabmatch works", html)
                 self.assertIn("Request this service", html)
                 self.assertLessEqual(len(page["title"]), 60)
                 self.assertLessEqual(len(page["description"]), 160)
@@ -66,9 +66,9 @@ class PageTests(TestCase):
         from django.contrib.staticfiles import finders
 
         html = self.client.get("/").content.decode()
-        self.assertEqual(html.count("website/images/logo-roundel.svg"), 2)  # header + footer
+        self.assertEqual(html.count("website/images/logo-mark.svg"), 2)  # header + footer
         self.assertNotIn(">TA<", html)
-        for name in ("logo-roundel.svg", "favicon.svg", "favicon-32.png", "favicon-48.png",
+        for name in ("logo-mark.svg", "favicon.svg", "favicon-32.png", "favicon-48.png",
                      "apple-touch-icon.png", "og-image.png"):
             self.assertIsNotNone(finders.find(f"website/images/{name}"), name)
         self.assertIn('rel="apple-touch-icon" sizes="180x180"', html)
@@ -275,3 +275,68 @@ class OrphanFixTests(TestCase):
         response = self.client.get("/services/electrical/")
         self.assertEqual(response.status_code, 301)
         self.assertEqual(response["Location"], "/electrician-edmonton/")
+
+
+class TabmatchBrandTests(TestCase):
+    """The site is Tabmatch everywhere a visitor, a search engine or an admin can see a name."""
+
+    PAGES = [
+        "/", "/sectors/", "/providers/", "/how-it-works/", "/get-the-app/", "/contact/", "/privacy/", "/terms/",
+        "/services/landscaping/", "/this-page-does-not-exist/",
+    ]
+
+    def test_no_page_still_carries_the_old_name_and_every_title_says_tabmatch(self):
+        import re
+
+        for path in self.PAGES:
+            with self.subTest(path=path):
+                html = self.client.get(path).content.decode()
+                self.assertNotRegex(html, r"(?i)top[ -]?link|toplink", path)
+                title = re.search(r"<title>(.*?)</title>", html, re.S).group(1)
+                self.assertIn("Tabmatch", title)
+                self.assertIn('property="og:site_name" content="Tabmatch"', html)
+
+    def test_the_header_and_footer_show_the_two_colour_wordmark_and_the_new_mark(self):
+        html = self.client.get("/").content.decode()
+        wordmark = '<strong class="wordmark"><span class="wm-tab">tab</span><span class="wm-match">match</span></strong>'
+        self.assertEqual(html.count(wordmark), 2)  # header + footer
+        self.assertIn('aria-label="Tabmatch home"', html)
+        self.assertIn("website/images/logo-mark.svg", html)
+
+    def test_the_wordmark_colours_are_turquoise_match_and_white_or_navy_tab(self):
+        from django.contrib.staticfiles import finders
+
+        css = open(finders.find("website/css/site.css"), encoding="utf-8").read()
+        self.assertIn(".wordmark .wm-match { color: #19C3B1; }", css)
+        self.assertIn(".wordmark .wm-tab { color: #fff; }", css)
+        self.assertIn(".on-light .wordmark .wm-tab { color: #0B1F3A; }", css)
+
+    def test_the_logo_and_favicon_are_the_supplied_icon(self):
+        from django.contrib.staticfiles import finders
+
+        for name in ("logo-mark.svg", "favicon.svg"):
+            svg = open(finders.find(f"website/images/{name}"), encoding="utf-8").read()
+            self.assertIn('rx="230" fill="#0B1F3A"', svg, name)
+            self.assertIn('stroke="#19C3B1"', svg, name)
+            self.assertIn('aria-label="Tabmatch"', svg, name)
+            self.assertNotIn("Top-Link", svg, name)
+
+    def test_the_site_name_and_description_use_the_new_name(self):
+        from . import config
+
+        self.assertEqual(config.SITE_NAME, "Tabmatch")
+        html = self.client.get("/").content.decode()
+        self.assertIn('name="description" content="Tabmatch connects customers', html)
+
+    def test_the_django_admin_is_branded(self):
+        from django.contrib import admin
+        from django.contrib.auth import get_user_model
+
+        self.assertEqual(admin.site.site_header, "Tabmatch administration")
+        self.assertEqual(admin.site.site_title, "Tabmatch admin")
+        user = get_user_model().objects.create_superuser("boss", "boss@example.com", "pw-for-tests-123")
+        self.client.force_login(user)
+        page = self.client.get("/admin/").content.decode()
+        self.assertIn("Tabmatch administration", page)
+        self.assertIn("<title>Site administration | Tabmatch admin</title>", page)
+        self.assertNotRegex(page, r"(?i)top[ -]?link")

@@ -1,7 +1,24 @@
-# Top-Link AI
+# Tabmatch
 
 A Flutter app (customers and providers) backed by a Django REST API. The
 backend also serves the marketing website.
+
+## Brand
+
+The product is **Tabmatch** (navy `#0B1F3A`, turquoise `#19C3B1`). The wordmark is
+lowercase: "tab" in white (navy on a light background) and "match" in turquoise.
+`assets/brand/tabmatch_icon.svg` is the source icon; `tabmatch_icon_foreground.svg`
+is the same shapes without the navy tile, for Android adaptive icons.
+
+```bash
+python tool/make_brand_assets.py      # PNGs in assets/brand + the website's favicon/social image (needs Pillow)
+dart run flutter_launcher_icons       # Android, iOS and web launcher icons
+dart run flutter_native_splash:create # Android/iOS/web splash screens
+```
+
+The package / bundle id (`com.toplinkai.app`), the Dart package name, the Render
+service and database names and the `TOPLINKAI_*` environment variable still use
+the old name on purpose.
 
 ## Running locally
 

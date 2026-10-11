@@ -9,13 +9,13 @@ import 'phone_validation.dart';
 /// provider_search.views.ServiceRequestCreateView. Never defaulted or
 /// pre-checked.
 const kServiceRequestConsentText =
-    'I consent to Top-Link AI sharing the details of this request, including '
+    'I consent to Tabmatch sharing the details of this request, including '
     'my phone number, with service providers who may be able to help.';
 
 /// Shown instead of [kServiceRequestConsentText] for a service that isn't
 /// open yet — the request is saved and only shared once it is.
 const kWaitlistConsentText =
-    'I consent to Top-Link AI saving this request and sharing it, including '
+    'I consent to Tabmatch saving this request and sharing it, including '
     'my phone number, with suitable service providers once this service is '
     'available in my area.';
 

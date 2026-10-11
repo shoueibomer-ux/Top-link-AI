@@ -150,7 +150,7 @@ class _ProviderGateState extends State<ProviderGate> {
       case _Stage.error:
         return Scaffold(
           backgroundColor: AppColors.lightBackground,
-          appBar: AppBar(title: const Text('Top-Link AI')),
+          appBar: AppBar(title: const Text('Tabmatch')),
           body: Padding(
             padding: const EdgeInsets.all(24),
             child: Column(

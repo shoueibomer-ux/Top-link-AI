@@ -38,7 +38,7 @@ def offer_message(offer: LeadOffer) -> str:
     contain contact details) — those come after a YES."""
     request = offer.service_request
     return (
-        f"Top-Link AI: new client request. {service_name(request)} in {request.city}, "
+        f"Tabmatch: new client request. {service_name(request)} in {request.city}, "
         f"{urgency_label(request)}. "
         f"Reply YES {offer.ref} to get the client's contact details, or NO {offer.ref} to pass. "
         "Reply STOP to opt out."
@@ -49,7 +49,7 @@ def followup_message(offer: LeadOffer) -> str:
     """Sent only after the provider says YES."""
     request = offer.service_request
     parts = [
-        f"Top-Link AI: thanks! Client phone: {request.phone}.",
+        f"Tabmatch: thanks! Client phone: {request.phone}.",
         f"Request: {service_name(request)} in {request.city}, {urgency_label(request)}.",
     ]
     if request.problem_description.strip():
@@ -61,7 +61,7 @@ def followup_message(offer: LeadOffer) -> str:
 def reminder_message(offer: LeadOffer) -> str:
     request = offer.service_request
     return (
-        f"Top-Link AI reminder: the {service_name(request)} request in {request.city} is still open. "
+        f"Tabmatch reminder: the {service_name(request)} request in {request.city} is still open. "
         f"Reply YES {offer.ref} or NO {offer.ref}. Reply STOP to opt out."
     )
 
@@ -240,7 +240,7 @@ def handle_inbound_sms(from_phone: str, body: str) -> str:
 
     if command is None:
         if awaiting.exists():
-            return "Top-Link AI: please reply YES <number> or NO <number>, or STOP to opt out."
+            return "Tabmatch: please reply YES <number> or NO <number>, or STOP to opt out."
         return ""
 
     verb, ref = command
@@ -251,16 +251,16 @@ def handle_inbound_sms(from_phone: str, body: str) -> str:
     if ref is not None:
         offer = LeadOffer.objects.filter(pk=ref, provider__in=providers).select_related("service_request", "provider").first()
         if offer is None:
-            return f"Top-Link AI: we couldn't find request number {ref}."
+            return f"Tabmatch: we couldn't find request number {ref}."
         if not offer.awaiting_reply:
             return ""  # already answered (or never sent): a repeat changes nothing
     else:
         open_offers = list(awaiting)
         if not open_offers:
-            return "Top-Link AI: you have no open requests right now."
+            return "Tabmatch: you have no open requests right now."
         if len(open_offers) > 1:
             refs = ", ".join(str(o.ref) for o in open_offers)
-            return f"Top-Link AI: you have several open requests ({refs}). Reply YES <number> or NO <number>."
+            return f"Tabmatch: you have several open requests ({refs}). Reply YES <number> or NO <number>."
         offer = open_offers[0]
 
     recorded = offer.record_reply(

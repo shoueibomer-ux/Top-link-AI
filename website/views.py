@@ -36,38 +36,38 @@ def _meta(title: str, description: str, robots: str = "index,follow") -> dict:
 def home(request):
     seo_links = [(slug, page["breadcrumb"]) for slug, page in SEO_PAGES.items()]
     meta = _meta(
-        "Top-Link AI | Trusted Local Service Providers",
-        "Top-Link AI connects customers with trusted local service providers including electricians, plumbers, cleaners, contractors, and other professionals.",
+        "Tabmatch | Trusted Local Service Providers",
+        "Tabmatch connects customers with trusted local service providers including electricians, plumbers, cleaners, contractors, and other professionals.",
     )
     return render(request, "website/home.html", {**_COMMON, **meta, "seo_links": seo_links, "hero_icons": HERO_CLUSTER_HOME})
 
 
 def sectors(request):
     meta = _meta(
-        "All Services and Sectors | Top-Link AI",
-        "Browse every Top-Link AI service: home services, construction and renovation, automotive, business, outdoor, moving and delivery, events and personal services.",
+        "All Services and Sectors | Tabmatch",
+        "Browse every Tabmatch service: home services, construction and renovation, automotive, business, outdoor, moving and delivery, events and personal services.",
     )
     return render(request, "website/sectors.html", {**_COMMON, **meta})
 
 
 def providers(request):
     meta = _meta(
-        "Join Top-Link AI as a Service Provider",
-        "Register your business on Top-Link AI, list your services and categories, and reach local customers. Manage your provider profile from the app.",
+        "Join Tabmatch as a Service Provider",
+        "Register your business on Tabmatch, list your services and categories, and reach local customers. Manage your provider profile from the app.",
     )
     return render(request, "website/providers.html", {**_COMMON, **meta, "provider_features": PROVIDER_FEATURES, "hero_icons": HERO_CLUSTER_PROVIDERS})
 
 
 def how_it_works(request):
     meta = _meta(
-        "How Top-Link AI Works | From Search to Service",
-        "See how Top-Link AI takes you from a Google search to a local provider: choose a service, compare providers, request the job and connect through the app.",
+        "How Tabmatch Works | From Search to Service",
+        "See how Tabmatch takes you from a Google search to a local provider: choose a service, compare providers, request the job and connect through the app.",
     )
     return render(request, "website/how_it_works.html", {**_COMMON, **meta})
 
 
 def get_app(request):
-    meta = _meta("Get the Top-Link AI App", "Get the Top-Link AI app to request services and manage your provider profile.", "noindex,follow")
+    meta = _meta("Get the Tabmatch App", "Get the Tabmatch app to request services and manage your provider profile.", "noindex,follow")
     return render(request, "website/get_app.html", {**meta, "as_provider": request.GET.get("as") == "provider"})
 
 
@@ -131,25 +131,25 @@ def service_detail(request, slug):
     # noindex until each service has unique copy; the 5 dedicated pages are
     # the SEO targets, and thin generated pages shouldn't dilute them.
     meta = _meta(
-        f"{service.name} in {config.CITY} | Top-Link AI",
-        (service.what_we_cover or f"Find {service.name} providers in {config.CITY} with Top-Link AI.")[:155],
+        f"{service.name} in {config.CITY} | Tabmatch",
+        (service.what_we_cover or f"Find {service.name} providers in {config.CITY} with Tabmatch.")[:155],
         "noindex,follow",
     )
     return render(request, "website/service_detail.html", {**_COMMON, **meta, "service": service})
 
 
 def contact(request):
-    meta = _meta("Contact Top-Link AI", "Get in touch with Top-Link AI about the app, your provider profile, or working with us.")
+    meta = _meta("Contact Tabmatch", "Get in touch with Tabmatch about the app, your provider profile, or working with us.")
     return render(request, "website/contact.html", meta)
 
 
 def privacy(request):
-    meta = _meta("Privacy Policy (Draft) | Top-Link AI", "Draft privacy policy describing what Top-Link AI collects and why.", "noindex,follow")
+    meta = _meta("Privacy Policy (Draft) | Tabmatch", "Draft privacy policy describing what Tabmatch collects and why.", "noindex,follow")
     return render(request, "website/privacy.html", meta)
 
 
 def terms(request):
-    meta = _meta("Terms of Service (Draft) | Top-Link AI", "Draft terms of service for Top-Link AI.", "noindex,follow")
+    meta = _meta("Terms of Service (Draft) | Tabmatch", "Draft terms of service for Tabmatch.", "noindex,follow")
     return render(request, "website/terms.html", meta)
 
 
@@ -158,7 +158,7 @@ def not_found(request, exception=None):
     paths get JSON so API clients never receive the website's HTML page."""
     if request.path.startswith("/api/"):
         return JsonResponse({"detail": "Not found."}, status=404)
-    meta = _meta("Page not found | Top-Link AI", "The page you were looking for could not be found.", "noindex,follow")
+    meta = _meta("Page not found | Tabmatch", "The page you were looking for could not be found.", "noindex,follow")
     return render(request, "404.html", meta, status=404)
 
 

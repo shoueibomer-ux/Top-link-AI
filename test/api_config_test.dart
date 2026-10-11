@@ -99,7 +99,7 @@ void main() {
 
       expect(find.text('This build is misconfigured'), findsOneWidget);
       expect(find.text(message), findsOneWidget);
-      expect(find.text('Unlock Top-Link AI'), findsNothing); // no paywall behind it
+      expect(find.text('Unlock Tabmatch'), findsNothing); // no paywall behind it
     });
   });
 }

@@ -20,16 +20,16 @@ void main() {
   // notification/history lookups all see it without each needing their own
   // loading state. Leaves the static fallback in place until this resolves.
   loadCatalogFromApi();
-  runApp(const TopLinkApp());
+  runApp(const TabmatchApp());
 }
 
-class TopLinkApp extends StatelessWidget {
-  const TopLinkApp({super.key});
+class TabmatchApp extends StatelessWidget {
+  const TabmatchApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Top-Link AI',
+      title: 'Tabmatch',
       theme: ThemeData(
         useMaterial3: true,
         scaffoldBackgroundColor: AppColors.lightBackground,
@@ -60,7 +60,7 @@ class ConfigErrorApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Top-Link AI',
+      title: 'Tabmatch',
       home: Scaffold(
         backgroundColor: AppColors.lightBackground,
         body: SafeArea(

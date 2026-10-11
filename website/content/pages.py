@@ -6,11 +6,11 @@ The last item of every tuple is a Lucide icon name (see website/icons.py).
 # (name, text, icon)
 JOURNEY_STEPS = [
     ("Search", "You look for a local service on Google.", "search"),
-    ("Top-Link AI", "You land on the Top-Link AI website.", "monitor"),
+    ("Tabmatch", "You land on the Tabmatch website.", "monitor"),
     ("Choose", "Pick the service category you need.", "layout-grid"),
     ("Select", "Compare providers and pick the right one.", "users"),
     ("Request", "Send your service request.", "send"),
-    ("Connect", "Continue the conversation in the Top-Link AI app.", "message-circle"),
+    ("Connect", "Continue the conversation in the Tabmatch app.", "message-circle"),
 ]
 
 # (title, text, icon)
@@ -24,7 +24,7 @@ HOW_IT_WORKS = [
 # (title, description, coming_soon, icon)
 PROVIDER_FEATURES = [
     ("Register as a provider",
-     "Create a business account in the Top-Link AI app as an individual or a business.", False, "users"),
+     "Create a business account in the Tabmatch app as an individual or a business.", False, "users"),
     ("Create your business profile",
      "Add your business name, description, city, service area, team size, languages, equipment and certifications.", False, "clipboard-list"),
     ("Add your services and categories",

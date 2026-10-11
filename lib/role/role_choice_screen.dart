@@ -24,10 +24,10 @@ class RoleChoiceScreen extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const SizedBox(height: 24),
-              const AppLogo(height: 44),
+              const AppLogo(height: 44, onLight: true),
               const SizedBox(height: 32),
               const Text(
-                'Welcome to Top-Link AI',
+                'Welcome to Tabmatch',
                 style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: AppColors.navy),
               ),
               const SizedBox(height: 8),

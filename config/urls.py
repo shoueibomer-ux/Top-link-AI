@@ -10,6 +10,9 @@ from provider_search.views import (
     ServiceRequestListView,
 )
 
+admin.site.site_header = "Tabmatch administration"
+admin.site.site_title = "Tabmatch admin"
+
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/accounts/", include("accounts.urls")),

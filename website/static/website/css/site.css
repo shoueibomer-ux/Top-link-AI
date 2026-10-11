@@ -1,4 +1,4 @@
-/* Top-Link AI marketing site. One small stylesheet, no framework, system fonts. */
+/* Tabmatch marketing site. One small stylesheet, no framework, system fonts. */
 :root {
   --navy: #0B1F3A;
   --turquoise: #19C3B1;
@@ -46,10 +46,14 @@ ul, ol { margin: 0; padding: 0; }
 .site-header { background: var(--navy); color: #fff; position: sticky; top: 0; z-index: 50; }
 .header-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; min-height: 68px; }
 .brand { display: flex; align-items: center; gap: .7rem; color: #fff; text-decoration: none; }
-.brand-mark { display: inline-grid; place-items: center; flex: none; width: 44px; height: 44px; border-radius: 12px; background: #fff; }
+.brand-mark { display: inline-grid; place-items: center; flex: none; width: 44px; height: 44px; border-radius: 12px; background: transparent; }
 .brand-mark img { display: block; width: 36px; height: 36px; }
 .brand-text { display: flex; flex-direction: column; line-height: 1.15; }
 .brand-text strong { font-size: 1.15rem; }
+.wordmark { font-weight: 800; letter-spacing: -.02em; }
+.wordmark .wm-tab { color: #fff; }
+.wordmark .wm-match { color: #19C3B1; }
+.on-light .wordmark .wm-tab { color: #0B1F3A; }
 .brand-text small { font-size: .72rem; color: rgba(255,255,255,.65); }
 .site-nav { display: flex; align-items: center; gap: .3rem; }
 .nav-item { position: relative; }
