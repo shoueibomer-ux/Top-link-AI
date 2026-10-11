@@ -61,3 +61,6 @@ db.sqlite3
 .shots/
 .flutter_stdin*
 dump.rdb
+
+# Claude Code / desktop-app local settings (preview server config)
+.claude/
