@@ -16,6 +16,28 @@ class SignInUnavailable implements Exception {
   String toString() => message;
 }
 
+/// What to tell the provider when Google sign-in fails, in words they can act
+/// on (never the raw error code). [GoogleSignInExceptionCode.unknownError] is
+/// what Android reports when the device has no Google account to choose from,
+/// so that is what the message points at.
+String googleSignInFailureMessage(GoogleSignInExceptionCode code) {
+  switch (code) {
+    case GoogleSignInExceptionCode.clientConfigurationError:
+      return 'Google sign-in is not set up correctly in this version of the app. Please contact support.';
+    case GoogleSignInExceptionCode.providerConfigurationError:
+      return 'Google sign-in is not available on this device. Update Google Play services and try again.';
+    case GoogleSignInExceptionCode.uiUnavailable:
+      return 'Google sign-in could not open. Please try again.';
+    case GoogleSignInExceptionCode.userMismatch:
+      return 'That Google account is different from the one already signed in. Sign out first, then try again.';
+    case GoogleSignInExceptionCode.unknownError:
+    case GoogleSignInExceptionCode.canceled:
+    case GoogleSignInExceptionCode.interrupted:
+      return 'Google sign-in did not finish. Make sure a Google account is added to this device '
+          '(Settings > Passwords & accounts), then try again.';
+  }
+}
+
 /// Gets a Google ID token for the backend to verify.
 ///
 /// Real sign-in needs `--dart-define=GOOGLE_SERVER_CLIENT_ID=<the Web OAuth
@@ -55,7 +77,7 @@ class GoogleSignInService {
       if (e.code == GoogleSignInExceptionCode.canceled || e.code == GoogleSignInExceptionCode.interrupted) {
         throw const SignInCancelled();
       }
-      throw SignInUnavailable('Google sign-in failed (${e.code.name}). Try again.');
+      throw SignInUnavailable(googleSignInFailureMessage(e.code));
     }
   }
 
