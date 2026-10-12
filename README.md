@@ -94,6 +94,28 @@ flutter build apk --release --dart-define=API_BASE_URL=https://toplinkai-backend
 flutter run --release --dart-define=API_BASE_URL=https://toplinkai-backend.onrender.com/api --dart-define="API_KEY=$env:TOPLINKAI_PROD_API_KEY"
 ```
 
+### Google sign-in for providers
+
+Provider sign-in needs the Web OAuth client ID (Google Cloud project "tabmatch"):
+the app passes it to Google as `serverClientId`, and the backend only accepts
+ID tokens issued for it (Render env var `GOOGLE_OAUTH_CLIENT_IDS`, the same
+value). It is an identifier, not a secret, but it lives in a git-ignored file
+so each build machine sets its own:
+
+```bash
+cp dart_defines.example.json dart_defines.local.json   # then paste the Web client ID into it
+flutter run --dart-define-from-file=dart_defines.local.json
+flutter build apk --release --dart-define-from-file=dart_defines.local.json   --dart-define=API_BASE_URL=https://toplinkai-backend.onrender.com/api   --dart-define=API_KEY="$TOPLINKAI_PROD_API_KEY"
+```
+
+Without it the sign-in screen says Google sign-in is not set up in this build.
+Google also needs an **Android** OAuth client in the same project for package
+`com.toplinkai.app` and the SHA-1 of the key that signed the build. Each
+signing key has its own SHA-1: the debug key (per machine, from
+`keytool -list -v -alias androiddebugkey -keystore ~/.android/debug.keystore`),
+and later the release key or Google Play's app-signing key. Release builds are
+currently signed with the debug key (see `android/app/build.gradle.kts`).
+
 ## Backend production settings
 
 See `.env.example`. With `DJANGO_DEBUG=False` the backend requires

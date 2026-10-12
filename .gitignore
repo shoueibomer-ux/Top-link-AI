@@ -64,3 +64,6 @@ dump.rdb
 
 # Claude Code / desktop-app local settings (preview server config)
 .claude/
+
+# Your own build-time values (copy dart_defines.example.json to this name)
+dart_defines.local.json
