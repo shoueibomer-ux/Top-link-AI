@@ -16,6 +16,12 @@ class SignInUnavailable implements Exception {
   String toString() => message;
 }
 
+/// Whether the dev-only fake sign-in is on: only in a debug build that was
+/// given a fake email. Profile and release builds (where kDebugMode is false)
+/// can never use it, whatever they were built with.
+bool fakeGoogleSignInEnabled({required bool isDebug, required String fakeEmail}) =>
+    isDebug && fakeEmail.isNotEmpty;
+
 /// What to tell the provider when Google sign-in fails, in words they can act
 /// on (never the raw error code). [GoogleSignInExceptionCode.unknownError] is
 /// what Android reports when the device has no Google account to choose from,
@@ -52,7 +58,7 @@ class GoogleSignInService {
   static const _fakeEmail = String.fromEnvironment('DEV_FAKE_GOOGLE_EMAIL');
   static const _serverClientId = String.fromEnvironment('GOOGLE_SERVER_CLIENT_ID');
 
-  static bool get usesFakeSignIn => kDebugMode && _fakeEmail.isNotEmpty;
+  static bool get usesFakeSignIn => fakeGoogleSignInEnabled(isDebug: kDebugMode, fakeEmail: _fakeEmail);
 
   static bool _initialized = false;
 

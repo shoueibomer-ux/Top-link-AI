@@ -1,6 +1,12 @@
+import os
+import re
+import subprocess
+import sys
+from pathlib import Path
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
+from django.core import checks
 from django.core.cache import cache
 from django.test import TestCase, override_settings
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -231,6 +237,71 @@ class DevFakeSignInTests(TestCase):
         for flag, debug in ((True, True), (False, True), (False, False)):
             with override_settings(GOOGLE_DEV_FAKE_AUTH=flag, DEBUG=debug):
                 self.assertEqual(check_dev_fake_auth(), [], (flag, debug))
+
+
+class FakeSignInNeverInProductionTests(TestCase):
+    """The fake sign-in lets anyone become any provider by typing an email. It
+    is for local development only: these prove the production server, which
+    runs with DEBUG off, can never have it on."""
+
+    ROOT = Path(__file__).resolve().parent.parent
+
+    def manage_check(self, **env):
+        """Runs `manage.py check` the way a production process would start."""
+        clean = {k: v for k, v in os.environ.items() if k not in ("DJANGO_DEBUG", "GOOGLE_DEV_FAKE_AUTH", "DATABASE_URL")}
+        production = {
+            "DJANGO_DEBUG": "False", "DJANGO_SECRET_KEY": "x" * 60, "API_KEY": "prod-like-key",
+            "DATABASE_URL": "postgres://nobody:nothing@localhost:5432/never_connected", **env,
+        }
+        # Only this app's checks: they need no database, so nothing is connected to.
+        return subprocess.run(
+            [sys.executable, "manage.py", "check", "--tag", "providers"], cwd=self.ROOT, env={**clean, **production},
+            capture_output=True, text=True, timeout=120,
+        )
+
+    def test_a_production_start_with_the_fake_login_on_is_refused(self):
+        result = self.manage_check(GOOGLE_DEV_FAKE_AUTH="True")
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("providers.E001", result.stdout + result.stderr)
+
+    def test_a_production_start_without_it_is_fine_and_the_flag_defaults_off(self):
+        result = self.manage_check()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        probe = subprocess.run(
+            [sys.executable, "-c",
+             "import os, django; os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings'); django.setup();"
+             "from django.conf import settings; print(settings.DEBUG, settings.GOOGLE_DEV_FAKE_AUTH)"],
+            cwd=self.ROOT, capture_output=True, text=True, timeout=120,
+            env={**{k: v for k, v in os.environ.items() if k not in ("DJANGO_DEBUG", "GOOGLE_DEV_FAKE_AUTH", "DATABASE_URL")},
+                 "DJANGO_DEBUG": "False", "DJANGO_SECRET_KEY": "x" * 60, "API_KEY": "prod-like-key",
+                 "DATABASE_URL": "postgres://nobody:nothing@localhost:5432/never_connected"},
+        )
+        self.assertEqual(probe.stdout.strip(), "False False", probe.stdout + probe.stderr)
+
+    def test_the_startup_check_is_actually_registered_with_django(self):
+        with override_settings(GOOGLE_DEV_FAKE_AUTH=True, DEBUG=False):
+            ids = [message.id for message in checks.run_checks()]
+        self.assertIn("providers.E001", ids)
+
+    @override_settings(GOOGLE_DEV_FAKE_AUTH=True, DEBUG=False, GOOGLE_OAUTH_CLIENT_IDS=[CLIENT_ID], API_KEY=API_KEY)
+    def test_with_debug_off_a_fake_token_goes_to_real_google_verification_and_fails(self):
+        cache.clear()
+        with patch("providers.google_auth.id_token.verify_oauth2_token", side_effect=ValueError("not a Google token")) as verify:
+            response = self.client.post(
+                SIGN_IN, {"id_token": "dev-fake:anyone@example.com"}, content_type="application/json", **KEY
+            )
+        self.assertEqual(response.status_code, 401)
+        verify.assert_called_once()
+        self.assertEqual(User.objects.count(), 0)
+
+    def test_render_never_sets_the_fake_login(self):
+        for name in ("render.yaml", ".env.example"):
+            path = self.ROOT / name
+            if not path.exists():
+                continue
+            text = path.read_text(encoding="utf-8")
+            self.assertIsNone(re.search(r"^\s*-\s*key:\s*GOOGLE_DEV_FAKE_AUTH", text, re.M), name)
+            self.assertIsNone(re.search(r"^\s*GOOGLE_DEV_FAKE_AUTH\s*=\s*(true|1|yes|on)", text, re.M | re.I), name)
 
 
 # ---------------------------------------------------------------------------
