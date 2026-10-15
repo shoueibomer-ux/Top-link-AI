@@ -90,10 +90,15 @@ class PageTests(TestCase):
         self.assertEqual(png_size("og-image.png"), (1200, 630))
         self.assertEqual(png_size("apple-touch-icon.png"), (180, 180))
 
-    def test_header_hides_wordmark_text_on_small_screens(self):
+    def test_header_keeps_the_wordmark_on_small_screens_just_smaller(self):
         css = open(__import__("django.contrib.staticfiles.finders", fromlist=["find"]).find("website/css/site.css"), encoding="utf-8").read()
-        self.assertIn("max-width: 559px", css)
-        self.assertIn(".site-header .brand-text { display: none; }", css)
+        start = css.index("@media (max-width: 559px)")
+        end = css.find("@media", start + 10)  # the block runs to the next media query, or the end of the file
+        block = css[start:end if end != -1 else None]
+        self.assertIn(".site-header .brand-text strong { font-size: 20px; }", block)
+        self.assertIn("width: 28px; height: 28px;", block)
+        self.assertIn(".site-header .brand { gap: 8px; }", block)
+        self.assertNotIn("display: none", block)  # the name is never hidden
 
     def test_unknown_service_404(self):
         self.assertEqual(self.client.get("/services/does-not-exist/").status_code, 404)
@@ -298,10 +303,31 @@ class TabmatchBrandTests(TestCase):
 
     def test_the_header_and_footer_show_the_two_colour_wordmark_and_the_new_mark(self):
         html = self.client.get("/").content.decode()
-        wordmark = '<strong class="wordmark"><span class="wm-tab">tab</span><span class="wm-match">match</span></strong>'
+        wordmark = '<strong class="wordmark"><span class="wm-tab">Tab</span><span class="wm-match">match</span></strong>'
         self.assertEqual(html.count(wordmark), 2)  # header + footer
+        self.assertNotIn('<span class="wm-tab">tab</span>', html)  # a capital T, never the old lowercase
         self.assertIn('aria-label="Tabmatch home"', html)
         self.assertIn("website/images/logo-mark.svg", html)
+
+    def test_the_tagline_is_in_the_footer_only_and_the_header_is_just_the_logo(self):
+        import re
+
+        for path in ("/", "/providers/", "/this-page-does-not-exist/"):
+            html = self.client.get(path).content.decode()
+            header = re.search(r'<header class="site-header">.*?</header>', html, re.S).group(0)
+            self.assertNotIn("AI-Powered Service Matching", header, path)
+            self.assertNotIn("<small", header, path)
+        html = self.client.get("/").content.decode()
+        footer = re.search(r'<footer class="site-footer">.*?</footer>', html, re.S).group(0)
+        self.assertEqual(footer.count("AI-Powered Service Matching"), 1)
+        self.assertIn('<p class="footer-tagline">AI-Powered Service Matching</p>', footer)
+
+    def test_the_header_logo_uses_the_apps_proportions(self):
+        from django.contrib.staticfiles import finders
+
+        css = open(finders.find("website/css/site.css"), encoding="utf-8").read()
+        self.assertIn(".brand { display: flex; align-items: center; gap: 10px;", css)
+        self.assertIn(".brand-text strong { font-size: 26px; }", css)  # 0.72 x the 36px icon, like the app
 
     def test_the_wordmark_colours_are_turquoise_match_and_white_or_navy_tab(self):
         from django.contrib.staticfiles import finders

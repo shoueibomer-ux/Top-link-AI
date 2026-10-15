@@ -25,7 +25,7 @@ void main() {
         (tester.widget<Text>(find.byKey(const Key('wordmark'))).textSpan! as TextSpan).children!;
 
     for (final width in [400.0, 1080.0, 1600.0]) {
-      testWidgets('shows the tm mark and the lowercase "tabmatch" wordmark at ${width.toInt()}px wide',
+      testWidgets('shows the tm mark and the "Tabmatch" wordmark (capital T) at ${width.toInt()}px wide',
           (tester) async {
         await pumpLogo(tester, const AppLogo(), width: width);
 
@@ -34,21 +34,21 @@ void main() {
             .map((image) => (image.image as AssetImage).assetName)
             .toList();
         expect(assetNames, ['assets/brand/tabmatch_icon_192.png']);
-        expect(tester.widget<Text>(find.byKey(const Key('wordmark'))).textSpan!.toPlainText(), 'tabmatch');
+        expect(tester.widget<Text>(find.byKey(const Key('wordmark'))).textSpan!.toPlainText(), 'Tabmatch');
         expect(find.textContaining('Top-Link'), findsNothing);
         expect(find.textContaining('TLA'), findsNothing);
       });
     }
 
-    testWidgets('on a dark background "tab" is white and "match" is turquoise', (tester) async {
+    testWidgets('on a dark background "Tab" is white and "match" is turquoise', (tester) async {
       await pumpLogo(tester, const AppLogo(), background: AppColors.navy);
       final spans = wordmarkSpans(tester).cast<TextSpan>();
-      expect([for (final s in spans) s.text], ['tab', 'match']);
+      expect([for (final s in spans) s.text], ['Tab', 'match']);
       expect(spans[0].style!.color, AppColors.white);
       expect(spans[1].style!.color, const Color(0xFF19C3B1));
     });
 
-    testWidgets('on a light background "tab" is navy (#0B1F3A)', (tester) async {
+    testWidgets('on a light background "Tab" is navy (#0B1F3A)', (tester) async {
       await pumpLogo(tester, const AppLogo(onLight: true));
       final spans = wordmarkSpans(tester).cast<TextSpan>();
       expect(spans[0].style!.color, const Color(0xFF0B1F3A));
