@@ -22,4 +22,4 @@ class ProvidersConfig(AppConfig):
     name = "providers"
 
     def ready(self):
-        checks.register(check_dev_fake_auth)
+        checks.register(check_dev_fake_auth, "providers")

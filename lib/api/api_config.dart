@@ -35,6 +35,7 @@ class ApiConfigException implements Exception {
 class ApiConfig {
   static const _baseUrlDefine = String.fromEnvironment('API_BASE_URL');
   static const _apiKeyDefine = String.fromEnvironment('API_KEY');
+  static const _fakeGoogleEmailDefine = String.fromEnvironment('DEV_FAKE_GOOGLE_EMAIL');
 
   /// The placeholder the backend also falls back to when DEBUG=True (see
   /// config/settings.py). Public knowledge — must never reach a release.
@@ -58,11 +59,25 @@ class ApiConfig {
   static void validate() {
     final url = baseUrl();
     final key = apiKey();
+    checkFakeGoogleSignIn(fakeEmail: _fakeGoogleEmailDefine, isRelease: kReleaseMode);
     if (kDebugMode) {
       debugPrint('[api] ${describeApiConfig(baseUrl: url, apiKey: key)}');
       final warning = apiConfigWarning(baseUrlOverride: _baseUrlDefine, apiKey: key);
       if (warning != null) debugPrint('[api] WARNING: $warning');
     }
+  }
+}
+
+/// The dev-only fake Google sign-in (`DEV_FAKE_GOOGLE_EMAIL`) must never be in
+/// a release build. It is already inert there (see
+/// [fakeGoogleSignInEnabled]); refusing to start makes a build that was given
+/// it by mistake fail loudly instead of looking fine.
+void checkFakeGoogleSignIn({required String fakeEmail, required bool isRelease}) {
+  if (isRelease && fakeEmail.trim().isNotEmpty) {
+    throw ApiConfigException(
+      'DEV_FAKE_GOOGLE_EMAIL is set in a release build. It is a development-only shortcut that skips '
+      'Google sign-in; remove --dart-define=DEV_FAKE_GOOGLE_EMAIL from the release build command.',
+    );
   }
 }
 

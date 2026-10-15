@@ -94,6 +94,73 @@ flutter build apk --release --dart-define=API_BASE_URL=https://toplinkai-backend
 flutter run --release --dart-define=API_BASE_URL=https://toplinkai-backend.onrender.com/api --dart-define="API_KEY=$env:TOPLINKAI_PROD_API_KEY"
 ```
 
+### Google sign-in for providers
+
+Provider sign-in needs the Web OAuth client ID (Google Cloud project "tabmatch"):
+the app passes it to Google as `serverClientId`, and the backend only accepts
+ID tokens issued for it (Render env var `GOOGLE_OAUTH_CLIENT_IDS`, the same
+value). It is an identifier, not a secret, but it lives in a git-ignored file
+so each build machine sets its own:
+
+```bash
+cp dart_defines.example.json dart_defines.local.json   # then paste the Web client ID into it
+flutter run --dart-define-from-file=dart_defines.local.json
+flutter build apk --release --dart-define-from-file=dart_defines.local.json   --dart-define=API_BASE_URL=https://toplinkai-backend.onrender.com/api   --dart-define=API_KEY="$TOPLINKAI_PROD_API_KEY"
+```
+
+Without it the sign-in screen says Google sign-in is not set up in this build.
+Google also needs an **Android** OAuth client in the same project for package
+`com.toplinkai.app` and the SHA-1 of the key that signed the build. Each
+signing key has its own SHA-1: the debug key (per machine, from
+`keytool -list -v -alias androiddebugkey -keystore ~/.android/debug.keystore`),
+and later the release key or Google Play's app-signing key. Release builds are
+currently signed with the debug key (see `android/app/build.gradle.kts`).
+
+### Trying provider sign-in without a Google account (development only)
+
+To click through the provider flow on the emulator without adding a Google
+account, run the local dev server with `GOOGLE_DEV_FAKE_AUTH=True` (and
+`DJANGO_DEBUG=True`), and a **debug** build with a fake email:
+
+```bash
+flutter run --dart-define=DEV_FAKE_GOOGLE_EMAIL=dev.provider@example.com
+```
+
+The app then sends `dev-fake:<email>` instead of a Google token. It can only
+work when **all** of these hold, and each is enforced and tested:
+
+- the app is a debug build (`kDebugMode`); profile and release builds ignore it,
+  and a release build given the define refuses to start;
+- the server has `GOOGLE_DEV_FAKE_AUTH=True` **and** `DEBUG=True`; with `DEBUG`
+  off the token goes to real Google verification and fails, and the server's
+  startup check (`providers.E001`, run by `migrate` in `build.sh`) refuses to
+  start at all.
+
+Never add `GOOGLE_DEV_FAKE_AUTH` to `render.yaml`, `.env.example` or the Render
+dashboard (a test fails if it appears in `render.yaml`).
+
+### Before publishing
+
+Tick every box before a release goes to the Play Store, the App Store or real
+providers:
+
+- [ ] Real Google sign-in tested end to end on a **real device** (not only the
+      emulator), with a real Google account, reaching the registration form.
+- [ ] An **Android OAuth client** exists in Google Cloud (project "tabmatch") for
+      `com.toplinkai.app` and the SHA-1 of the key that signs the release: your
+      own release key, or Google Play's app-signing key if you use Play App
+      Signing. The debug SHA-1 is not enough, and release builds are currently
+      signed with the debug key (`android/app/build.gradle.kts`), so fix that
+      first.
+- [ ] `GOOGLE_OAUTH_CLIENT_IDS` is set on Render to the Web client ID, and the
+      release build was made with that same `GOOGLE_SERVER_CLIENT_ID`.
+- [ ] **Fake sign-in confirmed disabled:** `GOOGLE_DEV_FAKE_AUTH` is not set on
+      Render (check the environment tab), the release command has no
+      `DEV_FAKE_GOOGLE_EMAIL`, and a fake token is refused by the production
+      server (`providers/tests.py`, `FakeSignInNeverInProductionTests`, passes).
+- [ ] Providers can delete their account inside the app (an app-store
+      requirement; not built yet).
+
 ## Backend production settings
 
 See `.env.example`. With `DJANGO_DEBUG=False` the backend requires
