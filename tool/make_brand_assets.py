@@ -10,7 +10,7 @@ writes:
   assets/brand/        icon PNGs (1024, 512, 192, 180, 48, favicon 32), the iOS
                        (opaque, square) icon, the Android adaptive foreground
                        and monochrome layers, the splash image, and the
-                       "tabmatch" wordmark on dark and light backgrounds
+                       "Tabmatch" wordmark on dark and light backgrounds
   website/static/website/images/   favicon, apple-touch icon, social image
 
 Platform launcher icons and the native splash screens are produced from these
@@ -99,16 +99,16 @@ def _font(px):
 
 
 def render_wordmark(height, tab_color, on=None):
-    """"tabmatch" in lowercase: "tab" in tab_color, "match" in turquoise."""
+    """"Tabmatch" with a capital T: "Tab" in tab_color, "match" in turquoise."""
     font = _font(height * SUPERSAMPLE)
     big_h = height * SUPERSAMPLE
-    tab_w = font.getlength("tab")
+    tab_w = font.getlength("Tab")
     match_w = font.getlength("match")
     pad = big_h // 4
     img = Image.new("RGBA", (round(tab_w + match_w) + pad * 2, round(big_h * 1.5)), on or (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
     baseline = round(big_h * 1.15)
-    draw.text((pad, baseline), "tab", font=font, fill=tab_color, anchor="ls")
+    draw.text((pad, baseline), "Tab", font=font, fill=tab_color, anchor="ls")
     draw.text((pad + tab_w, baseline), "match", font=font, fill=TURQUOISE, anchor="ls")
     bbox = img.getbbox()
     img = img.crop((max(bbox[0] - pad // 2, 0), max(bbox[1] - pad // 2, 0), bbox[2] + pad // 2, bbox[3] + pad // 2))

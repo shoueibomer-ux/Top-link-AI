@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../app_colors.dart';
 
-/// "tabmatch": lowercase, "tab" in white (navy on a light background) and
+/// "Tabmatch": a capital T, "Tab" in white (navy on a light background) and
 /// "match" in turquoise. Live text, so it stays sharp at any size and follows
 /// the system font scale.
 class Wordmark extends StatelessWidget {
@@ -10,7 +10,7 @@ class Wordmark extends StatelessWidget {
 
   final double fontSize;
 
-  /// True on a light background, where "tab" is navy instead of white.
+  /// True on a light background, where "Tab" is navy instead of white.
   final bool onLight;
 
   @override
@@ -21,7 +21,7 @@ class Wordmark extends StatelessWidget {
         child: Text.rich(
           TextSpan(
             children: [
-              TextSpan(text: 'tab', style: TextStyle(color: onLight ? AppColors.navy : AppColors.white)),
+              TextSpan(text: 'Tab', style: TextStyle(color: onLight ? AppColors.navy : AppColors.white)),
               const TextSpan(text: 'match', style: TextStyle(color: AppColors.turquoise)),
             ],
           ),
@@ -39,7 +39,7 @@ class Wordmark extends StatelessWidget {
 ///
 /// The mark is a navy rounded tile, so on the navy app bar and drawer header
 /// only the white T and turquoise m show; pass [onLight] on a light background,
-/// where the tile and a navy "tab" stand out instead. [showWordmark] false
+/// where the tile and a navy "Tab" stand out instead. [showWordmark] false
 /// gives just the mark, for tight spots.
 class AppLogo extends StatelessWidget {
   const AppLogo({super.key, this.height = 32, this.onLight = false, this.showWordmark = true});
