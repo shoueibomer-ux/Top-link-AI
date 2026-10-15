@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -9,6 +10,7 @@ import 'package:toplinkai_app/home/home_screen.dart';
 import 'package:toplinkai_app/onboarding/onboarding_screen.dart';
 import 'package:toplinkai_app/onboarding/phone_validation.dart';
 import 'package:toplinkai_app/onboarding/service_category.dart';
+import 'package:toplinkai_app/provider/auth_storage.dart';
 
 // The client's phone must be a Canadian / North American number. These are the
 // same cases the backend tests (leads.tests.NorthAmericanPhoneTests) use, so
@@ -50,7 +52,12 @@ void main() {
   });
 
   group('the request form', () {
-    setUp(() => SharedPreferences.setMockInitialValues({}));
+    setUp(() async {
+      SharedPreferences.setMockInitialValues({});
+      // Sending a request needs a signed-in client; these tests are about the phone number.
+      FlutterSecureStorage.setMockInitialValues({});
+      await AuthStorage.save(access: 'client-access', refresh: 'client-refresh');
+    });
 
     Future<void> openConfirmation(WidgetTester tester) async {
       tester.view.physicalSize = const Size(1080, 2400);

@@ -55,6 +55,11 @@ class LeadOffer(models.Model):
     hired = models.BooleanField(default=False, help_text="The client hired this provider.")
     hired_at = models.DateTimeField(null=True, blank=True, editable=False)
     job_completed = models.BooleanField(default=False)
+    # Set when job_completed is ticked, by the client in the app or by an admin.
+    completed_at = models.DateTimeField(null=True, blank=True, editable=False)
+    # The one "how did the job go?" email to the client, sent a few days after
+    # acceptance if they haven't marked the job complete (see leads.jobs).
+    completion_reminder_sent_at = models.DateTimeField(null=True, blank=True, editable=False)
 
     class Meta:
         ordering = ["-created_at"]
@@ -102,14 +107,22 @@ class LeadOffer(models.Model):
         return True
 
     def save(self, *args, **kwargs):
+        update_fields = kwargs.get("update_fields")
+        extra = []
         if self.hired and self.hired_at is None:
             self.hired_at = timezone.now()
-            if kwargs.get("update_fields") is not None:
-                kwargs["update_fields"] = [*kwargs["update_fields"], "hired_at"]
+            extra.append("hired_at")
         elif not self.hired and self.hired_at is not None:
             self.hired_at = None
-            if kwargs.get("update_fields") is not None:
-                kwargs["update_fields"] = [*kwargs["update_fields"], "hired_at"]
+            extra.append("hired_at")
+        if self.job_completed and self.completed_at is None:
+            self.completed_at = timezone.now()
+            extra.append("completed_at")
+        elif not self.job_completed and self.completed_at is not None:
+            self.completed_at = None
+            extra.append("completed_at")
+        if update_fields is not None and extra:
+            kwargs["update_fields"] = [*update_fields, *extra]
         super().save(*args, **kwargs)
 
 

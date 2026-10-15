@@ -142,6 +142,8 @@ class _ProviderGateState extends State<ProviderGate> {
       case _Stage.home:
         return ProviderHomeScreen(
           profile: _profile!,
+          session: _session,
+          onSessionExpired: () => _go(_Stage.signIn, message: 'Your session expired. Please sign in again.'),
           onEdit: () => _go(_Stage.edit),
           onRefresh: _refresh,
           onSignOut: _signOut,

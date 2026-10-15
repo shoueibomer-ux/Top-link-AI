@@ -23,6 +23,9 @@ logger = logging.getLogger(__name__)
 REMINDER_AFTER = timedelta(minutes=30)
 NO_YES_ALERT_AFTER = timedelta(hours=2)
 OFFER_EXPIRES_AFTER = timedelta(hours=24)
+# How long after a provider accepts before the client is asked, once, whether
+# the job is done (and so can be marked complete and, later, reviewed).
+COMPLETION_REMINDER_AFTER = timedelta(days=3)
 SUMMARY_HOUR_UTC = 14  # 7-8am in Edmonton
 QUIET_HOURS = (21, 8)  # no automatic texts from 21:00 to 08:00 Edmonton time
 LOCAL_TZ = ZoneInfo("America/Edmonton")
@@ -46,6 +49,48 @@ def notify_admin(subject: str, body: str) -> bool:
         logger.exception("Could not send admin email: %s", subject)
         return False
     return True
+
+
+def notify_user(email: str, subject: str, body: str) -> bool:
+    """Emails one person. Returns False (and logs) if sending fails, so the
+    caller leaves the reminder unsent and retries on the next run."""
+    try:
+        send_mail(subject, body, settings.DEFAULT_FROM_EMAIL, [email])
+    except Exception:
+        logger.exception("Could not send email: %s", subject)
+        return False
+    return True
+
+
+def send_completion_reminders(now=None) -> int:
+    """One email to the client, COMPLETION_REMINDER_AFTER after a provider
+    accepted, if the job still isn't marked complete. Never twice for the same
+    offer, and never for a request with no signed-in owner."""
+    now = now or timezone.now()
+    due = LeadOffer.objects.filter(
+        status=LeadOffer.STATUS_ACCEPTED,
+        job_completed=False,
+        completion_reminder_sent_at__isnull=True,
+        responded_at__lte=now - COMPLETION_REMINDER_AFTER,
+        service_request__user__isnull=False,
+    ).select_related("provider", "service_request", "service_request__user")
+    sent = 0
+    for offer in due:
+        user = offer.service_request.user
+        if not user.email or not user.is_active:
+            continue
+        service = services.service_name(offer.service_request)
+        body = (
+            f"{offer.provider.business_name} accepted your {service} request in {offer.service_request.city}.\n\n"
+            "If the job is done, open Tabmatch, go to History and tap \"Mark job complete\" next to "
+            f"{offer.provider.business_name}. If it isn't finished yet, you don't need to do anything.\n\n"
+            "Tabmatch"
+        )
+        if notify_user(user.email, f"How did your {service} job go?", body):
+            offer.completion_reminder_sent_at = now
+            offer.save(update_fields=["completion_reminder_sent_at"])
+            sent += 1
+    return sent
 
 
 def send_reminders(now=None) -> int:
@@ -178,5 +223,6 @@ def run_all(now=None) -> dict:
         "reminders_sent": send_reminders(now),
         "offers_expired": expire_offers(now),
         "no_yes_alerts": alert_requests_without_yes(now),
+        "completion_reminders": send_completion_reminders(now),
         "daily_summary_sent": send_daily_summary_if_due(now),
     }

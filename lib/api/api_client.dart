@@ -63,17 +63,18 @@ class ApiClient {
   /// the request (including `phone`) with providers — there is no default,
   /// callers must have actually shown the consent copy and had it checked.
   Future<ServiceRequestSubmission> createServiceRequest({
-    required String deviceId,
+    required String accessToken,
     required String category,
     required String phone,
     required bool consent,
+    String deviceId = '',
     String city = ApiClient.demoCity,
     String description = '',
     String urgency = '',
   }) async {
     final response = await http.post(
       Uri.parse('$baseUrl/requests/'),
-      headers: _headers,
+      headers: _authHeaders(accessToken),
       body: jsonEncode({
         'device_id': deviceId,
         'category': category,
@@ -84,23 +85,66 @@ class ApiClient {
         'urgency': urgency,
       }),
     );
+    _throwForAuthProblems(response);
     if (response.statusCode != 201) {
       throw ApiException(_firstErrorMessage(response.body) ?? 'Could not submit your request.');
     }
     return ServiceRequestSubmission.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
   }
 
-  /// See provider_search.views.ServiceRequestListView — "Your requests".
-  Future<List<ServiceRequestRecord>> getMyServiceRequests(String deviceId) async {
+  /// See provider_search.views.ServiceRequestListView: "Your requests", for the
+  /// signed-in client only (there is no longer a way to list by device id).
+  Future<List<ServiceRequestRecord>> getMyServiceRequests(String accessToken) async {
     final response = await http.get(
-      Uri.parse('$baseUrl/requests/mine/?device_id=$deviceId'),
-      headers: _headers,
+      Uri.parse('$baseUrl/requests/mine/'),
+      headers: _authHeaders(accessToken),
     );
+    _throwForAuthProblems(response);
     if (response.statusCode != 200) {
       throw ApiException('Could not fetch your requests (${response.statusCode}).');
     }
     final requests = jsonDecode(response.body)['requests'] as List<dynamic>;
     return requests.map((r) => ServiceRequestRecord.fromJson(r as Map<String, dynamic>)).toList();
+  }
+
+  /// See provider_search.views.ServiceRequestCompleteView: the client says the
+  /// job with [offerId] (a provider who accepted) is done.
+  Future<ServiceRequestRecord> completeServiceRequest(String accessToken, int requestId, int offerId) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/requests/$requestId/complete/'),
+      headers: _authHeaders(accessToken),
+      body: jsonEncode({'offer_id': offerId}),
+    );
+    _throwForAuthProblems(response);
+    if (response.statusCode != 200) {
+      throw ApiException(_firstErrorMessage(response.body) ?? 'Could not mark the job complete (${response.statusCode}).');
+    }
+    return ServiceRequestRecord.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
+  /// See accounts.views.ClientGoogleSignInView: trades a Google ID token for
+  /// this client's own tokens.
+  Future<ClientSignIn> signInClientWithGoogle(String idToken) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/accounts/google/'),
+      headers: _headers,
+      body: jsonEncode({'id_token': idToken}),
+    );
+    if (response.statusCode != 200) {
+      throw ApiException(_firstErrorMessage(response.body) ?? 'Could not sign in (${response.statusCode}).');
+    }
+    return ClientSignIn.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
+  /// See providers.views.ProviderLeadsView: the requests offered to this provider.
+  Future<List<ProviderLead>> getProviderLeads(String accessToken) async {
+    final response = await http.get(Uri.parse('$baseUrl/provider/leads/'), headers: _authHeaders(accessToken));
+    _throwForAuthProblems(response);
+    if (response.statusCode != 200) {
+      throw ApiException(_firstErrorMessage(response.body) ?? 'Could not load your leads (${response.statusCode}).');
+    }
+    final leads = jsonDecode(response.body)['leads'] as List<dynamic>;
+    return [for (final l in leads) ProviderLead.fromJson(l as Map<String, dynamic>)];
   }
 
   /// See notifications.views.NotificationListView. Notifications fire from

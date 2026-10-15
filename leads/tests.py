@@ -1011,3 +1011,96 @@ class RunLeadJobsCommandTests(TwilioMocked):
         for key in ("reminders_sent: 0", "offers_expired: 0", "no_yes_alerts: 1", "daily_summary_sent"):
             self.assertIn(key, text)
         self.assertEqual(self.sent, [])
+
+
+class CompletionTests(TestCase):
+    """job_completed stamps completed_at, whoever ticks it (client or admin)."""
+
+    def test_ticking_and_unticking_job_completed_sets_and_clears_the_time(self):
+        offer = make_offer(sent_minutes_ago=10)
+        self.assertIsNone(offer.completed_at)
+        offer.job_completed = True
+        offer.save()
+        offer.refresh_from_db()
+        self.assertIsNotNone(offer.completed_at)
+        offer.job_completed = False
+        offer.save()
+        offer.refresh_from_db()
+        self.assertIsNone(offer.completed_at)
+
+    def test_it_is_also_stamped_when_only_some_fields_are_saved(self):
+        offer = make_offer(sent_minutes_ago=10)
+        offer.job_completed = True
+        offer.save(update_fields=["job_completed"])
+        offer.refresh_from_db()
+        self.assertIsNotNone(offer.completed_at)
+
+
+class CompletionReminderTests(TestCase):
+    """One email to the client, three days after a provider accepts, if the job
+    isn't marked complete."""
+
+    def setUp(self):
+        self.owner = get_user_model().objects.create_user(
+            username="client@example.com", email="client@example.com", first_name="Pat"
+        )
+        self.now = timezone.now()
+
+    def accepted(self, days_ago=4, user="owner", **kw):
+        request = make_request(user=self.owner if user == "owner" else None)
+        provider = make_provider(f"Ace {ServiceRequest.objects.count()}", f"780 555 01{ServiceRequest.objects.count() + 10}")
+        offer = make_offer(request, provider, sent_minutes_ago=days_ago * 24 * 60 + 5, **kw)
+        offer.record_reply(
+            LeadOffer.REPLY_YES, LeadOffer.CHANNEL_SMS, now=self.now - timedelta(days=days_ago)
+        )
+        return offer
+
+    def test_it_emails_the_client_once_after_three_days(self):
+        offer = self.accepted(days_ago=4)
+        self.assertEqual(jobs.send_completion_reminders(self.now), 1)
+        (message,) = mail.outbox
+        self.assertEqual(message.to, ["client@example.com"])
+        self.assertIn("Plumbing", message.subject)
+        self.assertIn(offer.provider.business_name, message.body)
+        self.assertIn("Mark job complete", message.body)
+        offer.refresh_from_db()
+        self.assertIsNotNone(offer.completion_reminder_sent_at)
+
+    def test_never_twice(self):
+        self.accepted(days_ago=4)
+        jobs.send_completion_reminders(self.now)
+        self.assertEqual(jobs.send_completion_reminders(self.now + timedelta(days=1)), 0)
+        self.assertEqual(len(mail.outbox), 1)
+
+    def test_not_before_three_days(self):
+        self.accepted(days_ago=2)
+        self.assertEqual(jobs.send_completion_reminders(self.now), 0)
+        self.assertEqual(mail.outbox, [])
+
+    def test_not_if_the_job_is_already_complete(self):
+        offer = self.accepted(days_ago=5)
+        offer.job_completed = True
+        offer.save()
+        self.assertEqual(jobs.send_completion_reminders(self.now), 0)
+
+    def test_only_for_accepted_offers(self):
+        request = make_request(user=self.owner)
+        offer = make_offer(request, make_provider("Declined Co", "780 555 0188"), sent_minutes_ago=6 * 24 * 60)
+        offer.record_reply(LeadOffer.REPLY_NO, LeadOffer.CHANNEL_SMS, now=self.now - timedelta(days=5))
+        self.assertEqual(jobs.send_completion_reminders(self.now), 0)
+
+    def test_not_for_a_request_with_no_signed_in_owner(self):
+        self.accepted(days_ago=5, user=None)
+        self.assertEqual(jobs.send_completion_reminders(self.now), 0)
+
+    def test_a_failed_send_is_left_unsent_to_retry_next_run(self):
+        offer = self.accepted(days_ago=4)
+        with patch("leads.jobs.send_mail", side_effect=OSError("smtp down")):
+            self.assertEqual(jobs.send_completion_reminders(self.now), 0)
+        offer.refresh_from_db()
+        self.assertIsNone(offer.completion_reminder_sent_at)
+        self.assertEqual(jobs.send_completion_reminders(self.now), 1)
+
+    def test_it_runs_with_the_other_cron_jobs(self):
+        self.accepted(days_ago=4)
+        self.assertEqual(jobs.run_all(self.now)["completion_reminders"], 1)

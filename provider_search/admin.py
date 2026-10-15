@@ -12,11 +12,12 @@ from .models import ProviderOnboarding, ServiceRequest, WaitlistedRequest
 @admin.register(ServiceRequest)
 class ServiceRequestAdmin(admin.ModelAdmin):
     list_display = (
-        "id", "device_id", "category", "city", "phone", "consent_given",
+        "id", "user", "device_id", "category", "city", "phone", "consent_given",
         "urgency", "job_size", "job_complexity", "estimated_team_size", "status", "created_at", "offers_link",
     )
     list_filter = ("category", "city", "consent_given", "urgency", "job_size", "job_complexity", "status")
-    search_fields = ("device_id", "phone", "problem_description")
+    search_fields = ("device_id", "phone", "problem_description", "user__email")
+    raw_id_fields = ("user",)
     date_hierarchy = "created_at"
     actions = ["send_to_providers"]
 

@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 
 import '../api/api_client.dart';
+import '../api/service_request.dart';
 import '../app_colors.dart';
 import '../app_styles.dart';
+import '../client/client_sign_in_screen.dart';
 import '../home/home_screen.dart';
+import '../provider/auth_storage.dart';
+import '../provider/provider_session.dart';
 import '../subscription/device_id.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/app_logo.dart';
@@ -18,9 +22,13 @@ import 'urgency_step.dart';
 class OnboardingScreen extends StatefulWidget {
   /// With [initialCategory] (e.g. picked from the Home screen's search bar),
   /// the flow starts at the urgency step with that category already chosen.
-  const OnboardingScreen({super.key, this.initialCategory});
+  const OnboardingScreen({super.key, this.initialCategory, this.api, this.idTokenProvider});
 
   final ServiceCategory? initialCategory;
+
+  /// Tests pass a client backed by a fake HTTP layer and a fake Google token.
+  final ApiClient? api;
+  final Future<String> Function()? idTokenProvider;
 
   @override
   State<OnboardingScreen> createState() => _OnboardingScreenState();
@@ -29,7 +37,8 @@ class OnboardingScreen extends StatefulWidget {
 class _OnboardingScreenState extends State<OnboardingScreen> {
   static const _stepCount = 4;
 
-  final _apiClient = ApiClient();
+  late final _apiClient = widget.api ?? ApiClient();
+  late final _session = AuthSession(api: _apiClient);
   final _phoneController = TextEditingController();
   final _descriptionController = TextEditingController();
 
@@ -70,6 +79,19 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     }
   }
 
+  /// A request belongs to the account that sends it, so sign-in comes last:
+  /// after all the questions, when they're ready to send. False if they decline.
+  Future<bool> _ensureSignedIn() async {
+    if (await AuthStorage.isLoggedIn()) return true;
+    if (!mounted) return false;
+    final signedIn = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => ClientSignInScreen(api: _apiClient, idTokenProvider: widget.idTokenProvider),
+      ),
+    );
+    return signedIn == true;
+  }
+
   Future<void> _onContinue() async {
     if (!_canContinue) return;
     if (_step < _stepCount - 1) {
@@ -82,15 +104,34 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     setState(() => _isSubmitting = true);
 
     try {
+      if (!await _ensureSignedIn()) {
+        if (mounted) setState(() => _isSubmitting = false);
+        return;
+      }
       final deviceId = await getDeviceId();
-      final submission = await _apiClient.createServiceRequest(
-        deviceId: deviceId,
-        category: category.slug,
-        phone: normalizeNorthAmericanPhone(_phoneController.text)!,
-        consent: _consentGiven,
-        description: _descriptionController.text.trim(),
-        urgency: urgency.apiValue,
-      );
+      Future<ServiceRequestSubmission> send() => _session.authorized(
+            (accessToken) => _apiClient.createServiceRequest(
+              accessToken: accessToken,
+              deviceId: deviceId,
+              category: category.slug,
+              phone: normalizeNorthAmericanPhone(_phoneController.text)!,
+              consent: _consentGiven,
+              description: _descriptionController.text.trim(),
+              urgency: urgency.apiValue,
+            ),
+          );
+      ServiceRequestSubmission submission;
+      try {
+        submission = await send();
+      } on SessionExpiredException {
+        // The saved login is no longer valid (the session helper has cleared it):
+        // sign in again and send once more.
+        if (!await _ensureSignedIn()) {
+          if (mounted) setState(() => _isSubmitting = false);
+          return;
+        }
+        submission = await send();
+      }
 
       if (!mounted) return;
       if (submission.isWaitlisted) {

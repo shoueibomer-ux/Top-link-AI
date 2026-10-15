@@ -6,7 +6,8 @@ from leads import jobs
 class Command(BaseCommand):
     help = (
         "Run by the Render cron job every 15 minutes: remind slow providers (only when SMS_ENABLED), "
-        "expire stale offers, email when a request has no YES after 2 hours, and send the daily summary."
+        "expire stale offers, email when a request has no YES after 2 hours, email the client once to ask whether "
+        "an accepted job is done, and send the daily summary."
     )
 
     def handle(self, *args, **options):

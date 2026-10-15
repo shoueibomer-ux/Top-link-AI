@@ -224,3 +224,95 @@ class CreateSuperuserFromEnvCommandTests(TestCase):
         self.assertFalse(existing.is_superuser)  # not promoted
         self.assertEqual(existing.email, "original@example.com")  # not overwritten
         self.assertEqual(User.objects.filter(username="opsadmin").count(), 1)  # not duplicated
+
+
+CLIENT_ID = "web-client-id.apps.googleusercontent.com"
+GOOGLE = "/api/accounts/google/"
+
+
+def google_info(email="client@example.com", sub="client-sub-1", name="Pat Client", **overrides):
+    return {"aud": CLIENT_ID, "email": email, "email_verified": True, "sub": sub, "name": name, **overrides}
+
+
+@override_settings(API_KEY=TEST_API_KEY, GOOGLE_OAUTH_CLIENT_IDS=[CLIENT_ID], GOOGLE_DEV_FAKE_AUTH=False)
+class ClientGoogleSignInTests(TestCase):
+    """POST /api/accounts/google/: how a client signs in. Google's verification
+    is mocked, so nothing here reaches the network."""
+
+    def setUp(self):
+        self.headers = {"HTTP_X_API_KEY": TEST_API_KEY}
+        cache.delete_pattern("rl:*")
+
+    def tearDown(self):
+        cache.delete_pattern("rl:*")
+
+    def sign_in(self, token="good-token", headers=None, **info):
+        with patch("providers.google_auth.id_token.verify_oauth2_token", return_value=google_info(**info)):
+            return self.client.post(
+                GOOGLE, {"id_token": token}, content_type="application/json", **(self.headers if headers is None else headers)
+            )
+
+    def test_a_new_client_gets_an_account_and_tokens(self):
+        response = self.sign_in()
+        self.assertEqual(response.status_code, 200, response.content)
+        body = response.json()
+        self.assertTrue(body["is_new_account"])
+        self.assertEqual((body["email"], body["full_name"]), ("client@example.com", "Pat Client"))
+        self.assertTrue(body["access"] and body["refresh"])
+        user = User.objects.get()
+        self.assertEqual(user.profile.role, UserRole.CUSTOMER)
+        self.assertFalse(user.has_usable_password())
+
+    def test_signing_in_again_finds_the_same_account(self):
+        self.sign_in()
+        again = self.sign_in()
+        self.assertFalse(again.json()["is_new_account"])
+        self.assertEqual(User.objects.count(), 1)
+
+    def test_the_token_works_as_a_client_login(self):
+        access = self.sign_in().json()["access"]
+        auth = {**self.headers, "HTTP_AUTHORIZATION": f"Bearer {access}"}
+        self.assertEqual(self.client.get("/api/accounts/me/", **auth).json()["role"], UserRole.CUSTOMER)
+        self.assertEqual(self.client.get("/api/requests/mine/", **auth).status_code, 200)
+
+    def test_an_email_that_belongs_to_a_provider_is_refused(self):
+        provider = User.objects.create_user(username="client@example.com", email="client@example.com")
+        UserProfile.objects.create(user=provider, role=UserRole.PROVIDER, full_name="Pro")
+        response = self.sign_in()
+        self.assertEqual(response.status_code, 409)
+        self.assertIn("provider account", response.json()["detail"])
+        self.assertEqual(UserProfile.objects.get().role, UserRole.PROVIDER)  # nothing was taken over
+
+    def test_a_provider_cannot_sign_in_as_a_client_by_google_identity_either(self):
+        self.sign_in()  # creates the client account and links this Google id to it
+        # The same Google account trying the provider sign-in is refused too.
+        with patch("providers.google_auth.id_token.verify_oauth2_token", return_value=google_info()):
+            response = self.client.post(
+                "/api/provider/auth/google/", {"id_token": "t"}, content_type="application/json", **self.headers
+            )
+        self.assertEqual(response.status_code, 409)
+        self.assertIn("client account", response.json()["detail"])
+
+    def test_a_disabled_account_is_refused(self):
+        self.sign_in()
+        User.objects.update(is_active=False)
+        self.assertEqual(self.sign_in().status_code, 409)
+
+    def test_a_token_that_does_not_verify_is_a_401(self):
+        with patch("providers.google_auth.id_token.verify_oauth2_token", side_effect=ValueError("bad")):
+            response = self.client.post(GOOGLE, {"id_token": "junk"}, content_type="application/json", **self.headers)
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(User.objects.count(), 0)
+
+    def test_a_token_for_another_app_or_an_unverified_email_is_refused(self):
+        self.assertEqual(self.sign_in(aud="someone-elses-client").status_code, 401)
+        self.assertEqual(self.sign_in(email_verified=False).status_code, 401)
+        self.assertEqual(User.objects.count(), 0)
+
+    def test_without_the_api_key_it_is_refused(self):
+        self.assertEqual(self.sign_in(headers={}).status_code, 401)
+
+    @override_settings(GOOGLE_OAUTH_CLIENT_IDS=[])
+    def test_an_unconfigured_server_says_so(self):
+        response = self.client.post(GOOGLE, {"id_token": "t"}, content_type="application/json", **self.headers)
+        self.assertEqual(response.status_code, 503)

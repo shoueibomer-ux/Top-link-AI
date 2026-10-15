@@ -8,11 +8,14 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from accounts.models import UserProfile, UserRole
+from catalog.models import Service
+from leads.models import LeadOffer
 from matching.permissions import HasApiKey
 
-from .google_auth import GoogleAuthError, GoogleAuthNotConfigured, GoogleUser, verify_google_id_token
+from .google_auth import GoogleAuthError, GoogleAuthNotConfigured, verify_google_id_token
+from .google_signin import AccountConflict, user_for_google
 from .models import GoogleIdentity, ProviderProfile
-from .serializers import ProviderProfileSerializer, PublicProviderSerializer
+from .serializers import ProviderLeadSerializer, ProviderProfileSerializer, PublicProviderSerializer
 
 User = get_user_model()
 
@@ -26,36 +29,6 @@ class IsProviderAccount(BasePermission):
     def has_permission(self, request, view):
         profile = getattr(request.user, "profile", None)
         return bool(profile and profile.role == UserRole.PROVIDER)
-
-
-class AccountConflict(Exception):
-    pass
-
-
-def _user_for_google(google_user: GoogleUser):
-    """(user, created). Looks the person up by their Google id first, then by
-    a verified email that already belongs to a *provider* account. An email
-    that belongs to a client account is refused rather than taken over."""
-    with transaction.atomic():
-        identity = GoogleIdentity.objects.select_related("user").filter(sub=google_user.sub).first()
-        if identity:
-            user, created = identity.user, False
-        else:
-            user = User.objects.filter(email__iexact=google_user.email).first()
-            created = user is None
-            if user is None:
-                user = User.objects.create_user(username=google_user.email, email=google_user.email)
-                user.set_unusable_password()
-                user.save(update_fields=["password"])
-                UserProfile.objects.create(user=user, role=UserRole.PROVIDER, full_name=google_user.name)
-            GoogleIdentity.objects.create(user=user, sub=google_user.sub)
-
-        profile = getattr(user, "profile", None)
-        if profile is None or profile.role != UserRole.PROVIDER:
-            raise AccountConflict("This email already belongs to a client account. Use a different Google account.")
-        if not user.is_active:
-            raise AccountConflict("This account has been disabled.")
-        return user, created
 
 
 class GoogleSignInView(APIView):
@@ -79,7 +52,7 @@ class GoogleSignInView(APIView):
             return Response({"detail": str(exc)}, status=401)
 
         try:
-            user, created = _user_for_google(google_user)
+            user, created = user_for_google(google_user, UserRole.PROVIDER)
         except AccountConflict as exc:
             return Response({"detail": str(exc)}, status=409)
 
@@ -132,6 +105,30 @@ class ProviderProfileView(APIView):
         resubmit = {"status": ProviderProfile.STATUS_PENDING} if profile.status == ProviderProfile.STATUS_REJECTED else {}
         serializer.save(**resubmit)
         return Response(serializer.data)
+
+
+class ProviderLeadsView(APIView):
+    """GET /api/provider/leads/   (signed-in provider)
+
+    The client requests offered to this provider, newest first, limited to
+    offers that have actually been sent. Only the provider's own offers are
+    ever returned."""
+
+    permission_classes = [HasApiKey, IsAuthenticated, IsProviderAccount]
+    MAX_LEADS = 100
+
+    def get(self, request):
+        profile = ProviderProfile.objects.filter(user=request.user).first()
+        if profile is None:
+            return Response({"detail": "You haven't registered a provider profile yet."}, status=404)
+        offers = list(
+            LeadOffer.objects.filter(provider=profile, sent_at__isnull=False)
+            .select_related("service_request", "service_request__user", "service_request__user__profile")
+            .order_by("-created_at")[: self.MAX_LEADS]
+        )
+        service_names = dict(Service.objects.values_list("slug", "name"))
+        data = ProviderLeadSerializer(offers, many=True, context={"service_names": service_names}).data
+        return Response({"leads": data})
 
 
 class ProviderMatchesView(APIView):
