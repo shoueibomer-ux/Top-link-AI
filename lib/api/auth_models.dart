@@ -41,3 +41,27 @@ class AccountProfile {
   final String role;
   final String fullName;
 }
+
+/// The answer to POST /api/accounts/google/: a client signing in with Google.
+class ClientSignIn {
+  const ClientSignIn({
+    required this.tokens,
+    required this.email,
+    required this.fullName,
+    required this.isNewAccount,
+  });
+
+  factory ClientSignIn.fromJson(Map<String, dynamic> json) {
+    return ClientSignIn(
+      tokens: AuthTokens.fromJson(json),
+      email: json['email'] as String? ?? '',
+      fullName: json['full_name'] as String? ?? '',
+      isNewAccount: json['is_new_account'] as bool? ?? false,
+    );
+  }
+
+  final AuthTokens tokens;
+  final String email;
+  final String fullName;
+  final bool isNewAccount;
+}

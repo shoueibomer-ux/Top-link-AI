@@ -5,11 +5,13 @@ import '../api/service_request.dart';
 import '../app_colors.dart';
 import '../app_styles.dart';
 import '../chat/chat_screen.dart';
+import '../client/client_sign_in_screen.dart';
 import '../onboarding/onboarding_screen.dart';
 import '../onboarding/service_category.dart';
 import '../onboarding/urgency_step.dart';
 import '../pages/settings_page.dart';
-import '../subscription/device_id.dart';
+import '../provider/auth_storage.dart';
+import '../provider/provider_session.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/app_logo.dart';
 import '../widgets/category_search_view.dart';
@@ -59,7 +61,7 @@ class _HomeScreenState extends State<HomeScreen> {
       drawer: const AppDrawer(),
       body: SafeArea(
         child: switch (_tabIndex) {
-          1 => const _HistoryTab(),
+          1 => const HistoryTab(),
           2 => const ChatScreen(),
           3 => const SettingsBody(),
           // The search field is pinned directly under the app bar: it sits
@@ -177,16 +179,26 @@ class _HomeTab extends StatelessWidget {
 /// manually. Status lives on the backend (ProviderMatch.status), so this
 /// re-fetches on every mount rather than caching locally — switching away to
 /// another tab and back always reflects what's actually persisted.
-class _HistoryTab extends StatefulWidget {
-  const _HistoryTab();
+/// "Your requests": everything this account has submitted, and who accepted it.
+/// Needs a signed-in client; without one it offers to sign in instead of
+/// showing anything. Public so tests can pump it with a fake backend.
+class HistoryTab extends StatefulWidget {
+  const HistoryTab({super.key, this.api, this.idTokenProvider});
+
+  final ApiClient? api;
+  final Future<String> Function()? idTokenProvider;
 
   @override
-  State<_HistoryTab> createState() => _HistoryTabState();
+  State<HistoryTab> createState() => _HistoryTabState();
 }
 
-class _HistoryTabState extends State<_HistoryTab> {
-  final _apiClient = ApiClient();
-  Future<List<ServiceRequestRecord>>? _future;
+enum _HistoryState { loading, signedOut, error, ready }
+
+class _HistoryTabState extends State<HistoryTab> {
+  late final ApiClient _apiClient = widget.api ?? ApiClient();
+  late final AuthSession _session = AuthSession(api: _apiClient);
+  _HistoryState _state = _HistoryState.loading;
+  List<ServiceRequestRecord> _requests = const [];
 
   @override
   void initState() {
@@ -194,107 +206,195 @@ class _HistoryTabState extends State<_HistoryTab> {
     _load();
   }
 
-  void _load() {
-    setState(() {
-      _future = _fetchRequests();
-    });
+  Future<void> _load() async {
+    if (mounted) setState(() => _state = _HistoryState.loading);
+    try {
+      if (!await AuthStorage.isLoggedIn()) {
+        if (mounted) setState(() => _state = _HistoryState.signedOut);
+        return;
+      }
+      final requests = await _session.authorized(_apiClient.getMyServiceRequests);
+      if (!mounted) return;
+      setState(() {
+        _requests = requests;
+        _state = _HistoryState.ready;
+      });
+    } on SessionExpiredException {
+      if (mounted) setState(() => _state = _HistoryState.signedOut);
+    } catch (_) {
+      if (mounted) setState(() => _state = _HistoryState.error);
+    }
   }
 
-  Future<List<ServiceRequestRecord>> _fetchRequests() async {
-    final deviceId = await getDeviceId();
-    return _apiClient.getMyServiceRequests(deviceId);
+  Future<void> _signIn() async {
+    final signedIn = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => ClientSignInScreen(
+          api: _apiClient,
+          idTokenProvider: widget.idTokenProvider,
+          title: 'Sign in to see your requests',
+          message: 'Your requests, the providers who accept them and your job history are kept with your Google account.',
+        ),
+      ),
+    );
+    if (signedIn == true) _load();
+  }
+
+  Future<void> _markComplete(ServiceRequestRecord request, AcceptedOffer offer) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Mark job complete?'),
+        content: Text(
+          'Is the job with ${offer.providerName} finished? Only mark it complete once the work is done.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(dialogContext).pop(false), child: const Text('Not yet')),
+          TextButton(
+            key: const Key('confirm-complete'),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Yes, it is done'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    try {
+      await _session.authorized((token) => _apiClient.completeServiceRequest(token, request.id, offer.offerId));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Marked complete with ${offer.providerName}.')));
+      await _load();
+    } on SessionExpiredException {
+      if (mounted) setState(() => _state = _HistoryState.signedOut);
+    } on ApiException catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not reach the server. Check your connection and try again.')),
+        );
+      }
+    }
+  }
+
+  Widget _messageCard({required Widget child}) {
+    return ListView(
+      padding: const EdgeInsets.all(24),
+      children: [
+        Container(
+          padding: const EdgeInsets.all(22),
+          decoration: BoxDecoration(
+            color: AppColors.white,
+            borderRadius: BorderRadius.circular(kRadius),
+            boxShadow: kCardShadow,
+          ),
+          child: child,
+        ),
+      ],
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<List<ServiceRequestRecord>>(
-      future: _future,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState != ConnectionState.done) {
-          return const Center(child: CircularProgressIndicator(color: AppColors.turquoise));
-        }
-        if (snapshot.hasError) {
-          return ListView(
-            padding: const EdgeInsets.all(24),
+    switch (_state) {
+      case _HistoryState.loading:
+        return const Center(child: CircularProgressIndicator(color: AppColors.turquoise));
+      case _HistoryState.signedOut:
+        return _messageCard(
+          child: Column(
             children: [
-              Container(
-                padding: const EdgeInsets.all(22),
-                decoration: BoxDecoration(
-                  color: AppColors.white,
-                  borderRadius: BorderRadius.circular(kRadius),
-                  boxShadow: kCardShadow,
-                ),
-                child: Column(
-                  children: [
-                    Text(
-                      'Could not load your requests right now.',
-                      style: TextStyle(fontSize: 14, color: AppColors.muted),
-                    ),
-                    const SizedBox(height: 12),
-                    TextButton(
-                      onPressed: _load,
-                      child: const Text('Retry', style: TextStyle(color: AppColors.turquoise, fontWeight: FontWeight.w600)),
-                    ),
-                  ],
-                ),
+              Icon(Icons.history_outlined, size: 36, color: AppColors.muted),
+              const SizedBox(height: 12),
+              Text(
+                'Sign in to see your requests.',
+                key: const Key('history-signed-out'),
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 14, color: AppColors.muted),
+              ),
+              const SizedBox(height: 12),
+              TextButton(
+                key: const Key('history-sign-in'),
+                onPressed: _signIn,
+                child: const Text('Sign in with Google', style: TextStyle(color: AppColors.turquoise, fontWeight: FontWeight.w600)),
               ),
             ],
-          );
-        }
-
-        final requests = snapshot.data!;
-        return ListView(
-          padding: const EdgeInsets.all(24),
-          children: [
-            const Text(
-              'Your requests',
-              style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: AppColors.navy),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              "Every request you've submitted — we'll reach out by phone or text.",
-              style: TextStyle(fontSize: 14, color: AppColors.muted),
-            ),
-            const SizedBox(height: 20),
-            if (requests.isEmpty)
-              Container(
-                padding: const EdgeInsets.all(22),
-                decoration: BoxDecoration(
-                  color: AppColors.white,
-                  borderRadius: BorderRadius.circular(kRadius),
-                  boxShadow: kCardShadow,
-                ),
-                child: Column(
-                  children: [
-                    Icon(Icons.history_outlined, size: 36, color: AppColors.muted),
-                    const SizedBox(height: 12),
-                    Text(
-                      "No requests yet — once you submit one, it'll show up here.",
-                      textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 14, color: AppColors.muted),
-                    ),
-                  ],
-                ),
-              )
-            else
-              for (final request in requests) ...[
-                ServiceRequestCard(request: request),
-                const SizedBox(height: 14),
-              ],
-          ],
+          ),
         );
-      },
-    );
+      case _HistoryState.error:
+        return _messageCard(
+          child: Column(
+            children: [
+              Text('Could not load your requests right now.', style: TextStyle(fontSize: 14, color: AppColors.muted)),
+              const SizedBox(height: 12),
+              TextButton(
+                onPressed: _load,
+                child: const Text('Retry', style: TextStyle(color: AppColors.turquoise, fontWeight: FontWeight.w600)),
+              ),
+            ],
+          ),
+        );
+      case _HistoryState.ready:
+        return RefreshIndicator(
+          color: AppColors.turquoise,
+          onRefresh: _load,
+          child: ListView(
+            padding: const EdgeInsets.all(24),
+            children: [
+              const Text(
+                'Your requests',
+                style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: AppColors.navy),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                "Every request you've submitted. We'll reach out by phone or text.",
+                style: TextStyle(fontSize: 14, color: AppColors.muted),
+              ),
+              const SizedBox(height: 20),
+              if (_requests.isEmpty)
+                Container(
+                  padding: const EdgeInsets.all(22),
+                  decoration: BoxDecoration(
+                    color: AppColors.white,
+                    borderRadius: BorderRadius.circular(kRadius),
+                    boxShadow: kCardShadow,
+                  ),
+                  child: Column(
+                    children: [
+                      Icon(Icons.history_outlined, size: 36, color: AppColors.muted),
+                      const SizedBox(height: 12),
+                      Text(
+                        "No requests yet. Once you submit one, it'll show up here.",
+                        textAlign: TextAlign.center,
+                        style: TextStyle(fontSize: 14, color: AppColors.muted),
+                      ),
+                    ],
+                  ),
+                )
+              else
+                for (final request in _requests) ...[
+                  ServiceRequestCard(
+                    request: request,
+                    onMarkComplete: (offer) => _markComplete(request, offer),
+                  ),
+                  const SizedBox(height: 14),
+                ],
+            ],
+          ),
+        );
+    }
   }
 }
 
 /// Public (not `_`-prefixed) so it can be pumped directly in widget tests
 /// with a hand-built [ServiceRequestRecord] rather than needing to mock the
-/// network call _HistoryTabState makes to fetch real data.
+/// network call the History tab makes to fetch real data.
 class ServiceRequestCard extends StatelessWidget {
-  const ServiceRequestCard({super.key, required this.request});
+  const ServiceRequestCard({super.key, required this.request, this.onMarkComplete});
 
   final ServiceRequestRecord request;
+
+  /// Called when the client taps "Mark job complete" next to a provider who accepted.
+  final ValueChanged<AcceptedOffer>? onMarkComplete;
 
   @override
   Widget build(BuildContext context) {
@@ -342,6 +442,40 @@ class ServiceRequestCard extends StatelessWidget {
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(fontSize: 12, color: AppColors.muted, fontStyle: FontStyle.italic),
+                  ),
+                ],
+                for (final offer in request.acceptedOffers) ...[
+                  const SizedBox(height: 10),
+                  Row(
+                    key: Key('accepted-${offer.offerId}'),
+                    children: [
+                      const Icon(Icons.check_circle_outline, size: 16, color: AppColors.turquoise),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          '${offer.providerName} accepted',
+                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.navy),
+                        ),
+                      ),
+                      if (offer.jobCompleted)
+                        const Text(
+                          'Completed',
+                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF15803D)),
+                        )
+                      else if (offer.canComplete && onMarkComplete != null)
+                        TextButton(
+                          key: Key('complete-${offer.offerId}'),
+                          onPressed: () => onMarkComplete!(offer),
+                          style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            minimumSize: const Size(0, 32),
+                          ),
+                          child: const Text(
+                            'Mark job complete',
+                            style: TextStyle(fontSize: 12, color: AppColors.turquoise, fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                    ],
                   ),
                 ],
               ],

@@ -108,7 +108,15 @@ flutter run --dart-define-from-file=dart_defines.local.json
 flutter build apk --release --dart-define-from-file=dart_defines.local.json   --dart-define=API_BASE_URL=https://toplinkai-backend.onrender.com/api   --dart-define=API_KEY="$TOPLINKAI_PROD_API_KEY"
 ```
 
-Without it the sign-in screen says Google sign-in is not set up in this build.
+Clients sign in with Google too, using the same Web client ID. The app asks at
+the end of the request questions (not before), because a request now belongs to
+the account that sent it: "Your requests", marking a job complete, and later
+chat and reviews all go through that account. One Google account is one role: an
+email that belongs to a provider can't sign in as a client, and the other way
+round. Requests are listed at `GET /api/requests/mine/` for the signed-in client
+only (the old device-id listing is gone, so a phone number is never readable
+without signing in). Without the client ID the sign-in screen says Google
+sign-in is not set up in this build.
 Google also needs an **Android** OAuth client in the same project for package
 `com.toplinkai.app` and the SHA-1 of the key that signed the build. Each
 signing key has its own SHA-1: the debug key (per machine, from

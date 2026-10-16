@@ -1,9 +1,14 @@
+from django.db.models import Prefetch
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 from rest_framework.response import Response
 
+from accounts.permissions import IsClientAccount
 from catalog.models import Service
 from catalog.taxonomy import launched_slugs
+from leads.models import LeadOffer
 from leads.phone import normalize_north_american_phone
+from matching.permissions import HasApiKey
 
 from .chat_service import refine_request
 from .models import ProviderOnboarding, ServiceRequest
@@ -43,9 +48,12 @@ class ChatRefineView(APIView):
 
 
 class ServiceRequestCreateView(APIView):
-    """POST /api/requests/
-    {"device_id", "category", "phone", "consent": true,
+    """POST /api/requests/   (signed-in client, Authorization: Bearer ...)
+    {"category", "phone", "consent": true, "device_id": (optional),
      "city": (optional), "description": (optional), "urgency": (optional)}
+
+    The request belongs to the signed-in client: every later look at it, and
+    chat and reviews, go through that account, never through device_id.
 
     Creates a ServiceRequest — the one thing this endpoint does, shared by
     the app's own request flow and (once it exists) the website form. No
@@ -77,8 +85,11 @@ class ServiceRequestCreateView(APIView):
         "number, with service providers before submitting a request."
     )
 
+    permission_classes = [HasApiKey, IsAuthenticated, IsClientAccount]
+
     def post(self, request):
         device_id = request.data.get("device_id")
+        device_id = device_id[:64] if isinstance(device_id, str) else ""
         category = request.data.get("category")
         raw_phone = request.data.get("phone")
         city = request.data.get("city") or "Edmonton"
@@ -87,8 +98,6 @@ class ServiceRequestCreateView(APIView):
         if not isinstance(urgency, str) or urgency not in dict(ServiceRequest.URGENCY_CHOICES):
             urgency = ""
 
-        if not device_id:
-            return Response({"detail": "device_id is required."}, status=400)
         if not category:
             return Response({"detail": "category is required."}, status=400)
         service = (
@@ -109,6 +118,7 @@ class ServiceRequestCreateView(APIView):
             return Response({"detail": self.REQUIRED_CONSENT_MESSAGE}, status=400)
 
         service_request = ServiceRequest.objects.create(
+            user=request.user,
             device_id=device_id,
             category=service.slug,
             city=city,
@@ -129,17 +139,62 @@ class ServiceRequestCreateView(APIView):
         return Response(body, status=201)
 
 
+def _with_accepted_offers(queryset):
+    return queryset.prefetch_related(
+        Prefetch(
+            "offers",
+            queryset=LeadOffer.objects.filter(status=LeadOffer.STATUS_ACCEPTED).select_related("provider"),
+            to_attr="accepted_offers_cache",
+        )
+    )
+
+
 class ServiceRequestListView(APIView):
-    """GET /api/requests/?device_id=...  — "Your requests": every request
-    this device has submitted, newest first."""
+    """GET /api/requests/mine/   (signed-in client): "Your requests", every
+    request this account submitted, newest first, with the providers who
+    accepted it.
+
+    This used to list by an unauthenticated device_id, which made a phone
+    number readable to whoever held that id. It now needs sign-in, and a
+    device_id in the URL is ignored."""
+
+    permission_classes = [HasApiKey, IsAuthenticated, IsClientAccount]
 
     def get(self, request):
-        device_id = request.query_params.get("device_id")
-        if not device_id:
-            return Response({"detail": "device_id is required."}, status=400)
-
-        requests = ServiceRequest.objects.filter(device_id=device_id).order_by("-created_at")
+        requests = _with_accepted_offers(ServiceRequest.objects.filter(user=request.user)).order_by("-created_at")
         return Response({"requests": ServiceRequestSerializer(requests, many=True).data})
+
+
+class ServiceRequestCompleteView(APIView):
+    """POST /api/requests/<id>/complete/ {"offer_id": N}   (signed-in client)
+
+    The client says the job with one provider who accepted is done: that offer
+    becomes hired and completed. Only the request's own client can do this
+    (anyone else gets a 404), only for an accepted offer of that request, and
+    only once per request. An admin can still tick it in the admin.
+    """
+
+    permission_classes = [HasApiKey, IsAuthenticated, IsClientAccount]
+
+    def post(self, request, request_id):
+        service_request = ServiceRequest.objects.filter(pk=request_id, user=request.user).first()
+        if service_request is None:
+            return Response({"detail": "Request not found."}, status=404)
+        offer_id = request.data.get("offer_id")
+        offer = (
+            service_request.offers.filter(pk=offer_id, status=LeadOffer.STATUS_ACCEPTED).first()
+            if isinstance(offer_id, int) and not isinstance(offer_id, bool)
+            else None
+        )
+        if offer is None:
+            return Response({"detail": "That provider has not accepted this request."}, status=400)
+        if service_request.offers.filter(job_completed=True).exists():
+            return Response({"detail": "This request is already marked completed."}, status=409)
+        offer.hired = True
+        offer.job_completed = True
+        offer.save()
+        refreshed = _with_accepted_offers(ServiceRequest.objects.filter(pk=service_request.pk)).get()
+        return Response(ServiceRequestSerializer(refreshed).data)
 
 
 class ProviderOnboardingView(APIView):

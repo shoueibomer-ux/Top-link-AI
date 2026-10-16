@@ -1,14 +1,22 @@
 from rest_framework import serializers
 
+from leads.models import LeadOffer
+
 from .models import ProviderOnboarding, ServiceRequest
 
 
 class ServiceRequestSerializer(serializers.ModelSerializer):
-    """The client's own view of a request they submitted — see
+    """The signed-in client's own view of a request they submitted: see
     ServiceRequestListView ("Your requests"). Includes `phone` (it's their
     own number) and omits `consent_given` (it's always true for any row that
-    exists — see ServiceRequestCreateView — so showing it back adds nothing).
+    exists, see ServiceRequestCreateView, so showing it back adds nothing).
+
+    `accepted_offers` are the providers who said YES, with what the client may
+    do next: only an accepted offer can be marked completed, and only once per
+    request.
     """
+
+    accepted_offers = serializers.SerializerMethodField()
 
     class Meta:
         model = ServiceRequest
@@ -19,7 +27,27 @@ class ServiceRequestSerializer(serializers.ModelSerializer):
             "problem_description",
             "phone",
             "status",
+            "urgency",
             "created_at",
+            "accepted_offers",
+        ]
+
+    def get_accepted_offers(self, obj):
+        offers = getattr(obj, "accepted_offers_cache", None)
+        if offers is None:
+            offers = list(obj.offers.filter(status=LeadOffer.STATUS_ACCEPTED).select_related("provider"))
+        completed = any(o.job_completed for o in offers)
+        return [
+            {
+                "offer_id": o.id,
+                "provider": {"id": o.provider_id, "business_name": o.provider.business_name},
+                "accepted_at": o.responded_at,
+                "hired": o.hired,
+                "job_completed": o.job_completed,
+                "completed_at": o.completed_at,
+                "can_complete": not completed,
+            }
+            for o in offers
         ]
 
 

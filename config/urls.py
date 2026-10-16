@@ -6,6 +6,7 @@ from notifications.views import NotificationListView, NotificationMarkReadView
 from provider_search.views import (
     ChatRefineView,
     ProviderOnboardingView,
+    ServiceRequestCompleteView,
     ServiceRequestCreateView,
     ServiceRequestListView,
 )
@@ -21,6 +22,7 @@ urlpatterns = [
     path("api/", include("matching.urls")),
     path("api/requests/", ServiceRequestCreateView.as_view(), name="service-request-create"),
     path("api/requests/mine/", ServiceRequestListView.as_view(), name="service-request-list"),
+    path("api/requests/<int:request_id>/complete/", ServiceRequestCompleteView.as_view(), name="service-request-complete"),
     path("api/provider-onboarding/", ProviderOnboardingView.as_view(), name="provider-onboarding"),
     path("api/chat/refine/", ChatRefineView.as_view(), name="chat-refine"),
     path("api/twilio/sms/", twilio_sms_webhook, name="twilio-sms-webhook"),

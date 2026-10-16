@@ -3,9 +3,14 @@ from django_ratelimit.decorators import ratelimit
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenRefreshView as _TokenRefreshView
 
 from matching.permissions import HasApiKey
+from providers.google_auth import GoogleAuthError, GoogleAuthNotConfigured, verify_google_id_token
+from providers.google_signin import AccountConflict, user_for_google
+
+from .models import UserRole
 from .serializers import ProfileUpdateSerializer, UserProfileSerializer
 
 # Security audit finding H2: the token endpoint had no rate limiting. A trip
@@ -13,6 +18,43 @@ from .serializers import ProfileUpdateSerializer, UserProfileSerializer
 # `request.limited` check) instead of django-ratelimit's default exception,
 # which DRF would map to a 403.
 _TOKEN_REFRESH_IP_RATE = "30/m"
+_GOOGLE_SIGN_IN_RATE = "20/m"
+
+
+class ClientGoogleSignInView(APIView):
+    """POST /api/accounts/google/ {"id_token": "..."}
+
+    The client's way in: the app signs the person in with Google and sends the
+    ID token. The server verifies it (same checks as the provider sign-in),
+    finds or creates their *client* account, and returns that account's own JWT
+    pair. An email that belongs to a provider account is refused (409): one
+    Google account is one role.
+    """
+
+    @method_decorator(ratelimit(key="ip", rate=_GOOGLE_SIGN_IN_RATE, method="POST", block=False))
+    def post(self, request):
+        if getattr(request, "limited", False):
+            return Response({"detail": "Too many sign-in attempts. Try again in a minute."}, status=429)
+        try:
+            google_user = verify_google_id_token(request.data.get("id_token"))
+        except GoogleAuthNotConfigured as exc:
+            return Response({"detail": str(exc)}, status=503)
+        except GoogleAuthError as exc:
+            return Response({"detail": str(exc)}, status=401)
+
+        try:
+            user, created = user_for_google(google_user, UserRole.CUSTOMER)
+        except AccountConflict as exc:
+            return Response({"detail": str(exc)}, status=409)
+
+        refresh = RefreshToken.for_user(user)
+        return Response({
+            "access": str(refresh.access_token),
+            "refresh": str(refresh),
+            "email": user.email,
+            "full_name": user.profile.full_name,
+            "is_new_account": created,
+        })
 
 
 class TokenRefreshView(_TokenRefreshView):

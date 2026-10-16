@@ -20,7 +20,8 @@ class LeadOfferAdmin(admin.ModelAdmin):
     list_editable = ("hired", "job_completed")
     list_select_related = ("provider", "service_request")
     readonly_fields = (
-        "created_at", "hired_at", "twilio_sid", "followup_sid", "send_error", "response_time", "reply_channel",
+        "created_at", "hired_at", "completed_at", "completion_reminder_sent_at", "twilio_sid", "followup_sid",
+        "send_error", "response_time", "reply_channel",
     )
     date_hierarchy = "created_at"
 

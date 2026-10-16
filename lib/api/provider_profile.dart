@@ -96,3 +96,68 @@ class ProviderSignIn {
   /// Null until the provider has registered.
   final ProviderProfileData? profile;
 }
+
+enum LeadStatus {
+  awaitingReply,
+  accepted,
+  declined,
+  expired;
+
+  static LeadStatus parse(String? value) => switch (value) {
+        'accepted' => LeadStatus.accepted,
+        'declined' => LeadStatus.declined,
+        'expired' => LeadStatus.expired,
+        _ => LeadStatus.awaitingReply,
+      };
+}
+
+/// One client request offered to the provider (providers.serializers.
+/// ProviderLeadSerializer). The description and client name only come once the
+/// provider has accepted; the client's phone number is never in the list.
+class ProviderLead {
+  const ProviderLead({
+    required this.offerId,
+    required this.requestId,
+    required this.serviceSlug,
+    required this.serviceName,
+    required this.city,
+    required this.status,
+    this.urgency = '',
+    this.sentAt,
+    this.hired = false,
+    this.jobCompleted = false,
+    this.description,
+    this.clientName,
+  });
+
+  factory ProviderLead.fromJson(Map<String, dynamic> json) {
+    final service = json['service'] as Map<String, dynamic>? ?? const {};
+    return ProviderLead(
+      offerId: json['offer_id'] as int,
+      requestId: json['request_id'] as int,
+      serviceSlug: service['slug'] as String? ?? '',
+      serviceName: service['name'] as String? ?? '',
+      city: json['city'] as String? ?? '',
+      urgency: json['urgency'] as String? ?? '',
+      status: LeadStatus.parse(json['status'] as String?),
+      sentAt: DateTime.tryParse(json['sent_at'] as String? ?? ''),
+      hired: json['hired'] as bool? ?? false,
+      jobCompleted: json['job_completed'] as bool? ?? false,
+      description: json['description'] as String?,
+      clientName: json['client_name'] as String?,
+    );
+  }
+
+  final int offerId;
+  final int requestId;
+  final String serviceSlug;
+  final String serviceName;
+  final String city;
+  final String urgency;
+  final LeadStatus status;
+  final DateTime? sentAt;
+  final bool hired;
+  final bool jobCompleted;
+  final String? description;
+  final String? clientName;
+}

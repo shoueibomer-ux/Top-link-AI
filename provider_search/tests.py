@@ -1,12 +1,43 @@
 from unittest.mock import patch
 
+from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
+from rest_framework_simplejwt.tokens import RefreshToken
 
+from accounts.models import UserProfile, UserRole
 from catalog.models import Service
+from leads.models import LeadOffer
+from providers.models import ProviderProfile
 
 from .models import ProviderOnboarding, ServiceRequest
 
 TEST_API_KEY = "test-key"
+
+
+def signed_in(email="client@example.com", role=UserRole.CUSTOMER, name="Pat Client"):
+    """(user, request headers) for a signed-in account: the API key plus its token."""
+    user = get_user_model().objects.create_user(username=email, email=email)
+    UserProfile.objects.create(user=user, role=role, full_name=name)
+    token = RefreshToken.for_user(user).access_token
+    return user, {"HTTP_X_API_KEY": TEST_API_KEY, "HTTP_AUTHORIZATION": f"Bearer {token}"}
+
+
+def make_provider(name="Ace Plumbing", email="ace@example.com"):
+    user, headers = signed_in(email, UserRole.PROVIDER, f"Owner of {name}")
+    profile = ProviderProfile.objects.create(
+        user=user, business_name=name, phone="+17805550101", email=email, status=ProviderProfile.STATUS_APPROVED
+    )
+    return profile, headers
+
+
+def make_offer(service_request, provider, status=LeadOffer.STATUS_ACCEPTED):
+    from django.utils import timezone
+
+    offer = LeadOffer.objects.create(service_request=service_request, provider=provider)
+    offer.status = status
+    offer.sent_at = offer.responded_at = timezone.now()
+    offer.save()
+    return offer
 
 
 @override_settings(API_KEY=TEST_API_KEY)
@@ -70,10 +101,11 @@ class ChatRefineViewTests(TestCase):
 class ServiceRequestCreateViewTests(TestCase):
     """POST /api/requests/ — the only way a ServiceRequest is created, by the
     app's own request flow today and (once it exists) the website form.
-    Replaces the old Google-listing search+unlock flow entirely."""
+    Replaces the old Google-listing search+unlock flow entirely. Needs a
+    signed-in client: the request belongs to that account."""
 
     def setUp(self):
-        self.headers = {"HTTP_X_API_KEY": TEST_API_KEY}
+        self.client_user, self.headers = signed_in()
 
     def _create(self, **overrides):
         body = {
@@ -189,10 +221,21 @@ class ServiceRequestCreateViewTests(TestCase):
 
     # ---- Required fields ----
 
-    def test_device_id_is_required(self):
-        response = self._create(device_id="")
-        self.assertEqual(response.status_code, 400)
-        self.assertEqual(ServiceRequest.objects.count(), 0)
+    def test_device_id_is_optional_now_that_the_account_identifies_the_client(self):
+        body = {"category": "plumbing", "phone": "+1 780-555-0100", "consent": True}
+        response = self.client.post("/api/requests/", body, content_type="application/json", **self.headers)
+        self.assertEqual(response.status_code, 201)
+        request = ServiceRequest.objects.get()
+        self.assertEqual(request.device_id, "")
+        self.assertEqual(request.user, self.client_user)
+
+    def test_the_request_belongs_to_the_signed_in_client(self):
+        self.assertEqual(self._create().status_code, 201)
+        self.assertEqual(ServiceRequest.objects.get().user, self.client_user)
+
+    def test_a_very_long_device_id_is_trimmed_not_rejected(self):
+        self.assertEqual(self._create(device_id="x" * 200).status_code, 201)
+        self.assertEqual(len(ServiceRequest.objects.get().device_id), 64)
 
     def test_category_is_required(self):
         response = self._create(category="")
@@ -273,14 +316,17 @@ class ServiceRequestCreateViewTests(TestCase):
 
 @override_settings(API_KEY=TEST_API_KEY)
 class ServiceRequestListViewTests(TestCase):
-    """GET /api/requests/mine/ — "Your requests"."""
+    """GET /api/requests/mine/: "Your requests", for the signed-in client only.
+    The old device_id listing made a phone number readable to whoever held
+    that id; it is gone."""
 
     def setUp(self):
-        self.headers = {"HTTP_X_API_KEY": TEST_API_KEY}
+        self.user, self.headers = signed_in()
 
-    def _make(self, device_id="dev-1", **fields):
+    def _make(self, user=None, **fields):
         return ServiceRequest.objects.create(
-            device_id=device_id,
+            user=user or self.user,
+            device_id=fields.pop("device_id", "dev-1"),
             category=fields.pop("category", "plumbing"),
             city=fields.pop("city", "Edmonton"),
             phone=fields.pop("phone", "+1 780-555-0100"),
@@ -288,34 +334,151 @@ class ServiceRequestListViewTests(TestCase):
             **fields,
         )
 
-    def test_lists_only_this_devices_requests_newest_first(self):
-        self._make(device_id="dev-1", category="plumbing")
-        newest = self._make(device_id="dev-1", category="electrical")
-        self._make(device_id="dev-2", category="roofing")  # a different device
+    def test_lists_only_this_accounts_requests_newest_first(self):
+        self._make(category="plumbing")
+        newest = self._make(category="electrical")
+        other, _ = signed_in("other@example.com")
+        self._make(user=other, category="roofing")  # someone else's
 
-        response = self.client.get("/api/requests/mine/", {"device_id": "dev-1"}, **self.headers)
+        response = self.client.get("/api/requests/mine/", **self.headers)
         self.assertEqual(response.status_code, 200)
         results = response.json()["requests"]
         self.assertEqual(len(results), 2)
         self.assertEqual(results[0]["id"], newest.id)
 
-    def test_a_device_with_no_requests_gets_an_empty_list_not_an_error(self):
-        response = self.client.get("/api/requests/mine/", {"device_id": "nobody"}, **self.headers)
+    def test_an_account_with_no_requests_gets_an_empty_list_not_an_error(self):
+        response = self.client.get("/api/requests/mine/", **self.headers)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["requests"], [])
 
-    def test_includes_phone_since_its_the_devices_own_data(self):
-        self._make(phone="+1 780-555-0199")
-        results = self.client.get("/api/requests/mine/", {"device_id": "dev-1"}, **self.headers).json()["requests"]
-        self.assertEqual(results[0]["phone"], "+1 780-555-0199")
+    def test_includes_the_owners_own_phone_and_urgency(self):
+        self._make(phone="+1 780-555-0199", urgency="today")
+        (result,) = self.client.get("/api/requests/mine/", **self.headers).json()["requests"]
+        self.assertEqual(result["phone"], "+1 780-555-0199")
+        self.assertEqual(result["urgency"], "today")
 
-    def test_device_id_is_required(self):
-        response = self.client.get("/api/requests/mine/", **self.headers)
-        self.assertEqual(response.status_code, 400)
+    def test_a_device_id_in_the_url_is_ignored_so_it_cannot_be_used_to_read_anyones_requests(self):
+        owner, _ = signed_in("owner@example.com")
+        self._make(user=owner, device_id="victim-device", phone="+1 780-555-0177")
+        # Another signed-in client who knows the device id still sees nothing of it.
+        response = self.client.get("/api/requests/mine/", {"device_id": "victim-device"}, **self.headers)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["requests"], [])
+        self.assertNotIn("0177", response.content.decode())
 
-    def test_it_requires_the_api_key(self):
-        response = self.client.get("/api/requests/mine/", {"device_id": "dev-1"})
-        self.assertEqual(response.status_code, 401)
+    def test_without_signing_in_nothing_is_readable_even_with_a_valid_device_id(self):
+        self._make(device_id="dev-1", phone="+1 780-555-0188")
+        for params in ({}, {"device_id": "dev-1"}):
+            response = self.client.get("/api/requests/mine/", params, HTTP_X_API_KEY=TEST_API_KEY)
+            self.assertEqual(response.status_code, 401, params)
+            self.assertNotIn("0188", response.content.decode())
+
+    def test_a_provider_account_cannot_use_the_clients_list(self):
+        _, provider_headers = signed_in("pro@example.com", UserRole.PROVIDER)
+        self.assertEqual(self.client.get("/api/requests/mine/", **provider_headers).status_code, 403)
+
+    def test_it_requires_the_api_key_even_with_a_valid_login(self):
+        response = self.client.get("/api/requests/mine/", HTTP_AUTHORIZATION=self.headers["HTTP_AUTHORIZATION"])
+        self.assertEqual(response.status_code, 403)  # signed in, but the key check fails
+        self.assertEqual(response.json(), {"detail": "Missing or invalid API key."})
+
+    def test_it_shows_who_accepted_and_whether_the_job_can_be_marked_complete(self):
+        request = self._make()
+        ace, _ = make_provider("Ace Plumbing", "ace@example.com")
+        busy, _ = make_provider("Busy Pipes", "busy@example.com")
+        make_offer(request, ace, LeadOffer.STATUS_ACCEPTED)
+        make_offer(request, busy, LeadOffer.STATUS_DECLINED)  # not shown: only YES replies are
+        (result,) = self.client.get("/api/requests/mine/", **self.headers).json()["requests"]
+        (accepted,) = result["accepted_offers"]
+        self.assertEqual(accepted["provider"]["business_name"], "Ace Plumbing")
+        self.assertTrue(accepted["can_complete"])
+        self.assertFalse(accepted["job_completed"])
+
+
+@override_settings(API_KEY=TEST_API_KEY)
+class ServiceRequestCompleteViewTests(TestCase):
+    """POST /api/requests/<id>/complete/: only the request's own client, only
+    for a provider who accepted, only once."""
+
+    def setUp(self):
+        self.user, self.headers = signed_in()
+        self.request = ServiceRequest.objects.create(
+            user=self.user, category="plumbing", city="Edmonton", phone="+17805550100", consent_given=True
+        )
+        self.provider, self.provider_headers = make_provider()
+        self.offer = make_offer(self.request, self.provider)
+
+    def _complete(self, headers=None, request_id=None, **body):
+        body = {"offer_id": self.offer.id, **body}
+        return self.client.post(
+            f"/api/requests/{request_id or self.request.id}/complete/", body,
+            content_type="application/json", **(headers or self.headers),
+        )
+
+    def test_the_client_marks_the_job_complete_with_the_provider_who_accepted(self):
+        response = self._complete()
+        self.assertEqual(response.status_code, 200)
+        self.offer.refresh_from_db()
+        self.assertTrue(self.offer.hired and self.offer.job_completed)
+        self.assertIsNotNone(self.offer.hired_at)
+        self.assertIsNotNone(self.offer.completed_at)
+        (accepted,) = response.json()["accepted_offers"]
+        self.assertTrue(accepted["job_completed"])
+        self.assertFalse(accepted["can_complete"])
+
+    def test_another_client_cannot_complete_it_and_cannot_tell_it_exists(self):
+        _, stranger = signed_in("stranger@example.com")
+        response = self._complete(headers=stranger)
+        self.assertEqual(response.status_code, 404)
+        self.offer.refresh_from_db()
+        self.assertFalse(self.offer.job_completed)
+
+    def test_the_provider_cannot_complete_their_own_job(self):
+        response = self._complete(headers=self.provider_headers)
+        self.assertEqual(response.status_code, 403)
+        self.offer.refresh_from_db()
+        self.assertFalse(self.offer.job_completed)
+
+    def test_signing_in_and_the_api_key_are_both_required(self):
+        self.assertEqual(self._complete(headers={"HTTP_X_API_KEY": TEST_API_KEY}).status_code, 401)
+        no_key = {"HTTP_AUTHORIZATION": self.headers["HTTP_AUTHORIZATION"]}
+        self.assertEqual(self._complete(headers=no_key).status_code, 403)
+
+    def test_only_an_accepted_offer_can_be_completed(self):
+        for status in (LeadOffer.STATUS_SENT, LeadOffer.STATUS_DECLINED, LeadOffer.STATUS_EXPIRED):
+            with self.subTest(status=status):
+                other, _ = make_provider(f"P {status}", f"{status}@example.com")
+                offer = make_offer(self.request, other, status)
+                self.assertEqual(self._complete(offer_id=offer.id).status_code, 400)
+                offer.refresh_from_db()
+                self.assertFalse(offer.job_completed)
+
+    def test_an_offer_from_someone_elses_request_is_refused(self):
+        other_user, _ = signed_in("other@example.com")
+        other_request = ServiceRequest.objects.create(
+            user=other_user, category="plumbing", city="Edmonton", phone="+17805550102", consent_given=True
+        )
+        foreign = make_offer(other_request, self.provider)
+        self.assertEqual(self._complete(offer_id=foreign.id).status_code, 400)
+        foreign.refresh_from_db()
+        self.assertFalse(foreign.job_completed)
+
+    def test_a_missing_or_malformed_offer_id_is_a_400_not_a_server_error(self):
+        for value in (None, "abc", True, [1], {"a": 1}, 999999):
+            with self.subTest(offer_id=value):
+                self.assertEqual(self._complete(offer_id=value).status_code, 400)
+
+    def test_a_request_can_only_be_completed_once(self):
+        second, _ = make_provider("Second Co", "second@example.com")
+        other_offer = make_offer(self.request, second)
+        self.assertEqual(self._complete().status_code, 200)
+        self.assertEqual(self._complete(offer_id=other_offer.id).status_code, 409)
+        self.assertEqual(self._complete().status_code, 409)  # not repeatable either
+        other_offer.refresh_from_db()
+        self.assertFalse(other_offer.job_completed)
+
+    def test_an_unknown_request_is_a_404(self):
+        self.assertEqual(self._complete(request_id=999999).status_code, 404)
 
 
 @override_settings(API_KEY=TEST_API_KEY)
@@ -346,30 +509,49 @@ class ProviderOnboardingViewTests(TestCase):
 
 @override_settings(API_KEY=TEST_API_KEY)
 class RequestEndpointAuthTests(TestCase):
-    """POST /api/requests/ is gated by the shared API key and nothing else —
-    there are no user accounts, so it must never ask for a login — and a
-    rejected key says so (it used to answer "Authentication credentials were
-    not provided.", which sounds like a missing login)."""
+    """POST /api/requests/ needs the shared API key AND a signed-in client. A
+    rejected key says so ("Missing or invalid API key."); a missing login says
+    that instead, so the two problems are never confused."""
 
-    BODY = {"device_id": "dev-1", "category": "plumbing", "phone": "+1 780-555-0100", "consent": True}
+    BODY = {"category": "plumbing", "phone": "+1 780-555-0100", "consent": True}
+
+    def setUp(self):
+        self.user, self.signed_in_headers = signed_in()
 
     def _post(self, **headers):
         return self.client.post("/api/requests/", self.BODY, content_type="application/json", **headers)
 
-    def test_the_api_key_alone_is_enough_no_login_needed(self):
-        response = self._post(HTTP_X_API_KEY=TEST_API_KEY)
-        self.assertEqual(response.status_code, 201)
-        self.assertNotIn("HTTP_AUTHORIZATION", response.wsgi_request.META)
+    def test_the_key_and_a_client_login_are_both_needed(self):
+        self.assertEqual(self._post(**self.signed_in_headers).status_code, 201)
 
-    def test_it_uses_the_project_wide_auth_defaults_and_adds_nothing(self):
-        from rest_framework.settings import api_settings
+    def test_the_key_alone_is_no_longer_enough(self):
+        response = self._post(HTTP_X_API_KEY=TEST_API_KEY)
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(ServiceRequest.objects.count(), 0)
+
+    def test_a_login_alone_is_not_enough_either(self):
+        response = self._post(HTTP_AUTHORIZATION=self.signed_in_headers["HTTP_AUTHORIZATION"])
+        self.assertEqual(response.status_code, 403)  # signed in, but the key check fails
+        self.assertEqual(response.json(), {"detail": "Missing or invalid API key."})
+
+    def test_only_a_client_account_may_submit_a_request(self):
+        _, provider_headers = signed_in("pro@example.com", UserRole.PROVIDER)
+        self.assertEqual(self._post(**provider_headers).status_code, 403)
+        self.assertEqual(ServiceRequest.objects.count(), 0)
+
+    def test_the_permissions_are_explicit(self):
+        from accounts.permissions import IsClientAccount
+        from matching.permissions import HasApiKey
+        from rest_framework.permissions import IsAuthenticated
 
         from .views import ServiceRequestCreateView
 
-        self.assertEqual(ServiceRequestCreateView.permission_classes, api_settings.DEFAULT_PERMISSION_CLASSES)
-        self.assertEqual(ServiceRequestCreateView.authentication_classes, api_settings.DEFAULT_AUTHENTICATION_CLASSES)
+        self.assertEqual(
+            ServiceRequestCreateView.permission_classes, [HasApiKey, IsAuthenticated, IsClientAccount]
+        )
 
     def test_a_missing_or_wrong_key_is_rejected_and_names_the_key(self):
+        token = {"HTTP_AUTHORIZATION": self.signed_in_headers["HTTP_AUTHORIZATION"]}
         cases = {
             "no key": {},
             "wrong key": {"HTTP_X_API_KEY": "not-the-key"},
@@ -378,20 +560,23 @@ class RequestEndpointAuthTests(TestCase):
             "empty key": {"HTTP_X_API_KEY": ""},
         }
         for name, headers in cases.items():
-            with self.subTest(name):
-                response = self._post(**headers)
-                self.assertEqual(response.status_code, 401)
-                self.assertEqual(response.json(), {"detail": "Missing or invalid API key."})
+            # Not signed in: a 401. Signed in with a bad key: a 403. Either way
+            # the message names the key, and nothing is created.
+            for label, auth, expected in (("anonymous", {}, 401), ("signed in", token, 403)):
+                with self.subTest(f"{name} ({label})"):
+                    response = self._post(**auth, **headers)
+                    self.assertEqual(response.status_code, expected)
+                    self.assertEqual(response.json(), {"detail": "Missing or invalid API key."})
         self.assertEqual(ServiceRequest.objects.count(), 0)
 
     def test_a_non_ascii_key_is_rejected_not_a_server_error(self):
-        response = self._post(HTTP_X_API_KEY="kéy")
+        response = self._post(HTTP_X_API_KEY="k\u00e9y")
         self.assertEqual(response.status_code, 401)
 
     def test_a_bad_key_is_rejected_the_same_way_on_the_endpoints_that_work(self):
         # The app's other calls go through the same gate, so a key problem
         # shows up everywhere, not only on submit.
-        for path in ("/api/requests/mine/?device_id=d", "/api/catalog/categories/"):
+        for path in ("/api/requests/mine/", "/api/catalog/categories/"):
             with self.subTest(path):
                 response = self.client.get(path, HTTP_X_API_KEY="not-the-key")
                 self.assertEqual(response.status_code, 401)

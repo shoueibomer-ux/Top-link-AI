@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../provider/auth_storage.dart';
 import 'root_gate.dart';
 
 /// Which side of the marketplace this device is using. Chosen once on the role
@@ -36,5 +37,7 @@ class RoleStorage {
 Future<void> switchRole(BuildContext context) async {
   final navigator = Navigator.of(context);
   await RoleStorage.clear();
+  // The tokens belong to one role's account; never carry them across.
+  await AuthStorage.clear();
   navigator.pushAndRemoveUntil(MaterialPageRoute(builder: (_) => const RootGate()), (route) => false);
 }

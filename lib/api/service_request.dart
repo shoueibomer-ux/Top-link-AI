@@ -2,6 +2,40 @@
 /// provider_search.views.ServiceRequestCreateView / ServiceRequestListView.
 /// Replaces RealProvider/ProviderMatchRecord: there's no provider matching
 /// yet, just the record of the request itself.
+/// A provider who said YES to a request, as the client sees them (see
+/// provider_search.serializers.ServiceRequestSerializer.accepted_offers).
+class AcceptedOffer {
+  const AcceptedOffer({
+    required this.offerId,
+    required this.providerId,
+    required this.providerName,
+    this.hired = false,
+    this.jobCompleted = false,
+    this.canComplete = true,
+  });
+
+  factory AcceptedOffer.fromJson(Map<String, dynamic> json) {
+    final provider = json['provider'] as Map<String, dynamic>? ?? const {};
+    return AcceptedOffer(
+      offerId: json['offer_id'] as int,
+      providerId: provider['id'] as int? ?? 0,
+      providerName: provider['business_name'] as String? ?? '',
+      hired: json['hired'] as bool? ?? false,
+      jobCompleted: json['job_completed'] as bool? ?? false,
+      canComplete: json['can_complete'] as bool? ?? false,
+    );
+  }
+
+  final int offerId;
+  final int providerId;
+  final String providerName;
+  final bool hired;
+  final bool jobCompleted;
+
+  /// True only while no provider on this request has been marked completed.
+  final bool canComplete;
+}
+
 class ServiceRequestRecord {
   const ServiceRequestRecord({
     required this.id,
@@ -11,6 +45,8 @@ class ServiceRequestRecord {
     required this.phone,
     required this.status,
     required this.createdAt,
+    this.urgency = '',
+    this.acceptedOffers = const [],
   });
 
   factory ServiceRequestRecord.fromJson(Map<String, dynamic> json) {
@@ -22,6 +58,11 @@ class ServiceRequestRecord {
       phone: json['phone'] as String? ?? '',
       status: json['status'] as String? ?? '',
       createdAt: DateTime.tryParse(json['created_at'] as String? ?? '') ?? DateTime.now(),
+      urgency: json['urgency'] as String? ?? '',
+      acceptedOffers: [
+        for (final o in json['accepted_offers'] as List<dynamic>? ?? const [])
+          AcceptedOffer.fromJson(o as Map<String, dynamic>),
+      ],
     );
   }
 
@@ -32,6 +73,8 @@ class ServiceRequestRecord {
   final String phone;
   final String status;
   final DateTime createdAt;
+  final String urgency;
+  final List<AcceptedOffer> acceptedOffers;
 }
 
 /// Response from ChatRefineView — a classification only, no request created

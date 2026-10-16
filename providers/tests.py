@@ -13,6 +13,8 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from accounts.models import UserProfile, UserRole
 from catalog.models import Service
+from leads.models import LeadOffer
+from provider_search.models import ServiceRequest
 
 from .apps import check_dev_fake_auth
 from .models import GoogleIdentity, ProviderProfile
@@ -572,3 +574,106 @@ class ProviderAdminTests(ProviderApiCase):
         self.run_action("approve_selected")
         self.profile.refresh_from_db()
         self.assertEqual(self.profile.status, "pending")
+
+
+@override_settings(API_KEY=API_KEY)
+class ProviderLeadsTests(TestCase):
+    """GET /api/provider/leads/: the requests offered to the signed-in provider."""
+
+    LEADS = "/api/provider/leads/"
+    CLIENT_PHONE = "+17805550166"
+
+    def account(self, email, role, name):
+        user = User.objects.create_user(username=email, email=email)
+        UserProfile.objects.create(user=user, role=role, full_name=name)
+        token = RefreshToken.for_user(user).access_token
+        return user, {**KEY, "HTTP_AUTHORIZATION": f"Bearer {token}"}
+
+    def provider(self, name="Ace Plumbing", email="ace@example.com"):
+        user, headers = self.account(email, UserRole.PROVIDER, f"Owner of {name}")
+        profile = ProviderProfile.objects.create(
+            user=user, business_name=name, phone="+17805550101", email=email, status=ProviderProfile.STATUS_APPROVED
+        )
+        return profile, headers
+
+    def setUp(self):
+        self.client_user, self.client_headers = self.account("client@example.com", UserRole.CUSTOMER, "Pat Client")
+        self.request = ServiceRequest.objects.create(
+            user=self.client_user, category="plumbing", city="Edmonton", phone=self.CLIENT_PHONE,
+            consent_given=True, urgency="today", problem_description="Leaking kitchen sink",
+        )
+        self.ace, self.ace_headers = self.provider()
+
+    def offer(self, provider=None, status=LeadOffer.STATUS_SENT, sent=True, request=None):
+        from django.utils import timezone
+
+        offer = LeadOffer.objects.create(service_request=request or self.request, provider=provider or self.ace)
+        offer.status = status
+        if sent:
+            offer.sent_at = timezone.now()
+        offer.save()
+        return offer
+
+    def leads(self, headers=None):
+        return self.client.get(self.LEADS, **(headers or self.ace_headers))
+
+    def test_it_lists_the_offers_sent_to_this_provider(self):
+        offer = self.offer()
+        response = self.leads()
+        self.assertEqual(response.status_code, 200)
+        (lead,) = response.json()["leads"]
+        self.assertEqual(lead["offer_id"], offer.id)
+        self.assertEqual(lead["service"], {"slug": "plumbing", "name": "Plumbing"})
+        self.assertEqual((lead["city"], lead["urgency"], lead["status"]), ("Edmonton", "today", "awaiting_reply"))
+
+    def test_before_accepting_the_provider_sees_no_description_or_client_name(self):
+        self.offer(status=LeadOffer.STATUS_SENT)
+        (lead,) = self.leads().json()["leads"]
+        self.assertNotIn("description", lead)
+        self.assertNotIn("client_name", lead)
+
+    def test_after_accepting_they_see_the_description_and_a_shortened_name(self):
+        self.offer(status=LeadOffer.STATUS_ACCEPTED)
+        (lead,) = self.leads().json()["leads"]
+        self.assertEqual(lead["status"], "accepted")
+        self.assertEqual(lead["description"], "Leaking kitchen sink")
+        self.assertEqual(lead["client_name"], "Pat C.")
+
+    def test_the_clients_phone_and_email_are_never_in_the_list(self):
+        self.offer(status=LeadOffer.STATUS_ACCEPTED)
+        text = self.leads().content.decode()
+        self.assertNotIn("0166", text)
+        self.assertNotIn("client@example.com", text)
+
+    def test_offers_that_were_never_sent_are_not_listed(self):
+        self.offer(sent=False, status=LeadOffer.STATUS_PENDING)
+        self.assertEqual(self.leads().json()["leads"], [])
+
+    def test_statuses_are_readable(self):
+        for status, label in (
+            (LeadOffer.STATUS_DECLINED, "declined"), (LeadOffer.STATUS_EXPIRED, "expired"),
+            (LeadOffer.STATUS_VIEWED, "awaiting_reply"),
+        ):
+            with self.subTest(status=status):
+                LeadOffer.objects.all().delete()
+                self.offer(status=status)
+                self.assertEqual(self.leads().json()["leads"][0]["status"], label)
+
+    def test_a_provider_never_sees_another_providers_offers(self):
+        busy, busy_headers = self.provider("Busy Pipes", "busy@example.com")
+        self.offer(provider=busy, status=LeadOffer.STATUS_ACCEPTED)
+        self.assertEqual(self.leads().json()["leads"], [])
+        self.assertEqual(len(self.leads(busy_headers).json()["leads"]), 1)
+
+    def test_a_client_account_is_refused(self):
+        self.offer()
+        self.assertEqual(self.leads(self.client_headers).status_code, 403)
+
+    def test_a_provider_with_no_profile_yet_gets_a_404(self):
+        _, headers = self.account("new@example.com", UserRole.PROVIDER, "New")
+        self.assertEqual(self.leads(headers).status_code, 404)
+
+    def test_signing_in_and_the_api_key_are_required(self):
+        self.assertEqual(self.client.get(self.LEADS, **KEY).status_code, 401)
+        no_key = {"HTTP_AUTHORIZATION": self.ace_headers["HTTP_AUTHORIZATION"]}
+        self.assertEqual(self.client.get(self.LEADS, **no_key).status_code, 403)

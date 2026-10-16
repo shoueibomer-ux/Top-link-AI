@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -15,6 +16,7 @@ import 'package:toplinkai_app/onboarding/confirmation_step.dart';
 import 'package:toplinkai_app/onboarding/onboarding_screen.dart';
 import 'package:toplinkai_app/onboarding/service_category.dart';
 import 'package:toplinkai_app/onboarding/service_list_page.dart';
+import 'package:toplinkai_app/provider/auth_storage.dart';
 import 'package:toplinkai_app/widgets/category_search_view.dart';
 import 'package:toplinkai_app/widgets/pressable.dart';
 
@@ -121,9 +123,13 @@ Future<void> _fillAndSubmit(WidgetTester tester) async {
 }
 
 void main() {
-  setUp(() {
+  setUp(() async {
     SharedPreferences.setMockInitialValues({});
     resetCatalogForTests();
+    // Submitting a request needs a signed-in client; these tests are about the
+    // request itself, so they start signed in (the sign-in step has its own tests).
+    FlutterSecureStorage.setMockInitialValues({});
+    await AuthStorage.save(access: 'client-access', refresh: 'client-refresh');
   });
 
   group('catalog parsing', () {

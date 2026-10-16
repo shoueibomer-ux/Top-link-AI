@@ -1,12 +1,12 @@
 import '../api/api_client.dart';
 import 'auth_storage.dart';
 
-/// Calls the backend as the signed-in provider. If the access token has
+/// Calls the backend as the signed-in user (a provider or a client). If the access token has
 /// expired it renews it once from the refresh token and retries; if that fails
 /// too, the stored tokens are cleared and [SessionExpiredException] is thrown
 /// so the caller can send them back to sign-in.
-class ProviderSession {
-  ProviderSession({ApiClient? api}) : api = api ?? ApiClient();
+class AuthSession {
+  AuthSession({ApiClient? api}) : api = api ?? ApiClient();
 
   final ApiClient api;
 
@@ -32,3 +32,6 @@ class ProviderSession {
     }
   }
 }
+
+/// The name the provider screens already use.
+typedef ProviderSession = AuthSession;

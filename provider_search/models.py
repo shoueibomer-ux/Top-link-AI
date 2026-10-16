@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import models
 
 
@@ -106,7 +107,16 @@ class ServiceRequest(models.Model):
         (STATUS_WAITLISTED, "Waitlisted"),
     ]
 
-    device_id = models.CharField(max_length=64, db_index=True)
+    # Who submitted it: the signed-in client. Required for every new request
+    # (see ServiceRequestCreateView); null only for rows from before sign-in
+    # existed, which nobody but an admin can see. Chat and reviews hang off
+    # this, never off device_id.
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="service_requests"
+    )
+    # Kept for the notifications and demand reports; no longer how a client
+    # is identified or how their requests are found.
+    device_id = models.CharField(max_length=64, blank=True, db_index=True)
     # catalog.Service.slug (validated against the catalog on creation).
     category = models.CharField(max_length=50)
     city = models.CharField(max_length=100)

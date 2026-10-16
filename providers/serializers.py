@@ -1,7 +1,9 @@
 from django.utils import timezone
 from rest_framework import serializers
 
+from accounts.names import public_name
 from catalog.models import Service
+from leads.models import LeadOffer
 from leads.phone import normalize_north_american_phone
 from provider_search.services import CITIES
 
@@ -66,6 +68,44 @@ class ProviderProfileSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         validated_data.pop("sms_consent", None)
         return super().update(instance, validated_data)
+
+
+class ProviderLeadSerializer(serializers.Serializer):
+    """One client request offered to this provider: what they may see of it.
+
+    The client's description and (shortened) name appear only once the provider
+    has accepted, mirroring the SMS flow, where the details come after YES. The
+    client's phone number is never in this list (the app asks for it, behind the
+    same acceptance check, when the provider taps Call)."""
+
+    STATUS_LABELS = {
+        LeadOffer.STATUS_SENT: "awaiting_reply",
+        LeadOffer.STATUS_VIEWED: "awaiting_reply",
+        LeadOffer.STATUS_ACCEPTED: "accepted",
+        LeadOffer.STATUS_DECLINED: "declined",
+        LeadOffer.STATUS_EXPIRED: "expired",
+    }
+
+    def to_representation(self, offer):
+        request = offer.service_request
+        accepted = offer.status == LeadOffer.STATUS_ACCEPTED
+        data = {
+            "offer_id": offer.id,
+            "request_id": request.id,
+            "service": {"slug": request.category, "name": self.context["service_names"].get(request.category, request.category)},
+            "city": request.city,
+            "urgency": request.urgency,
+            "status": self.STATUS_LABELS.get(offer.status, offer.status),
+            "sent_at": offer.sent_at,
+            "responded_at": offer.responded_at,
+            "hired": offer.hired,
+            "job_completed": offer.job_completed,
+        }
+        if accepted:
+            owner = request.user
+            data["description"] = request.problem_description
+            data["client_name"] = public_name(owner.profile.full_name if owner and hasattr(owner, "profile") else "")
+        return data
 
 
 class PublicProviderSerializer(serializers.ModelSerializer):
