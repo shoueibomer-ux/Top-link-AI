@@ -68,6 +68,7 @@ flutter:
 
   assets:
     - assets/brand/tabmatch_icon_192.png
+    - assets/brand/tabmatch_splash_1152.png
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
@@ -119,10 +120,7 @@ flutter_launcher_icons:
 flutter_native_splash:
   color: "#0B1F3A"
   image: assets/brand/tabmatch_splash_1152.png
-  branding: assets/brand/tabmatch_wordmark_on_dark.png
-  branding_mode: bottom
   android_12:
     color: "#0B1F3A"
     image: assets/brand/tabmatch_splash_1152.png
     icon_background_color: "#0B1F3A"
-    branding: assets/brand/tabmatch_wordmark_on_dark.png

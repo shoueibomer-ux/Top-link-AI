@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../app_colors.dart';
 import '../onboarding/onboarding_screen.dart';
 import '../provider/provider_gate.dart';
+import '../widgets/brand_splash.dart';
 import 'app_role.dart';
 import 'role_choice_screen.dart';
 
@@ -41,10 +41,8 @@ class _RootGateState extends State<RootGate> {
   @override
   Widget build(BuildContext context) {
     if (!_loaded) {
-      return const Scaffold(
-        backgroundColor: AppColors.lightBackground,
-        body: Center(child: CircularProgressIndicator(color: AppColors.turquoise)),
-      );
+      // The same logo the native launch screen shows, so there is no jump.
+      return const BrandSplash();
     }
     return switch (_role) {
       AppRole.client => const OnboardingScreen(),

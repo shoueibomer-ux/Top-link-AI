@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../app_colors.dart';
 import '../app_styles.dart';
@@ -13,54 +14,69 @@ class RoleChoiceScreen extends StatelessWidget {
 
   final ValueChanged<AppRole> onChosen;
 
+  /// This screen has no app bar to set the system bar, so it sets its own: dark icons on the light
+  /// background (the splash before it uses light ones, and would otherwise leave them behind).
+  static const systemBars = SystemUiOverlayStyle(
+    statusBarColor: Colors.transparent,
+    statusBarIconBrightness: Brightness.dark, // Android
+    statusBarBrightness: Brightness.light, // iOS
+  );
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.lightBackground,
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 24),
-              const AppLogo(height: 44, onLight: true),
-              const SizedBox(height: 32),
-              const Text(
-                'Welcome to Tabmatch',
-                style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: AppColors.navy),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'How would you like to use the app?',
-                style: TextStyle(fontSize: 15, color: AppColors.muted),
-              ),
-              const SizedBox(height: 32),
-              _RoleCard(
-                key: const Key('role-client'),
-                icon: Icons.search,
-                title: 'I need a service',
-                subtitle: 'Tell us what you need and we will connect you with local providers.',
-                filled: false,
-                onTap: () => onChosen(AppRole.client),
-              ),
-              const SizedBox(height: 16),
-              _RoleCard(
-                key: const Key('role-provider'),
-                icon: Icons.business_center_outlined,
-                title: "I'm a service provider",
-                subtitle: 'Register your business and get matched with clients in your city.',
-                filled: true,
-                onTap: () => onChosen(AppRole.provider),
-              ),
-              const Spacer(),
-              Center(
-                child: Text(
-                  'You can switch any time from the menu.',
-                  style: TextStyle(fontSize: 12, color: AppColors.mutedText),
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: systemBars,
+      child: Scaffold(
+        backgroundColor: AppColors.lightBackground,
+        body: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 24),
+                const AppLogo(height: 44, onLight: true),
+                const SizedBox(height: 32),
+                const Text(
+                  'Welcome to Tabmatch',
+                  style: TextStyle(
+                    fontSize: 26,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.navy,
+                  ),
                 ),
-              ),
-            ],
+                const SizedBox(height: 8),
+                Text(
+                  'How would you like to use the app?',
+                  style: TextStyle(fontSize: 15, color: AppColors.muted),
+                ),
+                const SizedBox(height: 32),
+                _RoleCard(
+                  key: const Key('role-client'),
+                  icon: Icons.search,
+                  title: 'I need a service',
+                  subtitle: 'Tell us what you need and we will connect you with local providers.',
+                  filled: false,
+                  onTap: () => onChosen(AppRole.client),
+                ),
+                const SizedBox(height: 16),
+                _RoleCard(
+                  key: const Key('role-provider'),
+                  icon: Icons.business_center_outlined,
+                  title: "I'm a service provider",
+                  subtitle: 'Register your business and get matched with clients in your city.',
+                  filled: true,
+                  onTap: () => onChosen(AppRole.provider),
+                ),
+                const Spacer(),
+                Center(
+                  child: Text(
+                    'You can switch any time from the menu.',
+                    style: TextStyle(fontSize: 12, color: AppColors.mutedText),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -94,7 +110,9 @@ class _RoleCard extends StatelessWidget {
           color: background,
           borderRadius: BorderRadius.circular(kRadius),
           boxShadow: kCardShadow,
-          border: filled ? null : Border.all(color: AppColors.navy.withValues(alpha: 0.15)),
+          border: filled
+              ? null
+              : Border.all(color: AppColors.navy.withValues(alpha: 0.15)),
         ),
         child: Material(
           color: Colors.transparent,
@@ -108,7 +126,10 @@ class _RoleCard extends StatelessWidget {
                   Container(
                     width: 52,
                     height: 52,
-                    decoration: BoxDecoration(color: AppColors.turquoise.withValues(alpha: 0.18), shape: BoxShape.circle),
+                    decoration: BoxDecoration(
+                      color: AppColors.turquoise.withValues(alpha: 0.18),
+                      shape: BoxShape.circle,
+                    ),
                     child: Icon(icon, color: AppColors.turquoise, size: 26),
                   ),
                   const SizedBox(width: 16),
@@ -116,16 +137,30 @@ class _RoleCard extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(title, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: foreground)),
+                        Text(
+                          title,
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: foreground,
+                          ),
+                        ),
                         const SizedBox(height: 4),
                         Text(
                           subtitle,
-                          style: TextStyle(fontSize: 13, height: 1.4, color: foreground.withValues(alpha: 0.75)),
+                          style: TextStyle(
+                            fontSize: 13,
+                            height: 1.4,
+                            color: foreground.withValues(alpha: 0.75),
+                          ),
                         ),
                       ],
                     ),
                   ),
-                  Icon(Icons.chevron_right, color: foreground.withValues(alpha: 0.6)),
+                  Icon(
+                    Icons.chevron_right,
+                    color: foreground.withValues(alpha: 0.6),
+                  ),
                 ],
               ),
             ),
