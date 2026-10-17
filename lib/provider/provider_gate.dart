@@ -4,6 +4,7 @@ import '../api/api_client.dart';
 import '../api/provider_profile.dart';
 import '../app_colors.dart';
 import '../role/app_role.dart';
+import '../widgets/brand_splash.dart';
 import 'auth_storage.dart';
 import 'google_sign_in_service.dart';
 import 'provider_home_screen.dart';
@@ -105,10 +106,7 @@ class _ProviderGateState extends State<ProviderGate> {
   Widget build(BuildContext context) {
     switch (_stage) {
       case _Stage.loading:
-        return const Scaffold(
-          backgroundColor: AppColors.lightBackground,
-          body: Center(child: CircularProgressIndicator(color: AppColors.turquoise)),
-        );
+        return const BrandSplash();
       case _Stage.signIn:
         return ProviderSignInScreen(
           api: _api,
