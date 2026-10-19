@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../app_colors.dart';
 import '../app_styles.dart';
 import '../onboarding/onboarding_screen.dart';
+import '../messaging/push_service.dart';
 import '../provider/auth_storage.dart';
 import '../widgets/app_drawer.dart';
 
@@ -85,6 +86,7 @@ class _SettingsBodyState extends State<SettingsBody> {
     // Actually end the provider session first: this used to just re-route,
     // leaving the stored access/refresh tokens in place, so "Log out" logged
     // nobody out.
+    await PushService.instance.unregister(); // before the login goes, so the server can be told
     await AuthStorage.clear();
     if (!mounted) return;
     Navigator.of(context).pushAndRemoveUntil(

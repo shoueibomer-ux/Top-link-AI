@@ -147,6 +147,36 @@ work when **all** of these hold, and each is enforced and tested:
 Never add `GOOGLE_DEV_FAKE_AUTH` to `render.yaml`, `.env.example` or the Render
 dashboard (a test fails if it appears in `render.yaml`).
 
+### Chat and push notifications
+
+Once a provider accepts a request, the client and that provider can chat in the app (text and photos),
+and the client can call them. Only the two people on that offer can ever see the conversation: every
+endpoint answers a stranger with the same 404 as a conversation that does not exist.
+
+- **How messages arrive:** the open chat screen asks the server every few seconds for anything newer than
+  the last message it has (a cursor, `since_id`), and only while the screen is open and the app is in
+  front. A push notification wakes the app when it isn't. This is polling, not WebSockets: it works on the
+  current single web instance without moving the whole backend to ASGI, at the cost of a delay of a few
+  seconds. The API is the same one WebSockets would use, so the app would not change if that is added later.
+- **Push:** Firebase Cloud Messaging. The text is generic ("<name> sent you a message"); the message never
+  leaves the app. Needs two things, neither in the repo:
+  - the Firebase service-account JSON as the Render env var `FCM_SERVICE_ACCOUNT_JSON` (web service), and
+  - `google-services.json` from the Firebase console saved as `android/app/google-services.json` on every
+    machine that builds the Android app (git-ignored; without it the app still builds, push is just off).
+- **Photos:** a private Cloudflare R2 bucket. The app uploads straight to R2 with a 10-minute signed link and
+  reads a photo through a 15-minute signed link that only the two people in the chat are given. The bucket is
+  never public. Needs the Render env vars `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` and
+  `R2_BUCKET`. Without them text chat works and the photo button is hidden.
+- **Check your keys** (shows only OK / OFF, never a value): in the Render Shell run
+  `python manage.py check_messaging_config`, and add `--live` to make one harmless real call to Firebase and R2.
+- **Safety (required by the app stores):** anyone can report a message (long-press) or block the other person;
+  a first message needs agreement to the chat rules. Staff moderate in the Django admin under *Messaging*:
+  *Message reports* is the queue (hide the message, or suspend the sender and hide it, or dismiss), and a
+  hidden message shows to both people as "removed by a moderator". Photos in reports open through a private link.
+- **Calling:** the Call button opens the phone's dialer with the other person's number, and only after the
+  provider has accepted. `CALL_MASKING_ENABLED` is reserved for phase 2 (Twilio masked calls, not built yet);
+  while it is on the server refuses calls (501) rather than silently ignoring it. The app does not change.
+
 ### Before publishing
 
 Tick every box before a release goes to the Play Store, the App Store or real
@@ -166,6 +196,11 @@ providers:
       Render (check the environment tab), the release command has no
       `DEV_FAKE_GOOGLE_EMAIL`, and a fake token is refused by the production
       server (`providers/tests.py`, `FakeSignInNeverInProductionTests`, passes).
+- [ ] Chat tested on **two real devices**: a push arrives with the app closed, tapping it opens the chat,
+      a photo sends and shows, and report / block work. (`check_messaging_config --live` is OK on Render.)
+- [ ] The Firebase project has the **release / Play app-signing SHA-1** added, and the release build was made
+      with the matching `google-services.json`.
+- [ ] The R2 bucket is private (no public development URL, no custom domain).
 - [ ] Providers can delete their account inside the app (an app-store
       requirement; not built yet).
 

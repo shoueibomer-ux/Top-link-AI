@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../messaging/push_service.dart';
 import '../provider/auth_storage.dart';
 import 'root_gate.dart';
 
@@ -37,6 +38,7 @@ class RoleStorage {
 Future<void> switchRole(BuildContext context) async {
   final navigator = Navigator.of(context);
   await RoleStorage.clear();
+  await PushService.instance.unregister(); // before the login goes, so the server can be told
   // The tokens belong to one role's account; never carry them across.
   await AuthStorage.clear();
   navigator.pushAndRemoveUntil(MaterialPageRoute(builder: (_) => const RootGate()), (route) => false);

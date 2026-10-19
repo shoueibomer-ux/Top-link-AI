@@ -7,6 +7,7 @@ import 'api_config.dart';
 import 'app_notification.dart';
 import 'auth_models.dart';
 import 'category_suggestions.dart';
+import 'messaging.dart';
 import 'provider_onboarding.dart';
 import 'provider_profile.dart';
 import 'service_request.dart';
@@ -25,6 +26,11 @@ class ApiException implements Exception {
 /// to log in again, which is what callers should offer.
 class SessionExpiredException extends ApiException {
   SessionExpiredException() : super('Your session has expired. Please log in again.');
+}
+
+/// The server says this person has to agree to the chat rules before they can send anything.
+class ChatTermsRequired extends ApiException {
+  ChatTermsRequired() : super('Agree to the chat rules first.');
 }
 
 class ApiClient {
@@ -245,6 +251,152 @@ class ApiClient {
       throw ApiException('Could not load your account (${response.statusCode}).');
     }
     return AccountProfile.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
+  // ---- chat (the messaging app) --------------------------------------------------------------
+
+  Map<String, dynamic> _chatBody(http.Response response, String failure) {
+    // The "agree to the chat rules" answer is a 403 too, so it is recognised before the general 403 handling.
+    if (response.statusCode == 403) {
+      final decoded = _tryDecode(response.body);
+      if (decoded is Map<String, dynamic> && decoded['code'] == 'terms_required') throw ChatTermsRequired();
+    }
+    _throwForAuthProblems(response);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw ApiException(_firstErrorMessage(response.body) ?? '$failure (${response.statusCode}).');
+    }
+    final decoded = _tryDecode(response.body);
+    return decoded is Map<String, dynamic> ? decoded : <String, dynamic>{};
+  }
+
+  Object? _tryDecode(String body) {
+    try {
+      return jsonDecode(body);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// This person's chats with unread counts, newest first.
+  Future<({List<ChatConversation> conversations, int totalUnread})> getConversations(String accessToken) async {
+    final response = await http.get(Uri.parse('$baseUrl/conversations/'), headers: _authHeaders(accessToken));
+    final body = _chatBody(response, 'Could not load your chats');
+    return (
+      conversations: [
+        for (final c in body['conversations'] as List<dynamic>? ?? const []) ChatConversation.fromJson(c as Map<String, dynamic>),
+      ],
+      totalUnread: body['total_unread'] as int? ?? 0,
+    );
+  }
+
+  /// Starts (or returns) the chat for an offer a provider accepted.
+  Future<ChatConversation> openConversation(String accessToken, int offerId) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/conversations/open/'),
+      headers: _authHeaders(accessToken),
+      body: jsonEncode({'offer_id': offerId}),
+    );
+    return ChatConversation.fromJson(_chatBody(response, 'Could not open the chat'));
+  }
+
+  /// The latest messages, or only those after [sinceId] (what the screen polls with).
+  Future<ChatPage> getMessages(String accessToken, int conversationId, {int? sinceId}) async {
+    final uri = Uri.parse('$baseUrl/conversations/$conversationId/messages/')
+        .replace(queryParameters: {'since_id': ?sinceId?.toString()});
+    final response = await http.get(uri, headers: _authHeaders(accessToken));
+    return ChatPage.fromJson(_chatBody(response, 'Could not load the messages'));
+  }
+
+  Future<ChatMessage> sendMessage(String accessToken, int conversationId, {String body = '', String? photoKey}) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/conversations/$conversationId/messages/'),
+      headers: _authHeaders(accessToken),
+      body: jsonEncode({'body': body, 'photo_key': ?photoKey}),
+    );
+    return ChatMessage.fromJson(_chatBody(response, 'Could not send the message'));
+  }
+
+  Future<void> markConversationRead(String accessToken, int conversationId, {int? lastId}) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/conversations/$conversationId/read/'),
+      headers: _authHeaders(accessToken),
+      body: jsonEncode({'last_id': ?lastId}),
+    );
+    _chatBody(response, 'Could not update the chat');
+  }
+
+  Future<String> getChatTerms(String accessToken) async {
+    final response = await http.get(Uri.parse('$baseUrl/messaging/terms/'), headers: _authHeaders(accessToken));
+    return _chatBody(response, 'Could not load the chat rules')['text'] as String? ?? '';
+  }
+
+  Future<void> acceptChatTerms(String accessToken) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/messaging/terms/'),
+      headers: _authHeaders(accessToken),
+      body: jsonEncode({}),
+    );
+    _chatBody(response, 'Could not save your choice');
+  }
+
+  /// A signed link to upload one photo, then [uploadPhotoBytes] sends it there.
+  Future<PhotoUpload> requestPhotoUpload(String accessToken, int conversationId, String contentType) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/conversations/$conversationId/photos/'),
+      headers: _authHeaders(accessToken),
+      body: jsonEncode({'content_type': contentType}),
+    );
+    return PhotoUpload.fromJson(_chatBody(response, 'Could not start the upload'));
+  }
+
+  /// Sends the photo straight to storage. Deliberately carries neither our API key nor the login token:
+  /// that address is a third party's, and the signed link is all it needs.
+  Future<void> uploadPhotoBytes(PhotoUpload upload, List<int> bytes) async {
+    final response = await http.put(Uri.parse(upload.uploadUrl), headers: upload.headers, body: bytes);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw ApiException('The photo could not be uploaded (${response.statusCode}). Try again.');
+    }
+  }
+
+  Future<void> reportMessage(String accessToken, int conversationId, int messageId, String reason) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/conversations/$conversationId/messages/$messageId/report/'),
+      headers: _authHeaders(accessToken),
+      body: jsonEncode({'reason': reason}),
+    );
+    _chatBody(response, 'Could not send your report');
+  }
+
+  Future<void> setConversationBlocked(String accessToken, int conversationId, bool blocked) async {
+    final uri = Uri.parse('$baseUrl/conversations/$conversationId/block/');
+    final response = blocked
+        ? await http.post(uri, headers: _authHeaders(accessToken), body: jsonEncode({}))
+        : await http.delete(uri, headers: _authHeaders(accessToken), body: jsonEncode({}));
+    _chatBody(response, 'Could not update the block');
+  }
+
+  Future<CallInfo> getCallInfo(String accessToken, int conversationId) async {
+    final response = await http.get(Uri.parse('$baseUrl/conversations/$conversationId/call/'), headers: _authHeaders(accessToken));
+    return CallInfo.fromJson(_chatBody(response, 'Could not start the call'));
+  }
+
+  /// Tells the server this phone can receive this person's push notifications.
+  Future<void> registerDevice(String accessToken, String token) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/devices/'),
+      headers: _authHeaders(accessToken),
+      body: jsonEncode({'token': token, 'platform': 'android'}),
+    );
+    _chatBody(response, 'Could not register for notifications');
+  }
+
+  Future<void> unregisterDevice(String accessToken, String token) async {
+    final response = await http.delete(
+      Uri.parse('$baseUrl/devices/'),
+      headers: _authHeaders(accessToken),
+      body: jsonEncode({'token': token}),
+    );
+    _chatBody(response, 'Could not unregister');
   }
 
   /// See catalog.views.CategoryListView — the admin-managed

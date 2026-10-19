@@ -68,6 +68,19 @@ GOOGLE_OAUTH_CLIENT_IDS = [c.strip() for c in os.environ.get("GOOGLE_OAUTH_CLIEN
 # app refuses to start with this on and DEBUG off (providers.E001).
 GOOGLE_DEV_FAKE_AUTH = _env_flag("GOOGLE_DEV_FAKE_AUTH", False)
 
+# Chat (the messaging app). Every value comes only from the environment, never the repo, and none is
+# needed to start the app: without FCM_SERVICE_ACCOUNT_JSON push notifications are simply off, and
+# without the R2_* values photos are off (text chat works). See README "Chat and push notifications".
+FCM_SERVICE_ACCOUNT_JSON = os.environ.get("FCM_SERVICE_ACCOUNT_JSON", "").strip()
+R2_ACCOUNT_ID = os.environ.get("R2_ACCOUNT_ID", "").strip()
+R2_ACCESS_KEY_ID = os.environ.get("R2_ACCESS_KEY_ID", "").strip()
+R2_SECRET_ACCESS_KEY = os.environ.get("R2_SECRET_ACCESS_KEY", "").strip()
+R2_BUCKET = os.environ.get("R2_BUCKET", "").strip()
+CHAT_PHOTO_MAX_BYTES = 8 * 1024 * 1024
+# Phase 2 of calling (Twilio masked calls) is not built yet. The Call button dials the other person's
+# number directly; turning this on today is refused so it can't be switched on by mistake.
+CALL_MASKING_ENABLED = _env_flag("CALL_MASKING_ENABLED", False)
+
 # Email (Gmail SMTP with an app password for now). Without EMAIL_HOST_USER,
 # mail goes to the console instead of failing.
 EMAIL_HOST = os.environ.get("EMAIL_HOST", "smtp.gmail.com")
@@ -109,6 +122,7 @@ INSTALLED_APPS = [
     "accounts",
     "catalog",
     "leads",
+    "messaging",
     "providers",
     "website",
 ]

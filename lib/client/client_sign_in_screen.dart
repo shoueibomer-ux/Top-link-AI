@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
+import 'dart:async';
+
 import '../api/api_client.dart';
+import '../messaging/push_service.dart';
 import '../app_colors.dart';
 import '../provider/auth_storage.dart';
 import '../provider/google_sign_in_service.dart';
@@ -47,6 +50,7 @@ class _ClientSignInScreenState extends State<ClientSignInScreen> {
       final idToken = await (widget.idTokenProvider ?? GoogleSignInService.getIdToken)();
       final result = await widget.api.signInClientWithGoogle(idToken);
       await AuthStorage.save(access: result.tokens.access, refresh: result.tokens.refresh);
+      unawaited(PushService.instance.register());
       if (!mounted) return;
       Navigator.of(context).pop(true);
       return;

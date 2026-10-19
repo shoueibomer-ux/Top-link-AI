@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../api/api_client.dart';
 import '../api/provider_profile.dart';
+import '../messaging/conversation_screen.dart';
+import '../messaging/push_service.dart';
 import '../app_colors.dart';
 import '../app_styles.dart';
 import 'provider_session.dart';
@@ -23,11 +25,50 @@ class ProviderLeadsTab extends StatefulWidget {
 class _ProviderLeadsTabState extends State<ProviderLeadsTab> {
   List<ProviderLead>? _leads;
   String? _error;
+  Map<int, int> _unreadByOffer = const {};
 
   @override
   void initState() {
     super.initState();
     _load();
+    PushService.instance.chatActivity.addListener(_refreshUnread);
+  }
+
+  @override
+  void dispose() {
+    PushService.instance.chatActivity.removeListener(_refreshUnread);
+    super.dispose();
+  }
+
+  /// Unread chat counts per offer. Best effort: the lead list works without them.
+  Future<void> _refreshUnread() async {
+    try {
+      final chats = await widget.session.authorized(widget.session.api.getConversations);
+      if (mounted) setState(() => _unreadByOffer = {for (final c in chats.conversations) c.offerId: c.unreadCount});
+    } catch (_) {
+      // leave the counts as they were
+    }
+  }
+
+  Future<void> _openChat(ProviderLead lead) async {
+    try {
+      final chat = await widget.session.authorized((token) => widget.session.api.openConversation(token, lead.offerId));
+      if (!mounted) return;
+      await Navigator.of(context).push<void>(MaterialPageRoute(
+        builder: (_) => ConversationScreen(session: widget.session, conversationId: chat.id, otherName: chat.otherName),
+      ));
+      if (mounted) _refreshUnread();
+    } on SessionExpiredException {
+      widget.onSessionExpired();
+    } on ApiException catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not reach the server. Check your connection and try again.')),
+        );
+      }
+    }
   }
 
   Future<void> _load() async {
@@ -38,6 +79,7 @@ class _ProviderLeadsTabState extends State<ProviderLeadsTab> {
         _leads = leads;
         _error = null;
       });
+      _refreshUnread();
     } on SessionExpiredException {
       widget.onSessionExpired();
     } on ApiException catch (e) {
@@ -80,7 +122,7 @@ class _ProviderLeadsTabState extends State<ProviderLeadsTab> {
             )
           else
             for (final lead in leads) ...[
-              LeadCard(lead: lead),
+              LeadCard(lead: lead, onMessage: _openChat, unread: _unreadByOffer[lead.offerId] ?? 0),
               const SizedBox(height: 14),
             ],
         ],
@@ -106,9 +148,15 @@ class _Note extends StatelessWidget {
 
 /// One lead. Public so tests can pump it with a hand-built [ProviderLead].
 class LeadCard extends StatelessWidget {
-  const LeadCard({super.key, required this.lead});
+  const LeadCard({super.key, required this.lead, this.onMessage, this.unread = 0});
 
   final ProviderLead lead;
+
+  /// Called when the provider taps "Message" on an accepted lead.
+  final ValueChanged<ProviderLead>? onMessage;
+
+  /// Unread chat messages for this lead.
+  final int unread;
 
   static const _urgency = {
     'today': 'Needed today',
@@ -167,6 +215,27 @@ class LeadCard extends StatelessWidget {
           if (lead.description != null && lead.description!.trim().isNotEmpty) ...[
             const SizedBox(height: 6),
             Text(lead.description!, style: const TextStyle(fontSize: 13, height: 1.4, color: AppColors.navy)),
+          ],
+          if (lead.status == LeadStatus.accepted && onMessage != null) ...[
+            const SizedBox(height: 8),
+            TextButton.icon(
+              key: Key('message-lead-${lead.offerId}'),
+              onPressed: () => onMessage!(lead),
+              style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 8), minimumSize: const Size(0, 32)),
+              icon: const Icon(Icons.chat_bubble_outline, size: 16, color: AppColors.turquoise),
+              label: Row(mainAxisSize: MainAxisSize.min, children: [
+                const Text('Message', style: TextStyle(fontSize: 13, color: AppColors.turquoise, fontWeight: FontWeight.w600)),
+                if (unread > 0) ...[
+                  const SizedBox(width: 6),
+                  Container(
+                    key: Key('unread-lead-${lead.offerId}'),
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                    decoration: BoxDecoration(color: const Color(0xFFBA1A1A), borderRadius: BorderRadius.circular(10)),
+                    child: Text(unread > 99 ? '99+' : '$unread', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.white)),
+                  ),
+                ],
+              ]),
+            ),
           ],
         ],
       ),

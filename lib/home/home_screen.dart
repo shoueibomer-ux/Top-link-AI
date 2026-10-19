@@ -6,6 +6,8 @@ import '../app_colors.dart';
 import '../app_styles.dart';
 import '../chat/chat_screen.dart';
 import '../client/client_sign_in_screen.dart';
+import '../messaging/conversation_screen.dart';
+import '../messaging/push_service.dart';
 import '../onboarding/onboarding_screen.dart';
 import '../onboarding/service_category.dart';
 import '../onboarding/urgency_step.dart';
@@ -15,7 +17,6 @@ import '../provider/provider_session.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/app_logo.dart';
 import '../widgets/category_search_view.dart';
-import '../widgets/coming_soon_badge.dart';
 import '../widgets/notification_bell.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -129,7 +130,7 @@ class _HomeTab extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         Text(
-          "We've got your ${category.label.toLowerCase()} request — a real person will reach out, usually by phone or text.",
+          "We've got your ${category.label.toLowerCase()} request. Providers who can help will accept it, and you can message them from History.",
           style: TextStyle(fontSize: 14, color: AppColors.muted),
         ),
         const SizedBox(height: 28),
@@ -144,11 +145,11 @@ class _HomeTab extends StatelessWidget {
           ),
           child: Row(
             children: [
-              Icon(Icons.phone_forwarded_outlined, color: AppColors.turquoise),
+              Icon(Icons.chat_bubble_outline, color: AppColors.turquoise),
               const SizedBox(width: 14),
               Expanded(
                 child: Text(
-                  "We'll be in touch soon. Check \"History\" for every request you've submitted.",
+                  "We'll notify you when a provider accepts. Open \"History\" to message them and to see every request you've submitted.",
                   style: TextStyle(fontSize: 13, color: AppColors.navy.withValues(alpha: 0.8)),
                 ),
               ),
@@ -199,11 +200,50 @@ class _HistoryTabState extends State<HistoryTab> {
   late final AuthSession _session = AuthSession(api: _apiClient);
   _HistoryState _state = _HistoryState.loading;
   List<ServiceRequestRecord> _requests = const [];
+  Map<int, int> _unreadByOffer = const {};
 
   @override
   void initState() {
     super.initState();
     _load();
+    PushService.instance.chatActivity.addListener(_refreshUnread);
+  }
+
+  @override
+  void dispose() {
+    PushService.instance.chatActivity.removeListener(_refreshUnread);
+    super.dispose();
+  }
+
+  /// Unread chat counts per offer. Best effort: History works without them.
+  Future<void> _refreshUnread() async {
+    try {
+      final chats = await _session.authorized(_apiClient.getConversations);
+      if (mounted) setState(() => _unreadByOffer = {for (final c in chats.conversations) c.offerId: c.unreadCount});
+    } catch (_) {
+      // leave the counts as they were
+    }
+  }
+
+  Future<void> _openChat(AcceptedOffer offer) async {
+    try {
+      final chat = await _session.authorized((token) => _apiClient.openConversation(token, offer.offerId));
+      if (!mounted) return;
+      await Navigator.of(context).push<void>(MaterialPageRoute(
+        builder: (_) => ConversationScreen(session: _session, conversationId: chat.id, otherName: chat.otherName),
+      ));
+      if (mounted) _refreshUnread();
+    } on SessionExpiredException {
+      if (mounted) setState(() => _state = _HistoryState.signedOut);
+    } on ApiException catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not reach the server. Check your connection and try again.')),
+        );
+      }
+    }
   }
 
   Future<void> _load() async {
@@ -219,6 +259,7 @@ class _HistoryTabState extends State<HistoryTab> {
         _requests = requests;
         _state = _HistoryState.ready;
       });
+      _refreshUnread();
     } on SessionExpiredException {
       if (mounted) setState(() => _state = _HistoryState.signedOut);
     } catch (_) {
@@ -346,7 +387,7 @@ class _HistoryTabState extends State<HistoryTab> {
               ),
               const SizedBox(height: 8),
               Text(
-                "Every request you've submitted. We'll reach out by phone or text.",
+                "Every request you've submitted. When a provider accepts, you can message them right here.",
                 style: TextStyle(fontSize: 14, color: AppColors.muted),
               ),
               const SizedBox(height: 20),
@@ -375,6 +416,8 @@ class _HistoryTabState extends State<HistoryTab> {
                   ServiceRequestCard(
                     request: request,
                     onMarkComplete: (offer) => _markComplete(request, offer),
+                    onMessage: _openChat,
+                    unreadByOffer: _unreadByOffer,
                   ),
                   const SizedBox(height: 14),
                 ],
@@ -389,9 +432,21 @@ class _HistoryTabState extends State<HistoryTab> {
 /// with a hand-built [ServiceRequestRecord] rather than needing to mock the
 /// network call the History tab makes to fetch real data.
 class ServiceRequestCard extends StatelessWidget {
-  const ServiceRequestCard({super.key, required this.request, this.onMarkComplete});
+  const ServiceRequestCard({
+    super.key,
+    required this.request,
+    this.onMarkComplete,
+    this.onMessage,
+    this.unreadByOffer = const {},
+  });
 
   final ServiceRequestRecord request;
+
+  /// Called when the client taps "Message" next to a provider who accepted.
+  final ValueChanged<AcceptedOffer>? onMessage;
+
+  /// Unread chat messages per accepted offer (by offer id).
+  final Map<int, int> unreadByOffer;
 
   /// Called when the client taps "Mark job complete" next to a provider who accepted.
   final ValueChanged<AcceptedOffer>? onMarkComplete;
@@ -423,10 +478,8 @@ class ServiceRequestCard extends StatelessWidget {
                   category?.label ?? request.category,
                   style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.navy),
                 ),
-                if (request.status == 'waitlisted') ...[
-                  const SizedBox(height: 4),
-                  const ComingSoonBadge(label: 'Waitlisted'),
-                ],
+                const SizedBox(height: 6),
+                _StatusPill(request: request),
                 const SizedBox(height: 3),
                 Row(
                   children: [
@@ -445,36 +498,52 @@ class ServiceRequestCard extends StatelessWidget {
                   ),
                 ],
                 for (final offer in request.acceptedOffers) ...[
-                  const SizedBox(height: 10),
-                  Row(
+                  const SizedBox(height: 12),
+                  Column(
                     key: Key('accepted-${offer.offerId}'),
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Icon(Icons.check_circle_outline, size: 16, color: AppColors.turquoise),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Text(
-                          '${offer.providerName} accepted',
-                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.navy),
-                        ),
-                      ),
-                      if (offer.jobCompleted)
-                        const Text(
-                          'Completed',
-                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF15803D)),
-                        )
-                      else if (offer.canComplete && onMarkComplete != null)
-                        TextButton(
-                          key: Key('complete-${offer.offerId}'),
-                          onPressed: () => onMarkComplete!(offer),
-                          style: TextButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(horizontal: 8),
-                            minimumSize: const Size(0, 32),
-                          ),
-                          child: const Text(
-                            'Mark job complete',
-                            style: TextStyle(fontSize: 12, color: AppColors.turquoise, fontWeight: FontWeight.w600),
+                      Row(children: [
+                        const Icon(Icons.check_circle_outline, size: 16, color: AppColors.turquoise),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            offer.providerName,
+                            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.navy),
                           ),
                         ),
+                      ]),
+                      Wrap(spacing: 4, children: [
+                        if (onMessage != null)
+                          TextButton.icon(
+                            key: Key('message-${offer.offerId}'),
+                            onPressed: () => onMessage!(offer),
+                            style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 8), minimumSize: const Size(0, 32)),
+                            icon: const Icon(Icons.chat_bubble_outline, size: 16, color: AppColors.turquoise),
+                            label: Row(mainAxisSize: MainAxisSize.min, children: [
+                              const Text('Message', style: TextStyle(fontSize: 12, color: AppColors.turquoise, fontWeight: FontWeight.w600)),
+                              if ((unreadByOffer[offer.offerId] ?? 0) > 0) ...[
+                                const SizedBox(width: 6),
+                                _UnreadBadge(count: unreadByOffer[offer.offerId]!, key: Key('unread-${offer.offerId}')),
+                              ],
+                            ]),
+                          ),
+                        if (offer.jobCompleted)
+                          const Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                            child: Text('Completed', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF15803D))),
+                          )
+                        else if (offer.canComplete && onMarkComplete != null)
+                          TextButton(
+                            key: Key('complete-${offer.offerId}'),
+                            onPressed: () => onMarkComplete!(offer),
+                            style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 8), minimumSize: const Size(0, 32)),
+                            child: const Text(
+                              'Mark job complete',
+                              style: TextStyle(fontSize: 12, color: AppColors.turquoise, fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                      ]),
                     ],
                   ),
                 ],
@@ -550,6 +619,49 @@ class _IconBadge extends StatelessWidget {
       radius: 24,
       backgroundColor: AppColors.turquoise.withValues(alpha: 0.12),
       child: Icon(icon, color: AppColors.turquoise),
+    );
+  }
+}
+
+/// The request's status in words: "Waiting for a provider", "Accepted by (name)" or "Completed".
+class _StatusPill extends StatelessWidget {
+  const _StatusPill({required this.request});
+
+  final ServiceRequestRecord request;
+
+  @override
+  Widget build(BuildContext context) {
+    final status = requestStatusOf(request);
+    final color = switch (status) {
+      RequestStatus.waiting => const Color(0xFFB45309),
+      RequestStatus.waitlisted => const Color(0xFFB45309),
+      RequestStatus.accepted => const Color(0xFF0F766E),
+      RequestStatus.completed => const Color(0xFF15803D),
+    };
+    return Container(
+      key: const Key('request-status'),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(20)),
+      child: Text(
+        requestStatusLabel(request),
+        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: color),
+      ),
+    );
+  }
+}
+
+/// A small round count of unread messages.
+class _UnreadBadge extends StatelessWidget {
+  const _UnreadBadge({super.key, required this.count});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+      decoration: BoxDecoration(color: const Color(0xFFBA1A1A), borderRadius: BorderRadius.circular(10)),
+      child: Text(count > 99 ? '99+' : '$count', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.white)),
     );
   }
 }

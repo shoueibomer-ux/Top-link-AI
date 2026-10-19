@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'api/api_config.dart';
 import 'app_colors.dart';
+import 'messaging/push_service.dart';
 import 'role/root_gate.dart';
 import 'onboarding/service_category.dart';
 
@@ -21,6 +24,8 @@ void main() {
   // loading state. Leaves the static fallback in place until this resolves.
   loadCatalogFromApi();
   runApp(const TabmatchApp());
+  // After the first frame, so it never delays launch. A build without Firebase config just skips it.
+  unawaited(PushService.instance.start());
 }
 
 class TabmatchApp extends StatelessWidget {
@@ -30,6 +35,7 @@ class TabmatchApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Tabmatch',
+      navigatorKey: PushService.navigatorKey,
       theme: ThemeData(
         useMaterial3: true,
         scaffoldBackgroundColor: AppColors.lightBackground,

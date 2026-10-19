@@ -4,6 +4,7 @@ import '../api/api_client.dart';
 import '../api/provider_profile.dart';
 import '../app_colors.dart';
 import '../role/app_role.dart';
+import '../messaging/push_service.dart';
 import '../widgets/brand_splash.dart';
 import 'auth_storage.dart';
 import 'google_sign_in_service.dart';
@@ -96,6 +97,7 @@ class _ProviderGateState extends State<ProviderGate> {
   }
 
   Future<void> _signOut() async {
+    await PushService.instance.unregister(); // before the login goes, so the server can be told
     await AuthStorage.clear();
     await GoogleSignInService.signOut();
     _profile = null;

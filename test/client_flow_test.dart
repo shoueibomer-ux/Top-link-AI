@@ -261,7 +261,8 @@ void main() {
       await http.runWithClient(() async {
         await pumpHistory(tester, backend);
         expect(find.text('Plumbing'), findsOneWidget);
-        expect(find.text('Ace Plumbing accepted'), findsOneWidget);
+        expect(find.descendant(of: find.byKey(const Key('request-status')), matching: find.text('Accepted by Ace Plumbing')), findsOneWidget);
+        expect(find.descendant(of: find.byKey(const Key('accepted-42')), matching: find.text('Ace Plumbing')), findsOneWidget);
         expect(find.byKey(const Key('complete-42')), findsOneWidget);
       }, () => backend.client);
 
@@ -283,7 +284,9 @@ void main() {
 
         await tester.tap(find.byKey(const Key('confirm-complete')));
         await _settle(tester);
-        expect(find.text('Completed'), findsOneWidget);
+        // both the status pill and the provider's row say Completed
+        expect(find.descendant(of: find.byKey(const Key('request-status')), matching: find.text('Completed')), findsOneWidget);
+        expect(find.descendant(of: find.byKey(const Key('accepted-42')), matching: find.text('Completed')), findsOneWidget);
         expect(find.byKey(const Key('complete-42')), findsNothing);
       }, () => backend.client);
 
@@ -317,7 +320,7 @@ void main() {
           ),
         ),
       ));
-      expect(find.text('Completed'), findsOneWidget);
+      expect(find.descendant(of: find.byKey(const Key('accepted-42')), matching: find.text('Completed')), findsOneWidget);
       expect(find.byKey(const Key('complete-42')), findsNothing);
     });
 

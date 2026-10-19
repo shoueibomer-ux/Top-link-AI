@@ -101,6 +101,19 @@ services:
       # GOOGLE_DEV_FAKE_AUTH here: the app refuses to start with it on outside DEBUG.
       - key: GOOGLE_OAUTH_CLIENT_IDS
         sync: false
+      # Chat (the messaging app), all set in the Render dashboard, never committed. Push needs the
+      # Firebase service-account JSON; photos need the four R2 values. Without them push / photos
+      # are off and text chat still works (check with `python manage.py check_messaging_config`).
+      - key: FCM_SERVICE_ACCOUNT_JSON
+        sync: false
+      - key: R2_ACCOUNT_ID
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: R2_BUCKET
+        sync: false
       # Lead validation tooling (the leads app) — all optional, all set in the
       # Render dashboard, never committed. SMS_ENABLED defaults to off: "Send to
       # providers" then only creates the offers and shows messages to copy.

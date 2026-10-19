@@ -127,3 +127,32 @@ class ServiceRequestSubmission {
 
   bool get isWaitlisted => status == 'waitlisted';
 }
+
+/// Where a request stands, as the client sees it.
+enum RequestStatus { waitlisted, waiting, accepted, completed }
+
+RequestStatus requestStatusOf(ServiceRequestRecord request) {
+  if (request.acceptedOffers.any((o) => o.jobCompleted)) return RequestStatus.completed;
+  if (request.acceptedOffers.isNotEmpty) return RequestStatus.accepted;
+  if (request.status == 'waitlisted') return RequestStatus.waitlisted;
+  return RequestStatus.waiting;
+}
+
+/// "Waiting for a provider", "Accepted by Ace Plumbing" (or "Accepted by A and B", "Accepted by A, B and C"),
+/// "Completed", or "Waitlisted" for a service that has not opened yet.
+String requestStatusLabel(ServiceRequestRecord request) {
+  switch (requestStatusOf(request)) {
+    case RequestStatus.completed:
+      return 'Completed';
+    case RequestStatus.accepted:
+      final names = [for (final o in request.acceptedOffers) o.providerName];
+      final list = names.length == 1
+          ? names.first
+          : '${names.sublist(0, names.length - 1).join(', ')} and ${names.last}';
+      return 'Accepted by $list';
+    case RequestStatus.waitlisted:
+      return 'Waitlisted';
+    case RequestStatus.waiting:
+      return 'Waiting for a provider';
+  }
+}
