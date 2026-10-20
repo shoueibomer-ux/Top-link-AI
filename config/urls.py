@@ -19,6 +19,7 @@ urlpatterns = [
     path("api/accounts/", include("accounts.urls")),
     path("api/provider/", include("providers.urls")),
     path("api/catalog/", include("catalog.urls")),
+    path("api/", include("messaging.urls")),
     path("api/", include("matching.urls")),
     path("api/requests/", ServiceRequestCreateView.as_view(), name="service-request-create"),
     path("api/requests/mine/", ServiceRequestListView.as_view(), name="service-request-list"),

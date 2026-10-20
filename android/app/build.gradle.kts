@@ -4,6 +4,12 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+// Firebase push needs google-services.json (downloaded from the Firebase console, git-ignored: see
+// README "Chat and push notifications"). Without it the app still builds, and push is simply off.
+if (file("google-services.json").exists()) {
+    apply(plugin = "com.google.gms.google-services")
+}
+
 android {
     namespace = "com.toplinkai.app"
     compileSdk = flutter.compileSdkVersion

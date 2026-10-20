@@ -67,3 +67,7 @@ dump.rdb
 
 # Your own build-time values (copy dart_defines.example.json to this name)
 dart_defines.local.json
+
+# Firebase client config for this machine's builds (downloaded from the Firebase console)
+android/app/google-services.json
+ios/Runner/GoogleService-Info.plist

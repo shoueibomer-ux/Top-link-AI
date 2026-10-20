@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../api/api_client.dart';
 import '../api/provider_profile.dart';
 import '../app_colors.dart';
+import '../messaging/push_service.dart';
 import '../widgets/app_logo.dart';
 import 'auth_storage.dart';
 import 'google_sign_in_service.dart';
@@ -46,6 +49,7 @@ class _ProviderSignInScreenState extends State<ProviderSignInScreen> {
       final idToken = await widget.idTokenProvider();
       final result = await widget.api.signInProviderWithGoogle(idToken);
       await AuthStorage.save(access: result.tokens.access, refresh: result.tokens.refresh);
+      unawaited(PushService.instance.register());
       if (!mounted) return;
       widget.onSignedIn(result);
     } on SignInCancelled {
