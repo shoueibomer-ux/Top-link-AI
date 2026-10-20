@@ -14,10 +14,13 @@ import '../onboarding/urgency_step.dart';
 import '../pages/settings_page.dart';
 import '../provider/auth_storage.dart';
 import '../provider/provider_session.dart';
+import '../reviews/provider_public_screen.dart';
+import '../reviews/review_ui.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/app_logo.dart';
 import '../widgets/category_search_view.dart';
 import '../widgets/notification_bell.dart';
+import '../widgets/stars.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({
@@ -246,6 +249,29 @@ class _HistoryTabState extends State<HistoryTab> {
     }
   }
 
+  Future<void> _openProvider(AcceptedOffer offer) async {
+    await Navigator.of(context).push<void>(MaterialPageRoute(
+      builder: (_) => ProviderPublicScreen(session: _session, providerId: offer.providerId, providerName: offer.providerName),
+    ));
+    if (mounted) _load(); // their rating may have changed
+  }
+
+  /// Rate the provider after the job is complete, or edit the review within its 7 days.
+  Future<void> _review(AcceptedOffer offer) async {
+    final saved = await showReviewSheet(
+      context,
+      session: _session,
+      offerId: offer.offerId,
+      providerName: offer.providerName,
+      existing: offer.review,
+    );
+    if (saved == null || !mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(offer.review == null ? 'Thanks for your review.' : 'Your review was updated.')),
+    );
+    await _load();
+  }
+
   Future<void> _load() async {
     if (mounted) setState(() => _state = _HistoryState.loading);
     try {
@@ -417,6 +443,8 @@ class _HistoryTabState extends State<HistoryTab> {
                     request: request,
                     onMarkComplete: (offer) => _markComplete(request, offer),
                     onMessage: _openChat,
+                    onOpenProvider: _openProvider,
+                    onReview: _review,
                     unreadByOffer: _unreadByOffer,
                   ),
                   const SizedBox(height: 14),
@@ -437,6 +465,8 @@ class ServiceRequestCard extends StatelessWidget {
     required this.request,
     this.onMarkComplete,
     this.onMessage,
+    this.onOpenProvider,
+    this.onReview,
     this.unreadByOffer = const {},
   });
 
@@ -444,6 +474,12 @@ class ServiceRequestCard extends StatelessWidget {
 
   /// Called when the client taps "Message" next to a provider who accepted.
   final ValueChanged<AcceptedOffer>? onMessage;
+
+  /// Called when the client taps a provider's name to see their page (rating and reviews).
+  final ValueChanged<AcceptedOffer>? onOpenProvider;
+
+  /// Called when the client taps "Rate" (job complete, no review yet) or "Edit review" (within 7 days).
+  final ValueChanged<AcceptedOffer>? onReview;
 
   /// Unread chat messages per accepted offer (by offer id).
   final Map<int, int> unreadByOffer;
@@ -503,17 +539,34 @@ class ServiceRequestCard extends StatelessWidget {
                     key: Key('accepted-${offer.offerId}'),
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(children: [
-                        const Icon(Icons.check_circle_outline, size: 16, color: AppColors.turquoise),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: Text(
-                            offer.providerName,
-                            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.navy),
-                          ),
+                      InkWell(
+                        key: Key('provider-${offer.offerId}'),
+                        onTap: onOpenProvider == null ? null : () => onOpenProvider!(offer),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 2),
+                          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            const Padding(
+                              padding: EdgeInsets.only(top: 1),
+                              child: Icon(Icons.check_circle_outline, size: 16, color: AppColors.turquoise),
+                            ),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                                Text(
+                                  offer.providerName,
+                                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.navy),
+                                ),
+                                KeyedSubtree(
+                                  key: Key('rating-${offer.offerId}'),
+                                  child: RatingLine(rating: offer.providerRating),
+                                ),
+                              ]),
+                            ),
+                            if (onOpenProvider != null) Icon(Icons.chevron_right, size: 18, color: AppColors.muted),
+                          ]),
                         ),
-                      ]),
-                      Wrap(spacing: 4, children: [
+                      ),
+                      Wrap(spacing: 4, crossAxisAlignment: WrapCrossAlignment.center, children: [
                         if (onMessage != null)
                           TextButton.icon(
                             key: Key('message-${offer.offerId}'),
@@ -543,7 +596,38 @@ class ServiceRequestCard extends StatelessWidget {
                               style: TextStyle(fontSize: 12, color: AppColors.turquoise, fontWeight: FontWeight.w600),
                             ),
                           ),
+                        if (offer.canReview && onReview != null)
+                          TextButton.icon(
+                            key: Key('rate-${offer.offerId}'),
+                            onPressed: () => onReview!(offer),
+                            style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 8), minimumSize: const Size(0, 32)),
+                            icon: const Icon(Icons.star_outline_rounded, size: 16, color: AppColors.turquoise),
+                            label: const Text(
+                              'Rate provider',
+                              style: TextStyle(fontSize: 12, color: AppColors.turquoise, fontWeight: FontWeight.w600),
+                            ),
+                          ),
                       ]),
+                      if (offer.review != null)
+                        Padding(
+                          key: Key('my-review-${offer.offerId}'),
+                          padding: const EdgeInsets.only(left: 8, bottom: 2),
+                          child: Row(children: [
+                            StarRow(rating: offer.review!.rating, size: 15),
+                            const SizedBox(width: 8),
+                            if (offer.review!.hidden)
+                              const Text('Removed by Tabmatch', style: TextStyle(fontSize: 12, fontStyle: FontStyle.italic, color: Color(0xFFBA1A1A)))
+                            else
+                              Text('Your review', style: TextStyle(fontSize: 12, color: AppColors.mutedText)),
+                            if (offer.review!.canEdit && onReview != null)
+                              TextButton(
+                                key: Key('edit-review-${offer.offerId}'),
+                                onPressed: () => onReview!(offer),
+                                style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 8), minimumSize: const Size(0, 28)),
+                                child: const Text('Edit', style: TextStyle(fontSize: 12, color: AppColors.turquoise, fontWeight: FontWeight.w600)),
+                              ),
+                          ]),
+                        ),
                     ],
                   ),
                 ],

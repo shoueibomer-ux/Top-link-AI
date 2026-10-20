@@ -1,3 +1,5 @@
+import 'reviews.dart';
+
 /// One request the client has submitted — see
 /// provider_search.views.ServiceRequestCreateView / ServiceRequestListView.
 /// Replaces RealProvider/ProviderMatchRecord: there's no provider matching
@@ -12,6 +14,9 @@ class AcceptedOffer {
     this.hired = false,
     this.jobCompleted = false,
     this.canComplete = true,
+    this.providerRating = const RatingSummary(),
+    this.review,
+    this.canReview = false,
   });
 
   factory AcceptedOffer.fromJson(Map<String, dynamic> json) {
@@ -23,6 +28,9 @@ class AcceptedOffer {
       hired: json['hired'] as bool? ?? false,
       jobCompleted: json['job_completed'] as bool? ?? false,
       canComplete: json['can_complete'] as bool? ?? false,
+      providerRating: RatingSummary.fromJson(provider),
+      review: json['review'] is Map<String, dynamic> ? Review.fromJson(json['review'] as Map<String, dynamic>) : null,
+      canReview: json['can_review'] as bool? ?? false,
     );
   }
 
@@ -34,6 +42,15 @@ class AcceptedOffer {
 
   /// True only while no provider on this request has been marked completed.
   final bool canComplete;
+
+  /// The provider's average rating and review count.
+  final RatingSummary providerRating;
+
+  /// The client's own review of this job, once written.
+  final Review? review;
+
+  /// The job is complete and the client hasn't reviewed it yet.
+  final bool canReview;
 }
 
 class ServiceRequestRecord {

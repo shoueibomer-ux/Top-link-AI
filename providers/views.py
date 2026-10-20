@@ -11,6 +11,7 @@ from accounts.models import UserProfile, UserRole
 from catalog.models import Service
 from leads.models import LeadOffer
 from matching.permissions import HasApiKey
+from reviews import ratings
 
 from .google_auth import GoogleAuthError, GoogleAuthNotConfigured, verify_google_id_token
 from .google_signin import AccountConflict, user_for_google
@@ -154,4 +155,6 @@ class ProviderMatchesView(APIView):
         )
         if city:
             profiles = [p for p in profiles if city in (p.cities or [])]
-        return Response({"results": PublicProviderSerializer(list(profiles)[:MAX_MATCHES], many=True).data})
+        shown = list(profiles)[:MAX_MATCHES]
+        context = {"ratings": ratings.summaries([p.pk for p in shown])}
+        return Response({"results": PublicProviderSerializer(shown, many=True, context=context).data})

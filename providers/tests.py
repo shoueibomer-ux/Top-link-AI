@@ -512,7 +512,7 @@ class MatchResultsTests(ProviderApiCase):
     def test_clients_never_see_contact_details(self):
         self.register("pro@example.com", "approved")
         (result,) = self.matches(category="plumbing").json()["results"]
-        self.assertEqual(set(result), {"id", "business_name", "bio", "categories", "cities"})
+        self.assertEqual(set(result), {"id", "business_name", "bio", "categories", "cities", "rating_average", "review_count"})
         self.assertNotIn("0100", str(result))
         self.assertNotIn("office@ace.example", str(result))
 

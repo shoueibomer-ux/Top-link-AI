@@ -10,6 +10,7 @@ import 'category_suggestions.dart';
 import 'messaging.dart';
 import 'provider_onboarding.dart';
 import 'provider_profile.dart';
+import 'reviews.dart';
 import 'service_request.dart';
 
 class ApiException implements Exception {
@@ -510,6 +511,82 @@ class ApiClient {
     }
     final json = jsonDecode(response.body) as Map<String, dynamic>;
     return AuthTokens(access: json['access'] as String, refresh: json['refresh'] as String? ?? refreshToken);
+  }
+
+  // ---- reviews and favorites (the reviews app) -----------------------------------------------
+
+  Map<String, dynamic> _reviewBody(http.Response response, String failure) {
+    _throwForAuthProblems(response);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw ApiException(_firstErrorMessage(response.body) ?? '$failure (${response.statusCode}).');
+    }
+    final decoded = _tryDecode(response.body);
+    return decoded is Map<String, dynamic> ? decoded : <String, dynamic>{};
+  }
+
+  /// The client rates the provider they hired, once the job is marked complete.
+  Future<Review> submitReview(String accessToken, int offerId, int rating, String comment) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/offers/$offerId/review/'),
+      headers: _authHeaders(accessToken),
+      body: jsonEncode({'rating': rating, 'comment': comment}),
+    );
+    return Review.fromJson(_reviewBody(response, 'Could not save your review'));
+  }
+
+  /// Changes the client's review (allowed for 7 days after posting).
+  Future<Review> updateReview(String accessToken, int offerId, int rating, String comment) async {
+    final response = await http.patch(
+      Uri.parse('$baseUrl/offers/$offerId/review/'),
+      headers: _authHeaders(accessToken),
+      body: jsonEncode({'rating': rating, 'comment': comment}),
+    );
+    return Review.fromJson(_reviewBody(response, 'Could not save your review'));
+  }
+
+  /// A provider's public page: details, rating, reviews, and whether this client saved them.
+  Future<ProviderPage> getProviderPage(String accessToken, int providerId) async {
+    final response = await http.get(Uri.parse('$baseUrl/providers/$providerId/reviews/'), headers: _authHeaders(accessToken));
+    return ProviderPage.fromJson(_reviewBody(response, 'Could not load this provider'));
+  }
+
+  /// The signed-in provider's own rating and reviews.
+  Future<MyReviews> getMyReviews(String accessToken) async {
+    final response = await http.get(Uri.parse('$baseUrl/provider/reviews/'), headers: _authHeaders(accessToken));
+    return MyReviews.fromJson(_reviewBody(response, 'Could not load your reviews'));
+  }
+
+  /// The provider's one public reply to a review.
+  Future<Review> replyToReview(String accessToken, int reviewId, String text) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/reviews/$reviewId/reply/'),
+      headers: _authHeaders(accessToken),
+      body: jsonEncode({'text': text}),
+    );
+    return Review.fromJson(_reviewBody(response, 'Could not post your reply'));
+  }
+
+  Future<void> reportReview(String accessToken, int reviewId, String reason) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/reviews/$reviewId/report/'),
+      headers: _authHeaders(accessToken),
+      body: jsonEncode({'reason': reason}),
+    );
+    _reviewBody(response, 'Could not send your report');
+  }
+
+  Future<List<PublicProviderInfo>> getFavorites(String accessToken) async {
+    final response = await http.get(Uri.parse('$baseUrl/favorites/'), headers: _authHeaders(accessToken));
+    final body = _reviewBody(response, 'Could not load your favorites');
+    return [for (final f in body['favorites'] as List<dynamic>? ?? const []) PublicProviderInfo.fromJson(f as Map<String, dynamic>)];
+  }
+
+  Future<void> setFavorite(String accessToken, int providerId, bool favorite) async {
+    final uri = Uri.parse('$baseUrl/favorites/$providerId/');
+    final response = favorite
+        ? await http.put(uri, headers: _authHeaders(accessToken), body: jsonEncode({}))
+        : await http.delete(uri, headers: _authHeaders(accessToken), body: jsonEncode({}));
+    _reviewBody(response, 'Could not update your favorites');
   }
 
   /// A 401 normally means the access token expired, but it is also how the

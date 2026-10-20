@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../api/api_client.dart';
 import '../api/provider_profile.dart';
+import '../api/reviews.dart';
+import '../widgets/stars.dart';
 import '../messaging/conversation_screen.dart';
 import '../messaging/push_service.dart';
 import '../app_colors.dart';
@@ -13,8 +15,10 @@ import 'provider_session.dart';
 /// (by replying YES to the text, or when a Tabmatch admin records it); their
 /// phone number is never shown here.
 class ProviderLeadsTab extends StatefulWidget {
-  const ProviderLeadsTab({super.key, required this.session, required this.onSessionExpired});
+  const ProviderLeadsTab({super.key, required this.session, required this.onSessionExpired, this.rating = const RatingSummary()});
 
+  /// The provider's own average rating, shown under the heading once they have a review.
+  final RatingSummary rating;
   final AuthSession session;
   final VoidCallback onSessionExpired;
 
@@ -112,6 +116,16 @@ class _ProviderLeadsTabState extends State<ProviderLeadsTab> {
             'Client requests sent to you. We also text you; reply YES to accept.',
             style: TextStyle(fontSize: 14, height: 1.5, color: AppColors.muted),
           ),
+          if (widget.rating.hasReviews) ...[
+            const SizedBox(height: 8),
+            KeyedSubtree(
+              key: const Key('leads-rating'),
+              child: Row(children: [
+                Text('Your rating  ', style: TextStyle(fontSize: 13, color: AppColors.mutedText)),
+                RatingLine(rating: widget.rating, fontSize: 13),
+              ]),
+            ),
+          ],
           const SizedBox(height: 20),
           if (_error != null)
             _Note(text: _error!, key: const Key('provider-leads-error'))

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../api/provider_profile.dart';
 import '../app_colors.dart';
+import '../reviews/provider_reviews_section.dart';
 import '../widgets/app_logo.dart';
 import 'provider_leads_tab.dart';
 import 'provider_session.dart';
@@ -63,6 +64,7 @@ class ProviderHomeScreen extends StatelessWidget {
             ProviderLeadsTab(
               session: session,
               onSessionExpired: onSessionExpired,
+              rating: profile.rating,
             ),
           ],
         ),
@@ -112,6 +114,8 @@ class ProviderHomeScreen extends StatelessWidget {
               icon: Icons.edit_outlined,
               onPressed: onEdit,
             ),
+            const SizedBox(height: 28),
+            ProviderReviewsSection(session: session, onSessionExpired: onSessionExpired),
           ],
         ),
       ),

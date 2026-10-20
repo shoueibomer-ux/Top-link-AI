@@ -6,6 +6,7 @@ from catalog.models import Service
 from leads.models import LeadOffer
 from leads.phone import normalize_north_american_phone
 from provider_search.services import CITIES
+from reviews import ratings
 
 from .models import ProviderProfile
 
@@ -32,14 +33,23 @@ class ProviderProfileSerializer(serializers.ModelSerializer):
     # registering; only the time it was given is stored, and it can't be
     # changed by editing the profile afterwards.
     sms_consent = serializers.BooleanField(write_only=True, required=False)
+    # Shown on the provider's own profile; counts only reviews that haven't been hidden.
+    rating_average = serializers.SerializerMethodField()
+    review_count = serializers.SerializerMethodField()
 
     class Meta:
         model = ProviderProfile
         fields = [
             "business_name", "phone", "email", "categories", "cities", "bio", "sms_consent",
-            "status", "review_note", "reviewed_at", "created_at",
+            "status", "review_note", "reviewed_at", "created_at", "rating_average", "review_count",
         ]
         read_only_fields = ["status", "review_note", "reviewed_at", "created_at"]
+
+    def get_rating_average(self, obj):
+        return ratings.summary_for(obj.id)["rating_average"] if obj.pk else None
+
+    def get_review_count(self, obj):
+        return ratings.summary_for(obj.id)["review_count"] if obj.pk else 0
 
     def validate_business_name(self, value):
         value = value.strip()
@@ -116,3 +126,9 @@ class PublicProviderSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProviderProfile
         fields = ["id", "business_name", "bio", "categories", "cities"]
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        known = self.context.get("ratings")
+        data.update((known or ratings.summaries([instance.pk])).get(instance.pk, ratings.EMPTY))
+        return data

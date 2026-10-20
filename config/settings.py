@@ -123,6 +123,7 @@ INSTALLED_APPS = [
     "catalog",
     "leads",
     "messaging",
+    "reviews",
     "providers",
     "website",
 ]
