@@ -1,4 +1,5 @@
 import 'auth_models.dart';
+import 'reviews.dart';
 
 /// The cities a provider can serve (provider_search.services.CITIES).
 const kProviderCities = ['Edmonton', 'Calgary', 'Fort McMurray', 'Red Deer'];
@@ -27,6 +28,7 @@ class ProviderProfileData {
     this.smsConsent = false,
     this.status = ProviderStatus.pending,
     this.reviewNote = '',
+    this.rating = const RatingSummary(),
   });
 
   factory ProviderProfileData.fromJson(Map<String, dynamic> json) {
@@ -39,6 +41,7 @@ class ProviderProfileData {
       bio: json['bio'] as String? ?? '',
       status: ProviderStatus.parse(json['status'] as String?),
       reviewNote: json['review_note'] as String? ?? '',
+      rating: RatingSummary.fromJson(json),
     );
   }
 
@@ -54,6 +57,9 @@ class ProviderProfileData {
   final bool smsConsent;
   final ProviderStatus status;
   final String reviewNote;
+
+  /// Average rating and review count, from clients' reviews (never sent back to the server).
+  final RatingSummary rating;
 
   /// What the app sends. Status and review note are the admin's to set.
   Map<String, dynamic> toJson() => {

@@ -9,6 +9,7 @@ from catalog.taxonomy import launched_slugs
 from leads.models import LeadOffer
 from leads.phone import normalize_north_american_phone
 from matching.permissions import HasApiKey
+from reviews import ratings
 
 from .chat_service import refine_request
 from .models import ProviderOnboarding, ServiceRequest
@@ -143,7 +144,7 @@ def _with_accepted_offers(queryset):
     return queryset.prefetch_related(
         Prefetch(
             "offers",
-            queryset=LeadOffer.objects.filter(status=LeadOffer.STATUS_ACCEPTED).select_related("provider"),
+            queryset=LeadOffer.objects.filter(status=LeadOffer.STATUS_ACCEPTED).select_related("provider", "review__client__profile"),
             to_attr="accepted_offers_cache",
         )
     )
@@ -161,8 +162,10 @@ class ServiceRequestListView(APIView):
     permission_classes = [HasApiKey, IsAuthenticated, IsClientAccount]
 
     def get(self, request):
-        requests = _with_accepted_offers(ServiceRequest.objects.filter(user=request.user)).order_by("-created_at")
-        return Response({"requests": ServiceRequestSerializer(requests, many=True).data})
+        requests = list(_with_accepted_offers(ServiceRequest.objects.filter(user=request.user)).order_by("-created_at"))
+        provider_ids = [o.provider_id for r in requests for o in r.accepted_offers_cache]
+        context = {"provider_ratings": ratings.summaries(provider_ids)}
+        return Response({"requests": ServiceRequestSerializer(requests, many=True, context=context).data})
 
 
 class ServiceRequestCompleteView(APIView):

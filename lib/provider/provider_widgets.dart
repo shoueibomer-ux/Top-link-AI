@@ -4,6 +4,7 @@ import '../api/provider_profile.dart';
 import '../app_colors.dart';
 import '../app_styles.dart';
 import '../onboarding/service_category.dart';
+import '../widgets/stars.dart';
 
 /// Turquoise full-width button used across the provider screens.
 class BrandButton extends StatelessWidget {
@@ -113,7 +114,9 @@ class ProviderProfileCard extends StatelessWidget {
             profile.businessName,
             style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.navy),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 4),
+          KeyedSubtree(key: const Key('profile-rating'), child: RatingLine(rating: profile.rating, fontSize: 13)),
+          const SizedBox(height: 10),
           _Line(icon: Icons.phone_outlined, text: profile.phone),
           _Line(icon: Icons.email_outlined, text: profile.email),
           _Line(icon: Icons.category_outlined, text: services.join(', ')),

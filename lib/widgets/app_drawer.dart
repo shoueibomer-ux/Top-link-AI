@@ -7,6 +7,7 @@ import '../pages/about_us_page.dart';
 import '../pages/mission_vision_page.dart';
 import '../pages/settings_page.dart';
 import '../provider/provider_onboarding_screen.dart';
+import '../reviews/favorites_screen.dart';
 import 'app_logo.dart';
 import 'pressable.dart';
 
@@ -31,6 +32,11 @@ class AppDrawer extends StatelessWidget {
             icon: Icons.flag_outlined,
             label: 'Mission & Vision',
             onTap: () => _navigateTo(context, const MissionVisionPage()),
+          ),
+          _DrawerItem(
+            icon: Icons.favorite_border,
+            label: 'Favorites',
+            onTap: () => _navigateTo(context, const FavoritesScreen()),
           ),
           _DrawerItem(
             icon: Icons.settings_outlined,

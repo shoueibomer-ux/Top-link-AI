@@ -177,6 +177,23 @@ endpoint answers a stranger with the same 404 as a conversation that does not ex
   provider has accepted. `CALL_MASKING_ENABLED` is reserved for phase 2 (Twilio masked calls, not built yet);
   while it is on the server refuses calls (501) rather than silently ignoring it. The app does not change.
 
+### Reviews and favorites
+
+After a client marks a job complete they can rate the provider (1-5 stars, optional comment). Nothing
+here needs a key or any Render setting; the migration only adds tables.
+
+- **Rules:** one review per completed job, written only by the client who owns the request, editable for
+  7 days. A provider can post one public reply per review (it can't be edited by them; staff can clear it).
+- **What is public:** the provider's average rating and review count (on their profile, their page, the
+  matches list, Favorites and the client's History), and the reviews with the client shown as "Pat P.".
+  No phone number or email is ever in a review.
+- **Favorites:** the heart on a provider's page saves them; the menu's *Favorites* lists them. Only clients
+  can save, and only approved providers.
+- **Safety:** anyone signed in can report a review (flag icon); reports stay up until staff look. In the
+  Django admin under *Reviews*: *Review reports* is the queue (hide the review, or dismiss), and *Reviews* has
+  hide / restore / remove-reply actions. A hidden review disappears from every page and no longer counts
+  toward the rating; its author is told it was removed.
+
 ### Before publishing
 
 Tick every box before a release goes to the Play Store, the App Store or real
