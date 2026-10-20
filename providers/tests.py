@@ -37,7 +37,7 @@ GOOD_PROFILE = {
     "phone": "(780) 555-0100",
     "email": "office@ace.example",
     "categories": ["plumbing", "hvac"],
-    "cities": ["Edmonton", "Calgary"],
+    "cities": ["Edmonton"],
     "bio": "Family-run since 2005.",
     "sms_consent": True,
 }
@@ -316,7 +316,8 @@ class RegisterAndEditProfileTests(ProviderApiCase):
         self.assertEqual(body["status"], "pending")
         self.assertEqual(body["phone"], "+17805550100")
         self.assertEqual(sorted(body["categories"]), ["hvac", "plumbing"])
-        self.assertEqual(body["cities"], ["Edmonton", "Calgary"])
+        self.assertEqual(body["cities"], ["Edmonton"])
+        self.assertEqual(body["waitlist_cities"], [])
 
         profile = ProviderProfile.objects.get()
         self.assertEqual(profile.user.email, "pro@example.com")
@@ -365,11 +366,49 @@ class RegisterAndEditProfileTests(ProviderApiCase):
         Service.objects.filter(slug="plumbing").update(is_active=False)
         self.assertEqual(self.post_profile(headers, categories=["plumbing"]).status_code, 400)
 
-    def test_the_four_cities_are_accepted_and_repeats_dropped(self):
+    def test_only_open_cities_can_be_chosen_and_repeats_are_dropped(self):
         headers = self.authed()
-        cities = ["Edmonton", "Calgary", "Fort McMurray", "Red Deer", "Edmonton"]
-        response = self.post_profile(headers, cities=cities)
-        self.assertEqual(response.json()["cities"], ["Edmonton", "Calgary", "Fort McMurray", "Red Deer"])
+        response = self.post_profile(headers, cities=["Edmonton", "Edmonton"])
+        self.assertEqual(response.json()["cities"], ["Edmonton"])
+
+    def test_cities_that_are_not_open_yet_are_refused_as_cities(self):
+        for closed in ("Calgary", "Fort McMurray", "Red Deer"):
+            with self.subTest(city=closed):
+                headers = self.authed(f"{closed[:3].lower()}@example.com", f"sub-{closed}")
+                response = self.post_profile(headers, cities=["Edmonton", closed])
+                self.assertEqual(response.status_code, 400)
+                self.assertIn("isn't open yet", str(response.json()["cities"]))
+                self.assertFalse(ProviderProfile.objects.filter(user__email=f"{closed[:3].lower()}@example.com").exists())
+
+    def test_a_provider_can_join_the_waitlist_for_cities_that_are_not_open(self):
+        headers = self.authed()
+        response = self.post_profile(headers, waitlist_cities=["Calgary", "Red Deer", "Calgary"])
+        self.assertEqual(response.status_code, 201, response.content)
+        self.assertEqual(response.json()["waitlist_cities"], ["Calgary", "Red Deer"])
+        self.assertEqual(response.json()["cities"], ["Edmonton"])
+        self.assertEqual(ProviderProfile.objects.get().waitlist_cities, ["Calgary", "Red Deer"])
+
+    def test_the_waitlist_only_takes_cities_that_are_not_open(self):
+        headers = self.authed()
+        for bad in (["Edmonton"], ["Atlantis"], "Calgary"):
+            with self.subTest(bad=bad):
+                self.assertEqual(self.post_profile(headers, waitlist_cities=bad).status_code, 400)
+        self.assertFalse(ProviderProfile.objects.exists())
+
+    def test_the_waitlist_can_be_changed_later(self):
+        headers = self.authed()
+        self.post_profile(headers, waitlist_cities=["Calgary"])
+        response = self.patch_profile(headers, waitlist_cities=["Fort McMurray"])
+        self.assertEqual(response.json()["waitlist_cities"], ["Fort McMurray"])
+        self.assertEqual(self.patch_profile(headers, waitlist_cities=[]).json()["waitlist_cities"], [])
+
+    def test_a_provider_who_already_has_another_city_keeps_it_when_editing(self):
+        headers = self.authed()
+        self.post_profile(headers)
+        ProviderProfile.objects.update(cities=["Edmonton", "Calgary"])  # saved before the cities were limited
+        response = self.patch_profile(headers, bio="Updated", cities=["Edmonton", "Calgary"])
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(self.patch_profile(headers, cities=["Edmonton", "Red Deer"]).status_code, 400)
 
     def test_registering_without_the_sms_consent_is_refused(self):
         headers = self.authed()
@@ -425,10 +464,10 @@ class RegisterAndEditProfileTests(ProviderApiCase):
     def test_patch_updates_only_the_fields_sent(self):
         headers = self.authed()
         self.post_profile(headers)
-        response = self.patch_profile(headers, bio="New bio", cities=["Red Deer"], categories=["electrical"])
+        response = self.patch_profile(headers, bio="New bio", cities=["Edmonton"], categories=["electrical"])
         self.assertEqual(response.status_code, 200)
         profile = ProviderProfile.objects.get()
-        self.assertEqual((profile.bio, profile.cities, profile.business_name), ("New bio", ["Red Deer"], "Ace Plumbing"))
+        self.assertEqual((profile.bio, profile.cities, profile.business_name), ("New bio", ["Edmonton"], "Ace Plumbing"))
         self.assertEqual([s.slug for s in profile.categories.all()], ["electrical"])
 
     def test_patch_before_registering_is_a_404(self):
@@ -471,12 +510,14 @@ class RegisterAndEditProfileTests(ProviderApiCase):
 
 # ---------------------------------------------------------------------------
 class MatchResultsTests(ProviderApiCase):
-    def register(self, email, status, **profile):
+    def register(self, email, status, cities=None, **profile):
         headers = self.authed(email, f"sub-{email}")
         self.post_profile(headers, business_name=email, **profile)
         provider = ProviderProfile.objects.get(user__email=email)
         provider.status = status
-        provider.save(update_fields=["status"])
+        if cities is not None:
+            provider.cities = cities  # providers saved before the cities were limited can have other cities
+        provider.save()
         return provider
 
     def matches(self, **params):
@@ -677,3 +718,131 @@ class ProviderLeadsTests(TestCase):
         self.assertEqual(self.client.get(self.LEADS, **KEY).status_code, 401)
         no_key = {"HTTP_AUTHORIZATION": self.ace_headers["HTTP_AUTHORIZATION"]}
         self.assertEqual(self.client.get(self.LEADS, **no_key).status_code, 403)
+
+
+class ProviderLeadReplyTests(ProviderLeadsTests):
+    """POST /api/provider/leads/<id>/accept|decline/: the YES / NO reply from the lead card in the app."""
+
+    def reply(self, verb, offer, headers=None):
+        url = f"/api/provider/leads/{offer.id}/{verb}/"
+        return self.client.post(url, {}, content_type="application/json", **(headers or self.ace_headers))
+
+    def test_accepting_records_a_yes_and_shows_the_client_details(self):
+        offer = self.offer()
+        with patch("leads.services.share_client_phone") as share:
+            response = self.reply("accept", offer)
+        self.assertEqual(response.status_code, 200, response.content)
+        lead = response.json()["lead"]
+        self.assertEqual((lead["offer_id"], lead["status"]), (offer.id, "accepted"))
+        self.assertEqual((lead["client_name"], lead["description"]), ("Pat C.", "Leaking kitchen sink"))
+        offer.refresh_from_db()
+        self.assertEqual((offer.status, offer.reply_channel), (LeadOffer.STATUS_ACCEPTED, LeadOffer.CHANNEL_APP))
+        self.assertIsNotNone(offer.responded_at)
+        self.assertIsNotNone(offer.response_time)
+        share.assert_called_once_with(offer)  # the client's phone is texted, same as the SMS YES
+
+    def test_declining_records_a_no_and_shares_nothing(self):
+        offer = self.offer()
+        with patch("leads.services.share_client_phone") as share:
+            response = self.reply("decline", offer)
+        self.assertEqual(response.status_code, 200, response.content)
+        lead = response.json()["lead"]
+        self.assertEqual(lead["status"], "declined")
+        self.assertNotIn("client_name", lead)
+        self.assertNotIn("description", lead)
+        offer.refresh_from_db()
+        self.assertEqual((offer.status, offer.reply_channel), (LeadOffer.STATUS_DECLINED, LeadOffer.CHANNEL_APP))
+        share.assert_not_called()
+
+    def test_an_sms_failure_when_sharing_the_phone_does_not_undo_the_accept(self):
+        from leads import sms
+
+        offer = self.offer()
+        with patch("leads.services.share_client_phone", side_effect=sms.SmsError("twilio down")):
+            response = self.reply("accept", offer)
+        self.assertEqual(response.status_code, 200)
+        offer.refresh_from_db()
+        self.assertEqual(offer.status, LeadOffer.STATUS_ACCEPTED)
+
+    def test_a_second_answer_changes_nothing(self):
+        offer = self.offer()
+        with patch("leads.services.share_client_phone"):
+            self.assertEqual(self.reply("accept", offer).status_code, 200)
+            self.assertEqual(self.reply("decline", offer).status_code, 409)
+            self.assertEqual(self.reply("accept", offer).status_code, 409)
+        offer.refresh_from_db()
+        self.assertEqual(offer.status, LeadOffer.STATUS_ACCEPTED)
+
+    def test_an_answer_by_text_first_blocks_the_app_and_the_other_way_round(self):
+        from leads import services
+
+        by_text = self.offer()
+        services.handle_inbound_sms("+17805550101", f"NO {by_text.id}")
+        self.assertEqual(self.reply("accept", by_text).status_code, 409)
+        by_app = self.offer(request=ServiceRequest.objects.create(
+            user=self.client_user, category="plumbing", city="Edmonton", phone=self.CLIENT_PHONE, consent_given=True,
+        ))
+        with patch("leads.services.share_client_phone"):
+            self.reply("accept", by_app)
+        services.handle_inbound_sms("+17805550101", f"NO {by_app.id}")  # a repeat change nothing
+        by_app.refresh_from_db()
+        self.assertEqual(by_app.status, LeadOffer.STATUS_ACCEPTED)
+
+    def test_the_sms_reply_still_works_for_an_offer_the_app_has_not_answered(self):
+        from leads import services
+
+        offer = self.offer()
+        with patch("leads.services.share_client_phone"):
+            services.handle_inbound_sms("+17805550101", f"YES {offer.id}")
+        offer.refresh_from_db()
+        self.assertEqual((offer.status, offer.reply_channel), (LeadOffer.STATUS_ACCEPTED, LeadOffer.CHANNEL_SMS))
+
+    def test_only_the_provider_the_offer_was_sent_to_can_answer_it(self):
+        offer = self.offer()
+        busy, busy_headers = self.provider("Busy Pipes", "busy@example.com")
+        for verb in ("accept", "decline"):
+            self.assertEqual(self.reply(verb, offer, busy_headers).status_code, 404)
+        offer.refresh_from_db()
+        self.assertEqual(offer.status, LeadOffer.STATUS_SENT)
+        self.assertIsNone(offer.responded_at)
+
+    def test_a_client_account_is_refused(self):
+        offer = self.offer()
+        for verb in ("accept", "decline"):
+            self.assertEqual(self.reply(verb, offer, self.client_headers).status_code, 403)
+        offer.refresh_from_db()
+        self.assertEqual(offer.status, LeadOffer.STATUS_SENT)
+
+    def test_an_offer_that_was_never_sent_or_does_not_exist_is_a_404(self):
+        unsent = self.offer(sent=False, status=LeadOffer.STATUS_PENDING)
+        self.assertEqual(self.reply("accept", unsent).status_code, 404)
+        url = "/api/provider/leads/999999/accept/"
+        self.assertEqual(self.client.post(url, {}, content_type="application/json", **self.ace_headers).status_code, 404)
+
+    def test_a_provider_with_no_profile_yet_gets_a_404(self):
+        offer = self.offer()
+        _, headers = self.account("new@example.com", UserRole.PROVIDER, "New")
+        self.assertEqual(self.reply("accept", offer, headers).status_code, 404)
+
+    def test_signing_in_and_the_api_key_are_required(self):
+        offer = self.offer()
+        url = f"/api/provider/leads/{offer.id}/accept/"
+        self.assertEqual(self.client.post(url, {}, content_type="application/json", **KEY).status_code, 401)
+        no_key = {"HTTP_AUTHORIZATION": self.ace_headers["HTTP_AUTHORIZATION"]}
+        self.assertEqual(self.client.post(url, {}, content_type="application/json", **no_key).status_code, 403)
+
+    def test_get_is_not_allowed(self):
+        offer = self.offer()
+        url = f"/api/provider/leads/{offer.id}/accept/"
+        self.assertEqual(self.client.get(url, **self.ace_headers).status_code, 405)
+
+    def test_the_location_comes_with_the_details_after_accepting_only(self):
+        self.request.location = "T5J 0N3"
+        self.request.save()
+        offer = self.offer()
+        (before,) = self.leads().json()["leads"]
+        self.assertNotIn("location", before)
+        with patch("leads.services.share_client_phone"):
+            self.reply("accept", offer)
+        (after,) = self.leads().json()["leads"]
+        self.assertEqual(after["location"], "T5J 0N3")

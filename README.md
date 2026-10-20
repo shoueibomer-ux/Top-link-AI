@@ -177,6 +177,22 @@ endpoint answers a stranger with the same 404 as a conversation that does not ex
   provider has accepted. `CALL_MASKING_ENABLED` is reserved for phase 2 (Twilio masked calls, not built yet);
   while it is on the server refuses calls (501) rather than silently ignoring it. The app does not change.
 
+### Answering leads, locations and city waitlists
+
+- **Accept / Decline in the app:** a lead card waiting for an answer has Accept and Decline buttons
+  (`POST /api/provider/leads/<id>/accept|decline/`). It is the same answer as replying `YES <number>` /
+  `NO <number>` to the text: both go through `LeadOffer.record_reply`, so whichever comes first wins and a second
+  answer by any route changes nothing (the app says it was already answered). Accepting also texts the client's
+  phone to the provider, exactly like the SMS YES. The text reply keeps working. `reply_channel` records `app`.
+- **Where the job is:** the request form asks for the phone's location *or* a postal code / address
+  (`ServiceRequest.location`). Coordinates are never shown or sent. A provider sees the location only after
+  accepting, like the description. "Use my current location" turns the position into a postal code with the
+  phone's own geocoder (no key needed); if that is unavailable the person types it.
+- **Cities:** only Edmonton can be served (`provider_search.services.LAUNCHED_CITIES`). Providers can join a
+  waitlist for the other cities (`ProviderProfile.waitlist_cities`); to open a city, add it to `LAUNCHED_CITIES`.
+- **Notifications are asked for once**, after a client sends their first request or a provider accepts their
+  first lead, not when the app opens. Settings has an on/off switch that shows the real state.
+
 ### Reviews and favorites
 
 After a client marks a job complete they can rate the provider (1-5 stars, optional comment). Nothing

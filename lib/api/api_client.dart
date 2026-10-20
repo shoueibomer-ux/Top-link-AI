@@ -78,6 +78,7 @@ class ApiClient {
     String city = ApiClient.demoCity,
     String description = '',
     String urgency = '',
+    String location = '',
   }) async {
     final response = await http.post(
       Uri.parse('$baseUrl/requests/'),
@@ -90,6 +91,7 @@ class ApiClient {
         'city': city,
         'description': description,
         'urgency': urgency,
+        'location': location,
       }),
     );
     _throwForAuthProblems(response);
@@ -157,6 +159,23 @@ class ApiClient {
   /// See notifications.views.NotificationListView. Notifications fire from
   /// real events — there's no synthetic seed data, so a fresh device with
   /// no activity yet will legitimately see none.
+  /// The provider answers a lead from its card: the same as replying YES / NO to the text. Returns the lead as it
+  /// is now (an accepted one includes the client's name and description).
+  Future<ProviderLead> respondToLead(String accessToken, int offerId, {required bool accept}) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/provider/leads/$offerId/${accept ? 'accept' : 'decline'}/'),
+      headers: _authHeaders(accessToken),
+      body: jsonEncode({}),
+    );
+    _throwForAuthProblems(response);
+    if (response.statusCode != 200) {
+      throw ApiException(
+        _firstErrorMessage(response.body) ?? 'Could not ${accept ? 'accept' : 'decline'} this request (${response.statusCode}).',
+      );
+    }
+    return ProviderLead.fromJson((jsonDecode(response.body) as Map<String, dynamic>)['lead'] as Map<String, dynamic>);
+  }
+
   Future<NotificationsResult> getNotifications(String deviceId) async {
     final response = await http.get(
       Uri.parse('$baseUrl/notifications/?device_id=$deviceId'),

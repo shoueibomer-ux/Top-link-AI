@@ -42,6 +42,7 @@ class ConversationScreen extends StatefulWidget {
     required this.session,
     required this.conversationId,
     this.otherName = '',
+    this.requestSummary = '',
     this.pollInterval = const Duration(seconds: 4),
     this.pickPhoto = pickPhotoFromDevice,
     this.openDialer = openPhoneDialer,
@@ -50,6 +51,9 @@ class ConversationScreen extends StatefulWidget {
   final AuthSession session;
   final int conversationId;
   final String otherName;
+
+  /// What the chat is about ("Plumbing · Leaking kitchen sink"), shown under the name until the page has loaded.
+  final String requestSummary;
   final Duration pollInterval;
 
   /// Tests pass fakes for these two.
@@ -204,6 +208,7 @@ class _ConversationScreenState extends State<ConversationScreen> with WidgetsBin
       setState(() => _page = ChatPage(
             messages: _page!.messages,
             otherName: _page!.otherName,
+            requestSummary: _page!.requestSummary,
             blockedByMe: _page!.blockedByMe,
             canSend: _page!.canSend,
             termsAccepted: true,
@@ -349,10 +354,24 @@ class _ConversationScreenState extends State<ConversationScreen> with WidgetsBin
   @override
   Widget build(BuildContext context) {
     final title = _page?.otherName.isNotEmpty == true ? _page!.otherName : widget.otherName;
+    final summary = _page?.requestSummary.isNotEmpty == true ? _page!.requestSummary : widget.requestSummary;
     return Scaffold(
       backgroundColor: AppColors.lightBackground,
       appBar: AppBar(
-        title: Text(title.isEmpty ? 'Chat' : title, key: const Key('chat-title')),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title.isEmpty ? 'Chat' : title, key: const Key('chat-title')),
+            if (summary.isNotEmpty)
+              Text(
+                summary,
+                key: const Key('chat-subtitle'),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w400, color: Color(0xCCFFFFFF)),
+              ),
+          ],
+        ),
         actions: [
           IconButton(key: const Key('call-button'), tooltip: 'Call', icon: const Icon(Icons.call_outlined), onPressed: _call_),
           PopupMenuButton<String>(

@@ -35,8 +35,8 @@ class ServiceCategory {
 
   String get howItWorks =>
       "Once you select $label, you'll choose how urgent your request is, "
-      "share your location, and we'll instantly match you with verified "
-      "$workerNoun near you. You can review their ratings and match score "
+      "share your location, and we'll match you with verified "
+      "$workerNoun near you. You can read their ratings and reviews "
       "before reaching out.";
 }
 
@@ -50,6 +50,17 @@ ServiceCategory? findCategoryBySlug(String slug) {
     if (category.slug == slug) return category;
   }
   return null;
+}
+
+/// The name to show for a service slug: the catalog's label, or a tidied version of the slug ("cleaning" ->
+/// "Cleaning") for a service the catalog hasn't loaded or no longer lists. Never the raw lower-case slug.
+String categoryLabel(String slug) {
+  final known = findCategoryBySlug(slug);
+  if (known != null) return known.label;
+  return [
+    for (final word in slug.split(RegExp(r'[-_\s]+')))
+      if (word.isNotEmpty) '${word[0].toUpperCase()}${word.substring(1)}',
+  ].join(' ');
 }
 
 /// A top-level grouping of services (e.g. "Home Services") shown on the

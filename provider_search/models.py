@@ -121,6 +121,9 @@ class ServiceRequest(models.Model):
     category = models.CharField(max_length=50)
     city = models.CharField(max_length=100)
     problem_description = models.TextField(blank=True)
+    # Where the job is: a postal code ("T5J 0N3") or an address, as the client typed it. Optional. The provider
+    # sees it only after accepting, like the description. Never coordinates.
+    location = models.CharField(max_length=120, blank=True)
     phone = models.CharField(max_length=50)
     # Must be True to create a row at all (see ServiceRequestCreateView) —
     # stored anyway, rather than assumed, so consent is auditable per request

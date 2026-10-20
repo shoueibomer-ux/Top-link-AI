@@ -32,6 +32,8 @@ class LeadOffer(models.Model):
 
     CHANNEL_SMS = "sms"
     CHANNEL_MANUAL = "manual"
+    # The provider tapped Accept / Decline on the lead card in the app.
+    CHANNEL_APP = "app"
 
     service_request = models.ForeignKey("provider_search.ServiceRequest", on_delete=models.CASCADE, related_name="offers")
     provider = models.ForeignKey("providers.ProviderProfile", on_delete=models.PROTECT, related_name="offers")

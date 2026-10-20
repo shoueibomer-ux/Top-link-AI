@@ -32,6 +32,19 @@ class Conversation(models.Model):
     def other_user(self, user):
         return self.provider_user if self.client and user.pk == self.client.pk else self.client
 
+    def request_summary(self, service_names=None) -> str:
+        """What the chat is about, for under the name in the header: "Plumbing · Leaking kitchen sink"."""
+        from catalog.models import Service
+
+        request = self.offer.service_request
+        if service_names is None:
+            service_names = dict(Service.objects.filter(slug=request.category).values_list("slug", "name"))
+        service = service_names.get(request.category) or request.category.replace("-", " ").title()
+        description = " ".join((request.problem_description or "").split())
+        if len(description) > 60:
+            description = description[:59].rstrip() + "…"
+        return f"{service} · {description}" if description else service
+
     def display_name_for(self, viewer) -> str:
         """What `viewer` calls the other person: the provider's business name for the client, the
         client's shortened name for the provider."""

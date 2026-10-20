@@ -187,6 +187,43 @@ class OpenConversationTests(ChatCase):
         self.assertEqual(first.json()["other_name"], "Ace Plumbing")  # the client sees the business
         self.assertEqual(second.json()["other_name"], "Pat C.")  # the provider sees a shortened name
 
+    def test_the_chat_says_what_it_is_about(self):
+        self.request_obj.problem_description = "Leaking kitchen sink"
+        self.request_obj.save()
+        client_view = self.post("conversation-open", self.client_h, offer_id=self.offer.id).json()
+        provider_view = self.post("conversation-open", self.provider_h, offer_id=self.offer.id).json()
+        self.assertEqual(client_view["request_summary"], "Plumbing · Leaking kitchen sink")
+        self.assertEqual(provider_view["request_summary"], "Plumbing · Leaking kitchen sink")
+
+    def test_without_a_description_it_is_just_the_service(self):
+        data = self.post("conversation-open", self.client_h, offer_id=self.offer.id).json()
+        self.assertEqual(data["request_summary"], "Plumbing")
+
+    def test_a_long_description_is_cut_short_on_one_line(self):
+        self.request_obj.problem_description = "Water  everywhere\nin the basement " + "and rising " * 20
+        self.request_obj.save()
+        summary = self.post("conversation-open", self.client_h, offer_id=self.offer.id).json()["request_summary"]
+        self.assertTrue(summary.startswith("Plumbing · Water everywhere in the basement"))
+        self.assertTrue(summary.endswith("…"))
+        self.assertNotIn("\n", summary)
+        self.assertLessEqual(len(summary), len("Plumbing · ") + 60)
+
+    def test_the_summary_is_in_the_list_and_the_message_page_too(self):
+        self.request_obj.problem_description = "Leaking kitchen sink"
+        self.request_obj.save()
+        opened = self.post("conversation-open", self.client_h, offer_id=self.offer.id).json()
+        listed = self.client.get(self.url("conversation-list"), **self.client_h).json()["conversations"]
+        self.assertEqual(listed[0]["request_summary"], "Plumbing · Leaking kitchen sink")
+        page = self.client.get(self.url("conversation-messages", opened["id"]), **self.provider_h).json()
+        self.assertEqual(page["request_summary"], "Plumbing · Leaking kitchen sink")
+
+    def test_a_service_missing_from_the_catalog_falls_back_to_the_slug(self):
+        from provider_search.models import ServiceRequest as SR
+
+        SR.objects.filter(pk=self.request_obj.pk).update(category="old-service")
+        data = self.post("conversation-open", self.client_h, offer_id=self.offer.id).json()
+        self.assertEqual(data["request_summary"], "Old Service")
+
     def test_only_an_accepted_offer_has_a_chat(self):
         for status in (LeadOffer.STATUS_PENDING, LeadOffer.STATUS_SENT, LeadOffer.STATUS_DECLINED, LeadOffer.STATUS_EXPIRED):
             with self.subTest(status=status):

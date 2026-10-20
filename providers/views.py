@@ -9,6 +9,8 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from accounts.models import UserProfile, UserRole
 from catalog.models import Service
+from leads import services as lead_services
+from leads import sms
 from leads.models import LeadOffer
 from matching.permissions import HasApiKey
 from reviews import ratings
@@ -130,6 +132,46 @@ class ProviderLeadsView(APIView):
         service_names = dict(Service.objects.values_list("slug", "name"))
         data = ProviderLeadSerializer(offers, many=True, context={"service_names": service_names}).data
         return Response({"leads": data})
+
+
+class ProviderLeadReplyView(APIView):
+    """POST /api/provider/leads/<offer_id>/accept/  or  .../decline/   (signed-in provider)
+
+    The same answer as replying YES / NO to the text, from the lead card in the app. It goes through the same
+    `LeadOffer.record_reply` as the SMS reply and the admin buttons, so a second answer by any route changes
+    nothing (a 409 here). Accepting also sends the client's phone by text, exactly as the SMS YES does. Only the
+    provider the offer was sent to can answer it; anyone else gets a 404."""
+
+    permission_classes = [HasApiKey, IsAuthenticated, IsProviderAccount]
+    verb = None  # "accept" or "decline", set in urls.py
+
+    @method_decorator(ratelimit(key="user_or_ip", rate="60/h", method="POST", block=False))
+    def post(self, request, offer_id):
+        if getattr(request, "limited", False):
+            return Response({"detail": "Too many requests. Try again in a bit."}, status=429)
+        profile = ProviderProfile.objects.filter(user=request.user).first()
+        if profile is None:
+            return Response({"detail": "You haven't registered a provider profile yet."}, status=404)
+        accepting = self.verb == "accept"
+        with transaction.atomic():
+            offer = (
+                LeadOffer.objects.select_for_update()
+                .filter(pk=offer_id, provider=profile, sent_at__isnull=False)
+                .first()
+            )
+            if offer is None:
+                return Response({"detail": "Request not found."}, status=404)
+            if not offer.record_reply(
+                LeadOffer.REPLY_YES if accepting else LeadOffer.REPLY_NO, LeadOffer.CHANNEL_APP
+            ):
+                return Response({"detail": "You have already answered this request."}, status=409)
+        if accepting:
+            try:
+                lead_services.share_client_phone(offer)
+            except sms.SmsError:
+                pass  # recorded on the offer (send_error); the admin can follow up by hand
+        service_names = dict(Service.objects.values_list("slug", "name"))
+        return Response({"lead": ProviderLeadSerializer(offer, context={"service_names": service_names}).data})
 
 
 class ProviderMatchesView(APIView):

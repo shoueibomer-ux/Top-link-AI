@@ -69,7 +69,9 @@ void main() {
       await tester.pump();
       await tester.tap(find.text('Next'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Next')); // location is prefilled
+      await tester.enterText(find.byKey(const Key('location-field')), 'T5J 0N3');
+      await tester.pump();
+      await tester.tap(find.text('Next'));
       await tester.pumpAndSettle();
     }
 

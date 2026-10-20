@@ -1181,7 +1181,7 @@ void main() {
           final push = PushService(backend: backend);
           await push.start();
           expect(push.enabled, isTrue);
-          expect(backend.askedPermission, isTrue);
+          expect(backend.askedPermission, isFalse, reason: 'starting the app never shows the permission prompt');
           expect(
             jsonDecode(
               chat.to('/devices/', method: 'POST').single.body,
@@ -1286,13 +1286,20 @@ void main() {
 }
 
 class FakePush implements PushBackend {
-  FakePush({this.configured = true, String? token = 'tok-device'})
+  FakePush({this.configured = true, String? token = 'tok-device', this.granted = true, this.grantWhenAsked = true})
     : tokenValue = token;
 
   final bool configured;
+
+  /// Whether the phone already allows notifications (an older Android, or the person said yes before).
+  bool granted;
+
+  /// What the person answers when the system prompt is shown.
+  final bool grantWhenAsked;
   String? tokenValue;
   int tokenCalls = 0;
-  bool askedPermission = false;
+  int permissionPrompts = 0;
+  bool get askedPermission => permissionPrompts > 0;
   final refresh = StreamController<String>.broadcast();
   final foreground = StreamController<Map<String, dynamic>>.broadcast();
   final opened = StreamController<Map<String, dynamic>>.broadcast();
@@ -1301,7 +1308,13 @@ class FakePush implements PushBackend {
   Future<bool> init() async => configured;
 
   @override
-  Future<void> requestPermission() async => askedPermission = true;
+  Future<void> requestPermission() async {
+    permissionPrompts++;
+    if (grantWhenAsked) granted = true;
+  }
+
+  @override
+  Future<bool> permissionGranted() async => granted;
 
   @override
   Future<String?> token() async {

@@ -115,7 +115,9 @@ Future<void> _toSubmit(WidgetTester tester) async {
   await tester.pump();
   await tester.tap(find.text('Next'));
   await tester.pumpAndSettle();
-  await tester.tap(find.text('Next')); // location step is prefilled
+  await tester.enterText(find.byKey(const Key('location-field')), 'T5J 0N3');
+  await tester.pump();
+  await tester.tap(find.text('Next'));
   await tester.pumpAndSettle();
   await tester.enterText(find.byType(TextField).first, '+1 780 555 0100');
   await tester.pump();
@@ -284,9 +286,9 @@ void main() {
 
         await tester.tap(find.byKey(const Key('confirm-complete')));
         await _settle(tester);
-        // both the status pill and the provider's row say Completed
+        // the status pill says Completed; the provider's row doesn't say it again
         expect(find.descendant(of: find.byKey(const Key('request-status')), matching: find.text('Completed')), findsOneWidget);
-        expect(find.descendant(of: find.byKey(const Key('accepted-42')), matching: find.text('Completed')), findsOneWidget);
+        expect(find.descendant(of: find.byKey(const Key('accepted-42')), matching: find.text('Completed')), findsNothing);
         expect(find.byKey(const Key('complete-42')), findsNothing);
       }, () => backend.client);
 
@@ -320,8 +322,26 @@ void main() {
           ),
         ),
       ));
-      expect(find.descendant(of: find.byKey(const Key('accepted-42')), matching: find.text('Completed')), findsOneWidget);
+      // The pill says Completed once; the provider's row doesn't repeat it when there is only one provider.
+      expect(find.descendant(of: find.byKey(const Key('request-status')), matching: find.text('Completed')), findsOneWidget);
+      expect(find.descendant(of: find.byKey(const Key('accepted-42')), matching: find.text('Completed')), findsNothing);
+      expect(find.text('Completed'), findsOneWidget);
       expect(find.byKey(const Key('complete-42')), findsNothing);
+    });
+
+    testWidgets('with several providers the row says which one was completed', (tester) async {
+      final other = _accepted()..['offer_id'] = 43;
+      other['can_complete'] = false;
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: ServiceRequestCard(
+            request: ServiceRequestRecord.fromJson(_request(accepted: [_accepted(completed: true), other])),
+            onMarkComplete: (_) {},
+          ),
+        ),
+      ));
+      expect(find.descendant(of: find.byKey(const Key('accepted-42')), matching: find.text('Completed')), findsOneWidget);
+      expect(find.descendant(of: find.byKey(const Key('accepted-43')), matching: find.text('Completed')), findsNothing);
     });
 
     testWidgets('once one provider is completed, the others cannot also be marked complete', (tester) async {

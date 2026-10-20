@@ -6,6 +6,7 @@ class ChatConversation {
     required this.offerId,
     required this.requestId,
     required this.otherName,
+    this.requestSummary = '',
     this.unreadCount = 0,
     this.lastPreview,
     this.blockedByMe = false,
@@ -19,6 +20,7 @@ class ChatConversation {
       offerId: json['offer_id'] as int,
       requestId: json['request_id'] as int? ?? 0,
       otherName: json['other_name'] as String? ?? '',
+      requestSummary: json['request_summary'] as String? ?? '',
       unreadCount: json['unread_count'] as int? ?? 0,
       lastPreview: last is Map<String, dynamic> ? last['preview'] as String? : null,
       blockedByMe: json['blocked_by_me'] as bool? ?? false,
@@ -30,6 +32,9 @@ class ChatConversation {
   final int offerId;
   final int requestId;
   final String otherName;
+
+  /// What the chat is about, e.g. "Plumbing · Leaking kitchen sink".
+  final String requestSummary;
   final int unreadCount;
   final String? lastPreview;
   final bool blockedByMe;
@@ -71,6 +76,7 @@ class ChatPage {
   const ChatPage({
     required this.messages,
     required this.otherName,
+    this.requestSummary = '',
     this.blockedByMe = false,
     this.canSend = true,
     this.termsAccepted = false,
@@ -83,6 +89,7 @@ class ChatPage {
         for (final m in json['messages'] as List<dynamic>? ?? const []) ChatMessage.fromJson(m as Map<String, dynamic>),
       ],
       otherName: json['other_name'] as String? ?? '',
+      requestSummary: json['request_summary'] as String? ?? '',
       blockedByMe: json['blocked_by_me'] as bool? ?? false,
       canSend: json['can_send'] as bool? ?? true,
       termsAccepted: json['terms_accepted'] as bool? ?? false,
@@ -92,6 +99,7 @@ class ChatPage {
 
   final List<ChatMessage> messages;
   final String otherName;
+  final String requestSummary;
   final bool blockedByMe;
   final bool canSend;
   final bool termsAccepted;

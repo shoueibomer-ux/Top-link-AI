@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../provider/auth_storage.dart';
 import '../provider/provider_session.dart';
@@ -19,7 +20,12 @@ int? conversationIdFromPush(Map<String, dynamic> data) {
 abstract class PushBackend {
   /// False when this build has no Firebase config (no google-services.json): push is simply off.
   Future<bool> init();
+
+  /// Shows the system "allow notifications?" prompt (Android 13+; older versions say yes without asking).
   Future<void> requestPermission();
+
+  /// Whether notifications are allowed right now. Never prompts.
+  Future<bool> permissionGranted();
   Future<String?> token();
   Stream<String> get onTokenRefresh;
   Stream<Map<String, dynamic>> get onForegroundMessage;
@@ -55,6 +61,16 @@ class FirebasePushBackend implements PushBackend {
   }
 
   @override
+  Future<bool> permissionGranted() async {
+    try {
+      final status = (await _messaging.getNotificationSettings()).authorizationStatus;
+      return status == AuthorizationStatus.authorized || status == AuthorizationStatus.provisional;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  @override
   // ignore: deprecated_member_use
   Future<String?> token() => _messaging.getToken();
 
@@ -84,7 +100,14 @@ class PushService {
       : _backend = backend ?? FirebasePushBackend(),
         _sessionFactory = sessionFactory ?? AuthSession.new;
 
-  static final PushService instance = PushService();
+  /// The one the app uses. Not final so a test can swap in one with a fake backend.
+  static PushService instance = PushService();
+
+  /// Set once we have shown the system prompt, so a person is only ever asked at the moment it makes sense.
+  static const _askedKey = 'push_permission_asked';
+
+  /// The person's own on/off choice in Settings (on until they turn it off).
+  static const _preferenceKey = 'push_notifications_enabled';
 
   /// Lets a tapped notification open the chat from anywhere in the app.
   static final navigatorKey = GlobalKey<NavigatorState>();
@@ -105,7 +128,8 @@ class PushService {
     try {
       if (!await _backend.init()) return;
       _enabled = true;
-      await _backend.requestPermission();
+      // No prompt here: asking before the person has done anything is asking for nothing. The prompt comes
+      // later (askAfterFirstRequest). A phone that already allows notifications registers straight away.
       _subscriptions
         ..add(_backend.onTokenRefresh.listen((_) => register()))
         ..add(_backend.onForegroundMessage.listen((data) {
@@ -114,16 +138,61 @@ class PushService {
         ..add(_backend.onOpenedFromNotification.listen(_openFromPush));
       final initial = await _backend.initialMessage(); // the app was started by tapping a notification
       if (initial != null) _openFromPush(initial);
-      await register();
+      if (await _backend.permissionGranted()) await register();
     } catch (e) {
       debugPrint('[push] could not start: $e');
     }
+  }
+
+  /// Asks for notification permission, but only once and only when it makes sense: right after the person sends
+  /// their first request (a client) or accepts their first lead (a provider). If it is allowed, this phone is
+  /// registered with the server. Returns whether notifications are now allowed.
+  Future<bool> askAfterFirstRequest() => _askForPermission(onlyOnce: true);
+
+  Future<bool> _askForPermission({required bool onlyOnce}) async {
+    if (!_enabled) return false;
+    try {
+      if (!await _backend.permissionGranted()) {
+        final prefs = await SharedPreferences.getInstance();
+        if (onlyOnce && (prefs.getBool(_askedKey) ?? false)) return false;
+        await prefs.setBool(_askedKey, true);
+        await _backend.requestPermission();
+        if (!await _backend.permissionGranted()) return false;
+      }
+      await register();
+      return true;
+    } catch (e) {
+      debugPrint('[push] could not ask for permission: $e');
+      return false;
+    }
+  }
+
+  Future<bool> _preferenceOn() async => (await SharedPreferences.getInstance()).getBool(_preferenceKey) ?? true;
+
+  /// What the Settings switch shows: this build has push, the phone allows it, and the person has not turned it off.
+  Future<bool> notificationsOn() async {
+    if (!_enabled) return false;
+    return await _preferenceOn() && await _backend.permissionGranted();
+  }
+
+  /// The Settings switch. Turning it on asks the phone for permission if it hasn't been given (the system only
+  /// shows its prompt a limited number of times). Returns what is true afterwards, so the switch never lies.
+  Future<bool> setNotifications(bool on) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!on) {
+      await prefs.setBool(_preferenceKey, false);
+      await unregister();
+      return false;
+    }
+    await prefs.setBool(_preferenceKey, true);
+    return _enabled && await _askForPermission(onlyOnce: false);
   }
 
   /// Tells the server this phone can receive the signed-in person's notifications.
   Future<void> register([AuthSession? session]) async {
     if (!_enabled) return;
     try {
+      if (!await _preferenceOn()) return;
       if (!await AuthStorage.isLoggedIn()) return;
       final token = await _backend.token();
       if (token == null) return;

@@ -245,7 +245,7 @@ void main() {
         expect(find.byKey(const Key('city-error')), findsOneWidget);
         expect(backend.requests.where((r) => r.method == 'POST' && r.url.path.endsWith('/provider/profile/')), isEmpty);
 
-        await tester.enterText(find.byKey(const Key('field-phone')), '58792199587');
+        await tester.enterText(find.byKey(const Key('field-phone')), '12345');
         await tester.pump();
         expect(find.text(kInvalidPhoneMessage), findsOneWidget);
       }, backend.client);
@@ -273,6 +273,7 @@ void main() {
         'email': 'pro@example.com',
         'categories': ['plumbing'],
         'cities': ['Edmonton'],
+        'waitlist_cities': [],
         'bio': '',
         'sms_consent': true,
       });

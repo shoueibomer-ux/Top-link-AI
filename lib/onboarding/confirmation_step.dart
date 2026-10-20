@@ -79,6 +79,7 @@ class ConfirmationStep extends StatelessWidget {
           child: TextField(
             controller: phoneController,
             keyboardType: TextInputType.phone,
+            inputFormatters: const [PhoneInputFormatter()],
             decoration: const InputDecoration(
               hintText: 'e.g. 780 555 0100',
               border: InputBorder.none,

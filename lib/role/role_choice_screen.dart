@@ -36,39 +36,49 @@ class RoleChoiceScreen extends StatelessWidget {
               children: [
                 const SizedBox(height: 24),
                 const AppLogo(height: 44, onLight: true),
-                const SizedBox(height: 32),
-                const Text(
-                  'Welcome to Tabmatch',
-                  style: TextStyle(
-                    fontSize: 26,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.navy,
+                // The question and the two choices sit in the middle of what is left, not at the top.
+                Expanded(
+                  child: Center(
+                    child: SingleChildScrollView(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Welcome to Tabmatch',
+                            style: TextStyle(
+                              fontSize: 26,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.navy,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'How would you like to use the app?',
+                            style: TextStyle(fontSize: 15, color: AppColors.muted),
+                          ),
+                          const SizedBox(height: 32),
+                          _RoleCard(
+                            key: const Key('role-client'),
+                            icon: Icons.search,
+                            title: 'I need a service',
+                            subtitle: 'Tell us what you need and we will connect you with local providers.',
+                            filled: false,
+                            onTap: () => onChosen(AppRole.client),
+                          ),
+                          const SizedBox(height: 16),
+                          _RoleCard(
+                            key: const Key('role-provider'),
+                            icon: Icons.business_center_outlined,
+                            title: "I'm a service provider",
+                            subtitle: 'Register your business and get matched with clients in your city.',
+                            filled: true,
+                            onTap: () => onChosen(AppRole.provider),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  'How would you like to use the app?',
-                  style: TextStyle(fontSize: 15, color: AppColors.muted),
-                ),
-                const SizedBox(height: 32),
-                _RoleCard(
-                  key: const Key('role-client'),
-                  icon: Icons.search,
-                  title: 'I need a service',
-                  subtitle: 'Tell us what you need and we will connect you with local providers.',
-                  filled: false,
-                  onTap: () => onChosen(AppRole.client),
-                ),
-                const SizedBox(height: 16),
-                _RoleCard(
-                  key: const Key('role-provider'),
-                  icon: Icons.business_center_outlined,
-                  title: "I'm a service provider",
-                  subtitle: 'Register your business and get matched with clients in your city.',
-                  filled: true,
-                  onTap: () => onChosen(AppRole.provider),
-                ),
-                const Spacer(),
                 Center(
                   child: Text(
                     'You can switch any time from the menu.',

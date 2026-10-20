@@ -6,7 +6,6 @@ import '../app_styles.dart';
 import '../pages/about_us_page.dart';
 import '../pages/mission_vision_page.dart';
 import '../pages/settings_page.dart';
-import '../provider/provider_onboarding_screen.dart';
 import '../reviews/favorites_screen.dart';
 import 'app_logo.dart';
 import 'pressable.dart';
@@ -42,11 +41,6 @@ class AppDrawer extends StatelessWidget {
             icon: Icons.settings_outlined,
             label: 'Settings',
             onTap: () => _navigateTo(context, const SettingsPage()),
-          ),
-          _DrawerItem(
-            icon: Icons.assignment_outlined,
-            label: 'Provider Sign-Up (demo)',
-            onTap: () => _navigateTo(context, const ProviderOnboardingScreen()),
           ),
           const Divider(height: 24),
           _DrawerItem(

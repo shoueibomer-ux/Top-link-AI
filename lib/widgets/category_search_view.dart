@@ -252,8 +252,8 @@ class _SearchField extends StatelessWidget {
         textInputAction: TextInputAction.search,
         style: const TextStyle(fontSize: 16, color: AppColors.navy),
         decoration: InputDecoration(
-          // No hint text: the field is just the search icon until the user types.
-          // The label is for screen readers only; nothing extra is drawn.
+          hintText: 'Search for a service',
+          hintStyle: TextStyle(fontSize: 16, color: AppColors.mutedText),
           prefixIcon: const Icon(Icons.search, color: AppColors.turquoise, semanticLabel: 'Search services'),
           // Rebuilds with the controller so the clear button appears and
           // disappears as text does, without the parent having to.
