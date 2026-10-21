@@ -2,30 +2,137 @@
 {% block content %}
 <section class="page-head"><div class="wrap">
   <h1>Privacy policy</h1>
-  <p class="lead-dark">What Tabmatch collects and why.</p>
+  <p class="lead-dark">What Tabmatch collects, why, who sees it, and how you stay in control.</p>
 </div></section>
 <section class="section"><div class="wrap narrow prose">
-  <p class="draft-note"><strong>Draft.</strong> This is a placeholder that describes what the app and website do today. It has not been reviewed by a lawyer and will be replaced by a final policy before public launch.</p>
+  {% include "website/partials/draft_banner.html" %}
 
-  <h2>The website</h2>
-  <p>This website has no accounts or forms, and at the time of writing it does not use analytics or advertising cookies. Like any web server, ours may keep standard technical logs (such as IP address and pages requested).</p>
+  <ol class="toc">
+    <li><a href="#who">Who we are</a></li>
+    <li><a href="#collect">What we collect</a></li>
+    <li><a href="#why">Why we use it</a></li>
+    <li><a href="#consent">Your consent</a></li>
+    <li><a href="#share">Who we share it with</a></li>
+    <li><a href="#where">Where it is kept</a></li>
+    <li><a href="#keep">How long we keep it</a></li>
+    <li><a href="#rights">Your rights and choices</a></li>
+    <li><a href="#security">Keeping it safe</a></li>
+    <li><a href="#children">Children</a></li>
+    <li><a href="#website">This website</a></li>
+    <li><a href="#changes">Changes</a></li>
+    <li><a href="#contact">Contact and complaints</a></li>
+  </ol>
 
-  <h2>The Tabmatch app</h2>
+  <h2 id="who">1. Who we are</h2>
+  <p>Tabmatch ("we", "us") is an online marketplace based in Alberta, Canada. Through our mobile app and this website we connect people who need a service ("clients") with local service businesses and tradespeople ("providers"). This policy explains how we handle personal information. We follow Canada's <em>Personal Information Protection and Electronic Documents Act</em> (PIPEDA) and, where it applies to us, Alberta's <em>Personal Information Protection Act</em> (PIPA).</p>
+  <p>Our privacy contact is <span class="fill-in">[name or title of the person accountable for privacy]</span>, at {% include "website/partials/legal_contact.html" %}.</p>
+  <p class="decide"><strong>For the lawyer:</strong> confirm the legal name and address of the operating entity, which law (PIPEDA, PIPA or both) governs which flows, and the accountable person.</p>
+
+  <h2 id="collect">2. What we collect</h2>
+  <p>We collect only what the app needs to work. Here is everything, by where it comes from.</p>
+  <table>
+    <thead><tr><th>What</th><th>Details</th><th>From</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Sign-in details</strong></td><td>Your name, email address and a Google account identifier, when you sign in with Google. We never see or store your Google password, and Tabmatch has no passwords of its own.</td><td>Google, with your permission</td></tr>
+      <tr><td><strong>Phone number</strong></td><td>Clients give one with each request. Providers give a business phone when they register.</td><td>You</td></tr>
+      <tr><td><strong>Your requests</strong></td><td>The service you chose, your city, how urgent it is, anything you type to describe the job, and where the job is: a postal code or address you type, or a postal code worked out from your phone's location if you tap "Use my current location".</td><td>You</td></tr>
+      <tr><td><strong>Location</strong></td><td>If you allow it, your phone's location is used once, on your phone, to find a postal code. We do not store your coordinates and we do not track your location.</td><td>Your phone, with your permission</td></tr>
+      <tr><td><strong>Provider profile</strong></td><td>Business name, phone, email, description, the services and cities you offer, whether you agreed to be contacted, and whether you opted out of texts.</td><td>You</td></tr>
+      <tr><td><strong>Chat messages and photos</strong></td><td>The messages and photos you send in a chat with a client or provider, when they were sent, and any report or block you make. Photos are kept in a private storage bucket and are only shown to the two people in that chat.</td><td>You</td></tr>
+      <tr><td><strong>Reviews and replies</strong></td><td>A star rating and comment a client writes after a job, and a provider's public reply. Reviews show the client's first name and last initial (for example "Pat P.").</td><td>You</td></tr>
+      <tr><td><strong>Favorites</strong></td><td>The providers a client saved.</td><td>You</td></tr>
+      <tr><td><strong>Push notification token</strong></td><td>A code from Google's Firebase service that lets us send notifications to your phone, and your phone's platform (Android or iOS). Only if you allow notifications.</td><td>Your phone</td></tr>
+      <tr><td><strong>Device identifier</strong></td><td>A random ID the app creates on your phone to tie a request to the notifications about it.</td><td>The app</td></tr>
+      <tr><td><strong>Technical records</strong></td><td>IP address, the time and type of requests to our servers, and error logs, kept by our hosting service for security and troubleshooting.</td><td>Automatically</td></tr>
+      <tr><td><strong>Ask AI text</strong></td><td>If you use the Ask AI feature, the sentence you type describing what you need.</td><td>You</td></tr>
+    </tbody>
+  </table>
+  <p>We do not collect payment card details (Tabmatch does not take payments today), your contacts, your photos library (only photos you choose to send), or your precise location history.</p>
+
+  <h2 id="why">3. Why we use it</h2>
   <ul class="ticks">
-    <li><strong>Device identifier.</strong> A random ID generated on your device keeps your requests, saved providers, notifications and subscription status together without needing an account.</li>
-    <li><strong>Your requests.</strong> The service you choose, your city, how urgent it is, and anything you type when describing a job, including chat messages.</li>
-    <li><strong>Location.</strong> If you allow it, the app uses your device location to help choose your city for search.</li>
-    <li><strong>Provider accounts.</strong> If you register as a provider: your email, a password (stored hashed, never in plain text), your name, and the business profile details you enter (business name, description, city, phone, services, and similar).</li>
+    <li>To create and run your account, and to sign you in.</li>
+    <li>To offer your request to suitable providers and let them answer, by text message or in the app.</li>
+    <li>To let a client and provider chat and, once a provider accepts, call each other.</li>
+    <li>To show ratings and reviews, and to let you save providers.</li>
+    <li>To send notifications and messages about your requests and chats, and (to providers) text messages about client requests.</li>
+    <li>To keep the marketplace safe: handling reports, removing abusive content, suspending accounts that break the rules, and preventing fraud and misuse.</li>
+    <li>To answer your questions, meet our legal obligations, and understand in general terms how the service is used.</li>
+  </ul>
+  <p>We use information only for the purposes we have described, or purposes that are directly related, unless we ask you first.</p>
+
+  <h2 id="consent">4. Your consent</h2>
+  <p>By signing in and using Tabmatch you agree to this policy. For a request, you also agree to share its details, including your phone number, with providers who may be able to help; the app asks you to confirm this each time. Providers separately agree to be contacted about client requests by text message and in the app (this is how we meet Canada's anti-spam law, CASL). You can withdraw consent at any time, for example by replying STOP to a text, turning off notifications in Settings, or deleting your account (see section 8). Withdrawing consent may mean we can no longer provide some or all of the service.</p>
+
+  <h2 id="share">5. Who we share it with</h2>
+  <p><strong>We do not sell your personal information.</strong> We share it only as follows.</p>
+  <h3>With other people on Tabmatch</h3>
+  <ul class="ticks">
+    <li><strong>Providers see:</strong> before they answer a request, only the service, city and urgency. After a provider accepts, they also see your first name and last initial, the description you wrote, where the job is, and your phone number (shared by text message and available through the Call button).</li>
+    <li><strong>Clients see:</strong> a provider's business name, description, services, cities, rating and reviews. After a provider accepts, you can chat with them and call their business number.</li>
+    <li><strong>Everyone sees:</strong> reviews and provider replies, with the client shown as first name and last initial.</li>
+  </ul>
+  <h3>With companies that help us run Tabmatch</h3>
+  <table>
+    <thead><tr><th>Company</th><th>What for</th><th>What they receive</th></tr></thead>
+    <tbody>
+      <tr><td>Google</td><td>Sign-in with Google</td><td>Handles your Google account; tells us your name, email and account ID</td></tr>
+      <tr><td>Google Firebase Cloud Messaging</td><td>Push notifications</td><td>Your push token and the short text of a notification (it never contains your messages)</td></tr>
+      <tr><td>Cloudflare (R2 storage)</td><td>Storing chat photos privately</td><td>The photos you send in chats</td></tr>
+      <tr><td>Render</td><td>Hosting our servers, database and cache</td><td>All the information in section 2 that we hold, stored on their infrastructure</td></tr>
+      <tr><td>Twilio</td><td>Sending text messages to providers</td><td>The provider's phone number and the text; for an accepted request, the client's phone number</td></tr>
+      <tr><td>Anthropic</td><td>Ask AI (working out which service you need)</td><td>The sentence you type into Ask AI</td></tr>
+      <tr><td>Email service provider</td><td>Occasional emails, for example a reminder to mark a job complete</td><td>Your email address and the email</td></tr>
+      <tr><td>Apple and Google app stores</td><td>Distributing the app</td><td>Their own information about your download</td></tr>
+    </tbody>
+  </table>
+  <p class="decide"><strong>To confirm before launch:</strong> remove any company in this table we do not end up using (for example Twilio while text messaging is switched off, or the email provider), and add any we add later.</p>
+  <h3>When the law requires it</h3>
+  <p>We may disclose information if a law, court order or lawful request requires it, to protect the safety of a person, or to investigate misuse of Tabmatch. If Tabmatch is ever sold or merged, personal information may transfer to the new owner, who must honour this policy.</p>
+
+  <h2 id="where">6. Where it is kept</h2>
+  <p>Our servers and database are hosted by Render in the United States (Oregon). Chat photos are stored with Cloudflare, and notifications go through Google, whose systems may be located in several countries. This means your information can be stored and processed outside Alberta and Canada, and may be accessible to courts, law enforcement and national security authorities in those countries under their laws. We require the companies we use to protect it.</p>
+  <p class="decide"><strong>For the lawyer:</strong> confirm the Cloudflare storage region and whether any contractual safeguards or additional notice are needed for the transfers above.</p>
+
+  <h2 id="keep">7. How long we keep it</h2>
+  <p>We keep personal information only as long as we need it for the purposes above or the law requires.</p>
+  <table>
+    <thead><tr><th>Information</th><th>How long</th></tr></thead>
+    <tbody>
+      <tr><td>Your account, profile, requests, chats, favorites and tokens</td><td>While your account exists. You can delete your account at any time and it is removed straight away (see below). Today nothing is deleted automatically for inactivity. <span class="decide">Decision needed: an inactivity period after which unused accounts are deleted, for example <span class="fill-in">[24] months</span>.</span></td></tr>
+      <tr><td>Chat messages and photos</td><td>Until the account of either person is deleted. <span class="decide">Decision needed: whether to delete chats automatically after a job, for example after <span class="fill-in">[12] months</span>.</span></td></tr>
+      <tr><td>Push tokens</td><td>Until you sign out, turn notifications off, or delete your account.</td></tr>
+      <tr><td>Server logs kept by our host</td><td><span class="fill-in">[confirm with the hosting provider, typically up to 30 days]</span></td></tr>
+      <tr><td>Reviews and ratings you wrote</td><td>Kept after you delete your account, without your name, so a provider's rating history stays accurate (see below).</td></tr>
+      <tr><td>Records of requests and offers</td><td>Kept after you delete your account, with your phone number, description and location removed, for statistics, dispute handling and our records.</td></tr>
+      <tr><td>A record that an account was deleted</td><td>Kept. It contains no name, email or phone number.</td></tr>
+      <tr><td>Records we must keep by law (for example financial records, once Tabmatch takes payments)</td><td><span class="fill-in">[period set by the lawyer, for example 6 years]</span></td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="rights">8. Your rights and choices</h2>
+  <ul class="ticks">
+    <li><strong>Access.</strong> You can ask what personal information we hold about you and how we use it.</li>
+    <li><strong>Correction.</strong> You can fix your details yourself in the app, or ask us to.</li>
+    <li><strong>Withdraw consent.</strong> Turn off notifications in Settings, reply STOP to texts, or delete your account.</li>
+    <li><strong>Delete your account.</strong> In the app: Profile (clients) or Profile (providers), then <em>Delete my account</em>. Or follow the steps on our <a href="{% url 'website:delete-account' %}">delete your account</a> page if you cannot use the app. Deleting removes your name, email and sign-in, your chats and chat photos, your push tokens and saved providers, and blanks the details of your requests (or, for a provider, the business details). We keep reviews you wrote, without your name, and anonymous records of requests and offers.</li>
+    <li><strong>Questions or complaints.</strong> Contact us (section 13). We reply within 30 days. If you are not satisfied you can complain to the <a href="https://www.priv.gc.ca/">Office of the Privacy Commissioner of Canada</a> or the <a href="https://oipc.ab.ca/">Office of the Information and Privacy Commissioner of Alberta</a>.</li>
   </ul>
 
-  <h2>Who else handles data</h2>
-  <ul class="ticks">
-    <li><strong>Google.</strong> We use Google's Places service to find local business listings; public listing details such as name, phone, address and ratings come from there.</li>
-    <li><strong>Anthropic.</strong> The text you type to describe a job may be sent to Anthropic's Claude AI to work out which service you need.</li>
-    <li><strong>App stores.</strong> Paid subscriptions, once enabled, are processed by Apple or Google. We do not receive your card details.</li>
-  </ul>
+  <h2 id="security">9. Keeping it safe</h2>
+  <p>Traffic between the app and our servers is encrypted. Chat photos sit in a private bucket and are shown only through short-lived links to the two people in the chat. Access to our systems is limited to people who need it, and staff sign-ins are protected. No system is perfectly secure. If a breach creates a real risk of significant harm to you, we will tell you and the privacy regulators as the law requires.</p>
 
-  <h2>Your choices</h2>
-  <p>Details on how long data is kept, and how to ask us to access or delete it, will be added in the final policy. Until then, contact us using the details on the <a href="{% url 'website:contact' %}">contact page</a>.</p>
+  <h2 id="children">10. Children</h2>
+  <p>Tabmatch is for adults. You must be at least 18 (the age of majority in Alberta) to use it. We do not knowingly collect information from anyone under 18; if you think we have, contact us and we will delete it.</p>
+
+  <h2 id="website">11. This website</h2>
+  <p>This website has no accounts or forms. At the time of writing it does not use analytics or advertising cookies. Like any web server, ours keeps standard technical records such as your IP address and the pages requested. If this changes, we will update this policy first.</p>
+
+  <h2 id="changes">12. Changes</h2>
+  <p>We may update this policy. We will post the new version here with its date, and tell you in the app if a change is significant.</p>
+
+  <h2 id="contact">13. Contact and complaints</h2>
+  <p>Privacy questions, access, correction and deletion requests: {% include "website/partials/legal_contact.html" %}. Mail: <span class="fill-in">[postal address of the operating entity]</span>.</p>
+  <p>See also our <a href="{% url 'website:terms' %}">terms of service</a>, the <a href="{% url 'website:provider-agreement' %}">provider agreement</a> and how to <a href="{% url 'website:delete-account' %}">delete your account</a>.</p>
 </div></section>
 {% endblock %}

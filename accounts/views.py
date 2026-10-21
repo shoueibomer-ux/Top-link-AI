@@ -10,7 +10,8 @@ from matching.permissions import HasApiKey
 from providers.google_auth import GoogleAuthError, GoogleAuthNotConfigured, verify_google_id_token
 from providers.google_signin import AccountConflict, user_for_google
 
-from .models import UserRole
+from .deletion import CONFIRM_WORD, AccountNotDeletable, delete_account
+from .models import AccountDeletion, UserRole
 from .serializers import ProfileUpdateSerializer, UserProfileSerializer
 
 # Security audit finding H2: the token endpoint had no rate limiting. A trip
@@ -68,6 +69,28 @@ class TokenRefreshView(_TokenRefreshView):
         if getattr(request, "limited", False):
             return Response({"detail": "Too many requests. Try again in a minute."}, status=429)
         return super().post(request, *args, **kwargs)
+
+
+class DeleteAccountView(APIView):
+    """POST /api/accounts/delete/ {"confirm": "DELETE"}   (the signed-in client or provider)
+
+    Deletes the caller's own account: see accounts.deletion for exactly what goes and what is kept anonymised.
+    The word has to be typed so a stray request can't do it. Only ever the caller's own account; staff accounts
+    are refused. The app signs the person out afterwards."""
+
+    permission_classes = [HasApiKey, IsAuthenticated]
+
+    @method_decorator(ratelimit(key="user_or_ip", rate="5/h", method="POST", block=False))
+    def post(self, request):
+        if getattr(request, "limited", False):
+            return Response({"detail": "Too many attempts. Try again later."}, status=429)
+        if request.data.get("confirm") != CONFIRM_WORD:
+            return Response({"detail": f"Type {CONFIRM_WORD} to confirm."}, status=400)
+        try:
+            delete_account(request.user, via=AccountDeletion.VIA_APP)
+        except AccountNotDeletable as exc:
+            return Response({"detail": str(exc)}, status=403)
+        return Response({"deleted": True})
 
 
 class MeView(APIView):

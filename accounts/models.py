@@ -32,3 +32,23 @@ class UserProfile(models.Model):
 
     def __str__(self):
         return f"{self.user.email} ({self.role})"
+
+
+class AccountDeletion(models.Model):
+    """That an account was deleted, and when and how. Holds no personal data (not even the email): it exists so
+    we can show a deletion request was carried out."""
+
+    VIA_APP = "app"
+    VIA_ADMIN = "admin"
+    VIA_COMMAND = "command"
+
+    user_id = models.PositiveBigIntegerField(db_index=True)
+    role = models.CharField(max_length=20)
+    via = models.CharField(max_length=20)
+    deleted_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-deleted_at"]
+
+    def __str__(self):
+        return f"#{self.user_id} ({self.role}) deleted {self.deleted_at:%Y-%m-%d} via {self.via}"

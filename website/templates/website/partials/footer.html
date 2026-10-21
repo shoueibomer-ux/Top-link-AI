@@ -30,6 +30,8 @@
         <li><a href="{% url 'website:contact' %}">Contact</a></li>
         <li><a href="{% url 'website:privacy' %}">Privacy policy</a></li>
         <li><a href="{% url 'website:terms' %}">Terms of service</a></li>
+        <li><a href="{% url 'website:provider-agreement' %}">Provider agreement</a></li>
+        <li><a href="{% url 'website:delete-account' %}">Delete your account</a></li>
         {% if site.contact_email %}<li><a href="mailto:{{ site.contact_email }}">{{ site.contact_email }}</a></li>{% endif %}
       </ul>
     </div>

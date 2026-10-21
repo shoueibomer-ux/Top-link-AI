@@ -20,6 +20,7 @@ class Command(BaseCommand):
         self.stdout.write("Chat configuration (values are never shown)\n")
         self._push(live)
         self._photos(live)
+        self._photo_queue()
         self.stdout.write(f"\nCall masking (phase 2): {'ON, but not built yet' if settings.CALL_MASKING_ENABLED else 'off (Call dials directly)'}")
 
     def _line(self, label, ok, detail):
@@ -47,6 +48,15 @@ class Command(BaseCommand):
             except Exception as exc:  # noqa: BLE001
                 return self._line("Push notifications", False, f"{detail}; could not get a token ({type(exc).__name__})")
         self._line("Push notifications", True, detail)
+
+    def _photo_queue(self):
+        from messaging.models import PhotoDeletion
+
+        waiting = PhotoDeletion.objects.count()
+        if waiting:
+            self._line("Photo deletions", False, f"{waiting} photo(s) of deleted accounts still to remove; run `manage.py purge_photo_queue`")
+        else:
+            self._line("Photo deletions", True, "none waiting")
 
     def _photos(self, live):
         names = ("R2_ACCOUNT_ID", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_BUCKET")

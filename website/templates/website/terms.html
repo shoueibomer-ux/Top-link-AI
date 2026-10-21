@@ -2,27 +2,81 @@
 {% block content %}
 <section class="page-head"><div class="wrap">
   <h1>Terms of service</h1>
-  <p class="lead-dark">The basics of using Tabmatch.</p>
+  <p class="lead-dark">The rules for using Tabmatch.</p>
 </div></section>
 <section class="section"><div class="wrap narrow prose">
-  <p class="draft-note"><strong>Draft.</strong> This is a placeholder and has not been reviewed by a lawyer. It will be replaced by final terms before public launch.</p>
+  {% include "website/partials/draft_banner.html" %}
 
-  <h2>What Tabmatch is</h2>
-  <p>Tabmatch helps customers find local service providers. We are a matching service: we are not the provider, and we are not a party to any agreement between a customer and a provider. Providers are independent businesses or individuals.</p>
+  <ol class="toc">
+    <li><a href="#what">What Tabmatch is</a></li>
+    <li><a href="#eligibility">Who can use it</a></li>
+    <li><a href="#accounts">Your account</a></li>
+    <li><a href="#requests">Requests, chat and calls</a></li>
+    <li><a href="#conduct">How to behave</a></li>
+    <li><a href="#reviews">Reviews</a></li>
+    <li><a href="#providers">Providers and the work they do</a></li>
+    <li><a href="#payments">Prices and payment</a></li>
+    <li><a href="#content">Your content</a></li>
+    <li><a href="#suspension">Suspension and ending your account</a></li>
+    <li><a href="#liability">Warranties and liability</a></li>
+    <li><a href="#law">Governing law</a></li>
+    <li><a href="#changes">Changes and contact</a></li>
+  </ol>
 
-  <h2>Provider information</h2>
-  <p>Provider details, ratings and availability may come from public business listings or from providers themselves and may be incomplete or out of date. Tabmatch does not currently verify providers' identity, licences or insurance, and does not label any provider as verified. Please check details yourself before hiring.</p>
+  <p>These terms are between you and Tabmatch (<span class="fill-in">[legal name of the operating entity]</span>, Alberta, Canada) and apply when you use the Tabmatch app or website. By signing in or using Tabmatch you agree to them and to our <a href="{% url 'website:privacy' %}">privacy policy</a>. Providers also agree to the <a href="{% url 'website:provider-agreement' %}">provider agreement</a>.</p>
 
-  <h2>Using the app</h2>
+  <h2 id="what">1. What Tabmatch is</h2>
+  <p>Tabmatch is an online marketplace that helps clients find local service providers. <strong>We are not the provider and we are not a party to any agreement between a client and a provider.</strong> Providers are independent businesses or individuals, not our employees or agents. We do not perform, supervise or guarantee any work, and we do not guarantee that a request will be answered.</p>
+
+  <h2 id="eligibility">2. Who can use it</h2>
+  <p>You must be at least 18 and able to enter a binding contract. Tabmatch currently operates in Edmonton, Alberta. Other cities are shown as "coming soon".</p>
+
+  <h2 id="accounts">3. Your account</h2>
+  <p>You sign in with a Google account. One Google account is one account, either a client account or a provider account, not both. Keep your phone and Google account secure; you are responsible for what happens under your account. Give accurate information and keep it up to date.</p>
+
+  <h2 id="requests">4. Requests, chat and calls</h2>
   <ul class="ticks">
-    <li>Give accurate information and use the service lawfully.</li>
-    <li>Providers are responsible for the accuracy of their profiles and for the work they perform.</li>
-    <li>Subscription terms, pricing and cancellation will be described in the app and the app store at the time of purchase.</li>
+    <li>When you send a request you agree that we may share its details, including your phone number, with providers who may be able to help, as described in the <a href="{% url 'website:privacy' %}">privacy policy</a>.</li>
+    <li>Before a provider accepts, they see only the service, city and urgency. After they accept, they see your first name and last initial, your description, where the job is and your phone number.</li>
+    <li>You can chat with, and call, a provider who accepted your request. Chats and photos must follow the rules in the app and section 5. Messages and photos can be reported, and we may review reported content.</li>
+    <li>Agreeing on the work, timing and price is between you and the provider. Take your own care before inviting anyone into your home or paying them.</li>
   </ul>
 
-  <h2>Liability and other terms</h2>
-  <p>Sections on warranties, limits of liability, account suspension, governing law and changes to these terms will be added in the final version.</p>
+  <h2 id="conduct">5. How to behave</h2>
+  <p>Do not use Tabmatch to:</p>
+  <ul class="ticks">
+    <li>break the law, or ask for or offer work that is illegal or that requires a licence the provider does not hold;</li>
+    <li>harass, threaten, discriminate against or abuse anyone, or send hateful, sexual or misleading content;</li>
+    <li>send spam, advertise unrelated products, or ask people to move to another service to avoid the rules;</li>
+    <li>post fake reviews, or reviews in return for payment or favours;</li>
+    <li>share another person's private information, or send photos that show people who have not agreed to it;</li>
+    <li>interfere with the app or its security, scrape it, or use it in a way that harms other people or Tabmatch.</li>
+  </ul>
 
-  <p>Questions? See the <a href="{% url 'website:contact' %}">contact page</a> and our <a href="{% url 'website:privacy' %}">privacy policy</a>.</p>
+  <h2 id="reviews">6. Reviews</h2>
+  <p>After a job is marked complete, the client can rate the provider and leave a comment. A review must be honest and based on your own experience of the job. There is one review per completed job, and the client can edit it for 7 days. Reviews are public and show the client as first name and last initial. A provider can post one public reply. Anyone can report a review, and we may remove reviews and replies that break these terms. We do not remove a review just because it is negative.</p>
+
+  <h2 id="providers">7. Providers and the work they do</h2>
+  <p>Providers are responsible for their work, their prices, their licences, permits, insurance and tax, and for following the law. Provider information, ratings and availability come from the providers and their clients and may be incomplete or out of date. <strong>Tabmatch does not verify a provider's identity, licences or insurance</strong> unless we clearly say so on their profile, and a provider being approved to use Tabmatch is not a recommendation or a guarantee. Please check details yourself before you hire.</p>
+  <p class="decide"><strong>For the lawyer:</strong> if Tabmatch later checks licences or insurance, this section and the marketing copy must change to say exactly what is checked.</p>
+
+  <h2 id="payments">8. Prices and payment</h2>
+  <p>Tabmatch does not take or hold payments today. Clients and providers agree the price and arrange payment between themselves. <span class="decide">Decision needed: if fees, subscriptions or in-app payments are added, the terms for them go here, and consumer-protection rules for Alberta apply.</span></p>
+
+  <h2 id="content">9. Your content</h2>
+  <p>You keep ownership of what you post (messages, photos, reviews, your profile). You give Tabmatch a non-exclusive licence to host, display and use it to run and improve the service, including showing reviews and provider profiles to other users. You promise you have the right to post it.</p>
+
+  <h2 id="suspension">10. Suspension and ending your account</h2>
+  <p>You can delete your account at any time in the app or through our <a href="{% url 'website:delete-account' %}">delete your account</a> page. We may remove content, or suspend or end an account, if it breaks these terms or the law, puts someone at risk, or is used to harm Tabmatch. We will tell you why where we can.</p>
+
+  <h2 id="liability">11. Warranties and liability</h2>
+  <p>Tabmatch is provided "as is" and "as available". To the fullest extent the law allows, we are not responsible for what providers or clients do or fail to do, for the quality, safety or legality of any work, for disputes between users, or for losses that were not reasonably foreseeable. Our total liability to you for anything connected with Tabmatch is limited to <span class="fill-in">[an amount set by the lawyer]</span>. Nothing in these terms limits liability that cannot be limited by law, or any rights you have under Alberta consumer protection law.</p>
+  <p class="decide"><strong>For the lawyer:</strong> the limitation and disclaimer wording, any indemnity, and whether a consumer-protection carve-out is needed.</p>
+
+  <h2 id="law">12. Governing law</h2>
+  <p>These terms are governed by the laws of Alberta and the federal laws of Canada that apply there. Disputes will be decided by the courts of Alberta, in Edmonton, unless the law gives you the right to go elsewhere.</p>
+
+  <h2 id="changes">13. Changes and contact</h2>
+  <p>We may change these terms. We will post the new version with its date and tell you in the app if a change is significant. Using Tabmatch after that means you accept the change. Questions: {% include "website/partials/legal_contact.html" %}, or see the <a href="{% url 'website:contact' %}">contact page</a>.</p>
 </div></section>
 {% endblock %}

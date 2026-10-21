@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import '../api/api_client.dart';
 import '../api/auth_models.dart';
 import '../app_colors.dart';
+import '../account/delete_account.dart';
 import '../app_styles.dart';
+import '../legal/legal_pages.dart';
 import '../onboarding/onboarding_screen.dart';
 import '../messaging/push_service.dart';
 import '../provider/auth_storage.dart';
@@ -31,10 +33,14 @@ class SettingsPage extends StatelessWidget {
 /// body (the home screen's bottom-nav Profile tab), without duplicating the
 /// notifications/language/logout logic in two places.
 class SettingsBody extends StatefulWidget {
-  const SettingsBody({super.key, this.api});
+  const SettingsBody({super.key, this.api, this.openUrl = openInBrowser, this.afterDeleted});
 
   /// Tests pass a client backed by a fake HTTP layer.
   final ApiClient? api;
+
+  /// Opens a legal page in the browser, and what the app does once an account has been deleted. Tests replace both.
+  final UrlOpener openUrl;
+  final Future<void> Function(BuildContext context)? afterDeleted;
 
   @override
   State<SettingsBody> createState() => _SettingsBodyState();
@@ -48,6 +54,7 @@ class _SettingsBodyState extends State<SettingsBody> {
   /// Who is signed in, for the card at the top: null until loaded or when nobody is.
   AccountProfile? _account;
   bool _accountLoaded = false;
+  bool _signedIn = false;
 
   @override
   void initState() {
@@ -63,8 +70,10 @@ class _SettingsBodyState extends State<SettingsBody> {
 
   Future<void> _loadAccount() async {
     AccountProfile? account;
+    var signedIn = false;
     try {
-      if (await AuthStorage.isLoggedIn()) {
+      signedIn = await AuthStorage.isLoggedIn();
+      if (signedIn) {
         final session = AuthSession(api: widget.api);
         account = await session.authorized(session.api.getMe);
       }
@@ -74,6 +83,7 @@ class _SettingsBodyState extends State<SettingsBody> {
     if (mounted) {
       setState(() {
         _account = account;
+        _signedIn = signedIn;
         _accountLoaded = true;
       });
     }
@@ -133,11 +143,12 @@ class _SettingsBodyState extends State<SettingsBody> {
     }
   }
 
-  void _showComingSoon(String feature) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('$feature is coming soon.')),
-    );
-  }
+  Future<void> _deleteAccount() => startDeleteAccount(
+        context,
+        session: AuthSession(api: widget.api),
+        isProvider: _account?.role == 'provider',
+        afterDeleted: widget.afterDeleted,
+      );
 
   Future<void> _logOut() async {
     // Actually end the provider session first: this used to just re-route,
@@ -179,14 +190,16 @@ class _SettingsBodyState extends State<SettingsBody> {
         _SettingsCard(
           children: [
             _SettingsTile(
+              key: const Key('link-privacy'),
               icon: Icons.privacy_tip_outlined,
               title: 'Privacy Policy',
-              onTap: () => _showComingSoon('Privacy Policy'),
+              onTap: () => openLegalPage(context, LegalPage.privacy, open: widget.openUrl),
             ),
             _SettingsTile(
+              key: const Key('link-terms'),
               icon: Icons.description_outlined,
               title: 'Terms of Service',
-              onTap: () => _showComingSoon('Terms of Service'),
+              onTap: () => openLegalPage(context, LegalPage.terms, open: widget.openUrl),
             ),
           ],
         ),
@@ -199,6 +212,15 @@ class _SettingsBodyState extends State<SettingsBody> {
               onTap: _logOut,
               showChevron: false,
             ),
+            if (_signedIn)
+              _SettingsTile(
+                key: const Key('delete-account'),
+                icon: Icons.delete_outline,
+                title: 'Delete my account',
+                onTap: _deleteAccount,
+                showChevron: false,
+                destructive: true,
+              ),
           ],
         ),
         const SizedBox(height: 28),
@@ -318,10 +340,12 @@ class _SettingsCard extends StatelessWidget {
 
 class _SettingsTile extends StatelessWidget {
   const _SettingsTile({
+    super.key,
     required this.icon,
     required this.title,
     this.trailingText,
     this.showChevron = true,
+    this.destructive = false,
     required this.onTap,
   });
 
@@ -329,14 +353,15 @@ class _SettingsTile extends StatelessWidget {
   final String title;
   final String? trailingText;
   final bool showChevron;
+  final bool destructive;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-      leading: Icon(icon, color: AppColors.navy),
-      title: Text(title, style: const TextStyle(color: AppColors.navy, fontWeight: FontWeight.w500)),
+      leading: Icon(icon, color: destructive ? const Color(0xFFBA1A1A) : AppColors.navy),
+      title: Text(title, style: TextStyle(color: destructive ? const Color(0xFFBA1A1A) : AppColors.navy, fontWeight: FontWeight.w500)),
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [

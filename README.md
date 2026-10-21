@@ -210,6 +210,28 @@ here needs a key or any Render setting; the migration only adds tables.
   hide / restore / remove-reply actions. A hidden review disappears from every page and no longer counts
   toward the rating; its author is told it was removed.
 
+### Account deletion and the legal pages
+
+- **In the app:** *Delete my account* is in Settings / the Profile tab for clients, and in the provider's Profile
+  tab (also on the pending-review and registration screens) for providers. The person must type `DELETE`. It calls
+  `POST /api/accounts/delete/`, then the app signs out and returns to the first screen.
+- **What it does** (all in `accounts/deletion.py`, one transaction): deletes chats and their messages, push tokens,
+  favorites, blocks, the chat-rules agreement and the Google link; blanks the name and email on the account (it
+  stays as an inactive, anonymous row because a provider profile hangs off it); blanks a client's request details
+  (phone, description, location, device id); turns a provider profile into an anonymous "Deleted provider"; closes
+  open offers so nobody is asked to answer them; keeps reviews a client wrote (shown as "A client"), anonymous
+  request / offer rows, and an `AccountDeletion` record (no personal data). Staff accounts are refused.
+- **Chat photos in R2** are queued (`messaging.PhotoDeletion`) before anything is removed, deleted right after, and
+  retried by the 15-minute jobs command (give the cron service the four `R2_*` values) or by
+  `python manage.py purge_photo_queue`. `check_messaging_config` shows how many are waiting.
+- **Someone who can't use the app** emails the contact address (see `/delete-account/`). Staff delete them from the
+  admin (*Accounts > User profiles > Delete the selected accounts*, with a confirmation page) or with
+  `python manage.py delete_account --email someone@example.com --yes` (without `--yes` it only says what it would do).
+- **Website pages:** `/privacy/`, `/terms/`, `/provider-agreement/` (drafts, `noindex`, marked for a lawyer, with
+  orange placeholders for decisions still to make) and `/delete-account/` (public; this is the URL Google Play asks
+  for). They are linked from the footer and the app opens them from Settings. They print the contact email from
+  `WEBSITE_CONTACT_EMAIL` on Render; until it is set they show a visible placeholder.
+
 ### Before publishing
 
 Tick every box before a release goes to the Play Store, the App Store or real
@@ -234,8 +256,14 @@ providers:
 - [ ] The Firebase project has the **release / Play app-signing SHA-1** added, and the release build was made
       with the matching `google-services.json`.
 - [ ] The R2 bucket is private (no public development URL, no custom domain).
-- [ ] Providers can delete their account inside the app (an app-store
-      requirement; not built yet).
+- [ ] **Account deletion** tested on a real device for a client and for a provider (Settings / Profile >
+      Delete my account), and a chat photo really disappears from the R2 bucket afterwards.
+- [ ] `WEBSITE_CONTACT_EMAIL` is set on Render to a mailbox someone reads (the privacy and delete-account pages
+      show it), and a test deletion request sent to it is handled.
+- [ ] A lawyer has reviewed `/privacy/`, `/terms/` and `/provider-agreement/`, every orange placeholder is
+      filled or decided, and the "DRAFT" banner is removed. In Play Console the account-deletion URL is
+      `https://<your-host>/delete-account/`, and the Data safety form matches the privacy policy.
+- [ ] Rate limits see real client IPs behind Render's proxy (see "Backend production settings").
 
 ## Backend production settings
 
@@ -244,6 +272,24 @@ See `.env.example`. With `DJANGO_DEBUG=False` the backend requires
 `DB_*` settings) and `DJANGO_ALLOWED_HOSTS`, turns on HTTPS redirect / HSTS /
 secure cookies, and needs `DJANGO_BEHIND_PROXY=True` only if a reverse proxy
 terminates TLS for it.
+
+Checked for launch: the live site runs with `DEBUG` off (it serves the branded 404, not Django's debug page),
+sends HSTS (preload), `nosniff` and `X-Frame-Options: DENY`, redirects HTTP to HTTPS, and `manage.py check --deploy`
+reports nothing. The app refuses to start without a real `DJANGO_SECRET_KEY` when `DEBUG` is off.
+
+Known gaps to close before a public launch:
+
+- **Per-IP rate limits behind Render's proxy.** `django-ratelimit` reads `REMOTE_ADDR`, which behind Render is the
+  proxy's address, so limits keyed on `ip` (Google sign-in 20/min, token refresh, Ask AI) are shared by every user at
+  once instead of per person. Set `RATELIMIT_IP_META_KEY` to a function that reads the client address from the
+  proxy's `X-Forwarded-For` the way Render documents (and test it with a real request) before launch.
+- **The Django admin is public** at `/admin/` behind a password only. Use a long unique password, remove
+  `DJANGO_SUPERUSER_PASSWORD` from Render once the admin exists, and consider a non-default URL or an allow-list.
+- **No error monitoring or alerts** (only Render's logs). Add one (for example Sentry) so a failing deletion, a
+  failing push or a 500 is seen.
+- **The shared `API_KEY` is inside every app install.** It only keeps casual scrapers off; real protection is the
+  per-user login, so keep new endpoints behind login and rate limits.
+- Confirm the **Postgres backups and plan size** on Render match what you need to restore from.
 
 ## Deploying to Render
 

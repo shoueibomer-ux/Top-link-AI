@@ -251,6 +251,16 @@ ul, ol { margin: 0; padding: 0; }
 .prose h2 { margin-top: 2rem; font-size: 1.35rem; }
 .prose p, .prose li { color: #24374f; }
 .draft-note { background: rgba(25,195,177,.12); border: 1.5px solid var(--turquoise); border-radius: var(--radius-sm); padding: .9rem 1.1rem; }
+.draft-note.draft-strong { background: #FFF4E5; border-color: #B45309; }
+.draft-note.draft-strong strong { color: #92400E; }
+/* A choice the owner / a lawyer still has to make, or a value to fill in before launch. */
+.decide { background: #FFF4E5; border-left: 4px solid #B45309; padding: .45rem .8rem; border-radius: 4px; color: #6B3A08; font-size: .95rem; }
+.fill-in { background: #FFF4E5; border-radius: 4px; padding: 0 .35rem; color: #6B3A08; font-weight: 600; }
+.prose table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: .97rem; }
+.prose th, .prose td { text-align: left; vertical-align: top; padding: .55rem .7rem; border-bottom: 1px solid #DCE4EC; color: #24374f; }
+.prose th { background: #F1F5F9; font-weight: 700; }
+.prose .toc { columns: 2; column-gap: 2rem; margin: 1rem 0 0; padding-left: 1.1rem; }
+@media (max-width: 640px) { .prose .toc { columns: 1; } .prose table { display: block; overflow-x: auto; } }
 .muted-text { color: var(--muted); }
 
 /* Small screens: the wordmark stays, smaller (icon 28px, text 20px = 0.72x,

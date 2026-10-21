@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../api/provider_profile.dart';
 import '../app_colors.dart';
+import '../legal/legal_pages.dart';
+import '../account/account_section.dart';
 import '../reviews/provider_reviews_section.dart';
 import '../widgets/app_logo.dart';
 import 'provider_leads_tab.dart';
@@ -20,7 +22,13 @@ class ProviderHomeScreen extends StatelessWidget {
     required this.onSignOut,
     required this.onSwitchRole,
     required this.onSessionExpired,
+    this.openUrl = openInBrowser,
+    this.afterDeleted,
   });
+
+  /// Opens a legal page, and what happens after the account is deleted. Tests replace both.
+  final UrlOpener openUrl;
+  final Future<void> Function(BuildContext context)? afterDeleted;
 
   final ProviderProfileData profile;
   final AuthSession session;
@@ -116,6 +124,8 @@ class ProviderHomeScreen extends StatelessWidget {
             ),
             const SizedBox(height: 28),
             ProviderReviewsSection(session: session, onSessionExpired: onSessionExpired),
+            const SizedBox(height: 28),
+            AccountAndLegalSection(session: session, openUrl: openUrl, afterDeleted: afterDeleted),
           ],
         ),
       ),

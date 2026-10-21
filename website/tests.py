@@ -201,17 +201,19 @@ class VisualIdentityTests(TestCase):
 
 class StandardPagesTests(TestCase):
     def test_legal_and_contact_pages(self):
-        for path in ("/contact/", "/privacy/", "/terms/"):
+        for path in ("/contact/", "/privacy/", "/terms/", "/provider-agreement/", "/delete-account/"):
             response = self.client.get(path)
             self.assertEqual(response.status_code, 200, path)
         # draft legal pages stay out of search results until reviewed
-        self.assertContains(self.client.get("/privacy/"), 'content="noindex,follow"')
-        self.assertContains(self.client.get("/terms/"), 'content="noindex,follow"')
-        self.assertContains(self.client.get("/privacy/"), "Draft.")
+        for path in ("/privacy/", "/terms/", "/provider-agreement/"):
+            self.assertContains(self.client.get(path), 'content="noindex,follow"')
+            self.assertContains(self.client.get(path), "DRAFT. Not legal advice.", msg_prefix=path)
+        # the delete-account page is public and indexable: Google Play needs a URL for it
+        self.assertNotContains(self.client.get("/delete-account/"), 'content="noindex')
 
     def test_footer_links_to_legal_pages(self):
         html = self.client.get("/").content.decode()
-        for path in ("/contact/", "/privacy/", "/terms/"):
+        for path in ("/contact/", "/privacy/", "/terms/", "/provider-agreement/", "/delete-account/"):
             self.assertIn(f'href="{path}"', html)
 
     def test_branded_404_for_website_paths(self):
@@ -237,7 +239,10 @@ class LinkIntegrityTests(TestCase):
 
         result = crawl(self.client)
         reached = set(result["pages"])
-        expected = {"/", "/sectors/", "/providers/", "/how-it-works/", "/contact/", "/privacy/", "/terms/", "/get-the-app/"}
+        expected = {
+            "/", "/sectors/", "/providers/", "/how-it-works/", "/contact/", "/privacy/", "/terms/", "/get-the-app/",
+            "/provider-agreement/", "/delete-account/",
+        }
         expected |= {f"/{slug}/" for slug in SEO_PAGES}
         expected |= {item_url for item_url in (
             selectors.service_url(i.service.slug) for i in SectorItem.objects.select_related("service"))}
@@ -287,7 +292,7 @@ class TabmatchBrandTests(TestCase):
 
     PAGES = [
         "/", "/sectors/", "/providers/", "/how-it-works/", "/get-the-app/", "/contact/", "/privacy/", "/terms/",
-        "/services/landscaping/", "/this-page-does-not-exist/",
+        "/provider-agreement/", "/delete-account/", "/services/landscaping/", "/this-page-does-not-exist/",
     ]
 
     def test_no_page_still_carries_the_old_name_and_every_title_says_tabmatch(self):
@@ -366,3 +371,134 @@ class TabmatchBrandTests(TestCase):
         self.assertIn("Tabmatch administration", page)
         self.assertIn("<title>Site administration | Tabmatch admin</title>", page)
         self.assertNotRegex(page, r"(?i)top[ -]?link")
+
+
+class LegalPagesContentTests(TestCase):
+    """The draft legal pages say what the app really does, and are clearly marked as drafts."""
+
+    def page(self, path):
+        return self.client.get(path).content.decode()
+
+    def test_every_legal_page_is_marked_as_a_draft_for_a_lawyer(self):
+        for path in ("/privacy/", "/terms/", "/provider-agreement/"):
+            html = self.page(path)
+            self.assertIn("DRAFT. Not legal advice.", html, path)
+            self.assertIn("lawyer licensed in Alberta", html, path)
+            self.assertIn("Effective date", html, path)
+
+    def test_the_privacy_policy_covers_what_is_collected(self):
+        html = self.page("/privacy/")
+        for needle in (
+            "Google", "email address", "Phone number", "postal code", "Chat messages and photos", "Push notification token",
+            "Device identifier", "IP address", "Ask AI", "Reviews and replies", "Favorites",
+        ):
+            self.assertIn(needle, html, needle)
+
+    def test_the_privacy_policy_names_who_it_is_shared_with(self):
+        html = self.page("/privacy/")
+        for company in ("Google Firebase Cloud Messaging", "Cloudflare", "Render", "Twilio", "Anthropic", "Providers see", "Clients see"):
+            self.assertIn(company, html, company)
+        self.assertIn("We do not sell your personal information", html)
+
+    def test_the_privacy_policy_covers_the_law_retention_and_rights(self):
+        html = self.page("/privacy/")
+        for needle in (
+            "PIPEDA", "Personal Information Protection Act", "How long we keep it", "Where it is kept", "Oregon",
+            "Office of the Privacy Commissioner of Canada", "Information and Privacy Commissioner of Alberta",
+            "within 30 days", "at least 18", "Delete my account", "CASL",
+        ):
+            self.assertIn(needle, html, needle)
+
+    def test_open_decisions_are_highlighted_rather_than_invented(self):
+        html = self.page("/privacy/")
+        self.assertIn('class="decide"', html)
+        self.assertIn('class="fill-in"', html)
+        self.assertIn("Decision needed", html)
+
+    def test_the_terms_cover_the_marketplace_basics(self):
+        html = self.page("/terms/")
+        for needle in (
+            "we are not the provider", "at least 18", "independent", "Edmonton", "does not verify a provider",
+            "one review per completed job", "7 days", "laws of Alberta", "delete your account",
+        ):
+            self.assertIn(needle.lower(), html.lower(), needle)
+
+    def test_the_provider_agreement_covers_what_providers_agree_to(self):
+        html = self.page("/provider-agreement/")
+        for needle in (
+            "accept", "decline", "YES or NO", "CASL", "STOP", "independent business", "licence", "insurance",
+            "Client information", "only to respond to the request", "Deleted provider", "laws of Alberta", "waitlist",
+        ):
+            self.assertIn(needle.lower(), html.lower(), needle)
+
+    def test_the_legal_pages_link_to_each_other_and_to_deletion(self):
+        privacy = self.page("/privacy/")
+        for target in ("/terms/", "/provider-agreement/", "/delete-account/", "/contact/"):
+            self.assertIn(f'href="{target}"', privacy, target)
+        self.assertIn('href="/delete-account/"', self.page("/terms/"))
+        self.assertIn('href="/privacy/"', self.page("/terms/"))
+        self.assertIn('href="/terms/"', self.page("/provider-agreement/"))
+        self.assertIn('href="/delete-account/"', self.page("/provider-agreement/"))
+
+    def test_no_template_code_leaks_into_the_pages(self):
+        for path in ("/privacy/", "/terms/", "/provider-agreement/", "/delete-account/"):
+            html = self.page(path)
+            self.assertNotIn("{%", html, path)
+            self.assertNotIn("{{", html, path)
+
+    def test_the_contact_email_is_a_visible_placeholder_until_it_is_set(self):
+        from unittest.mock import patch
+
+        from . import config
+
+        with patch.object(config, "CONTACT_EMAIL", ""):  # whatever this machine's environment says
+            for path in ("/privacy/", "/provider-agreement/", "/delete-account/"):
+                html = self.page(path)
+                self.assertIn("contact email to be set before launch", html, path)
+                self.assertNotIn("mailto:", html.split('<footer')[0], path)
+
+    def test_once_set_the_real_contact_email_replaces_the_placeholder(self):
+        from unittest.mock import patch
+
+        from . import config
+
+        with patch.object(config, "CONTACT_EMAIL", "privacy@tabmatch.example"):
+            for path in ("/privacy/", "/provider-agreement/", "/delete-account/"):
+                html = self.page(path)
+                self.assertIn('href="mailto:privacy@tabmatch.example"', html, path)
+                self.assertNotIn("contact email to be set before launch", html, path)
+
+
+class DeleteAccountPageTests(TestCase):
+    """The public page Google Play asks for: how to delete an account, what goes, what stays."""
+
+    def setUp(self):
+        self.html = self.client.get("/delete-account/").content.decode()
+
+    def test_it_is_public_and_indexable(self):
+        response = self.client.get("/delete-account/")
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn('content="noindex', self.html)
+        self.assertIn("<title>Delete your account | Tabmatch</title>", self.html)
+
+    def test_it_explains_the_steps_in_the_app_for_clients_and_providers(self):
+        for needle in ("Delete my account", "Clients:", "Providers:", "type", "DELETE", "signed out"):
+            self.assertIn(needle, self.html, needle)
+
+    def test_it_explains_how_to_ask_by_email_and_how_long_it_takes(self):
+        self.assertIn("Delete my account", self.html)
+        self.assertIn("from the email address on your Tabmatch account", self.html)
+        self.assertIn("30 days", self.html)
+
+    def test_it_lists_what_is_deleted_and_what_is_kept(self):
+        for needle in (
+            "What is deleted", "What we keep, and why", "chats", "photos", "Push notification tokens", "Deleted provider",
+            "Reviews and ratings you wrote", "no personal details",
+        ):
+            self.assertIn(needle, self.html, needle)
+
+    def test_the_sitemap_lists_it_but_not_the_drafts(self):
+        sitemap = self.client.get("/sitemap.xml").content.decode()
+        self.assertIn("/delete-account/", sitemap)
+        for draft in ("/privacy/", "/terms/", "/provider-agreement/"):
+            self.assertNotIn(draft, sitemap)

@@ -9,6 +9,7 @@ from .models import (
     DeviceToken,
     Message,
     MessageReport,
+    PhotoDeletion,
     UserBlock,
 )
 
@@ -162,6 +163,17 @@ class MessageReportAdmin(admin.ModelAdmin):
     @admin.action(description="Dismiss (no action needed)")
     def dismiss(self, request, queryset):
         self.message_user(request, f"Dismissed {self._close(queryset, MessageReport.STATUS_DISMISSED)} report(s).")
+
+
+@admin.register(PhotoDeletion)
+class PhotoDeletionAdmin(admin.ModelAdmin):
+    """Photos waiting to be removed from the bucket (see `manage.py purge_photo_queue`). Empty is the healthy state."""
+
+    list_display = ("key", "created_at", "attempts", "last_error")
+    readonly_fields = ("key", "created_at", "attempts", "last_error")
+
+    def has_add_permission(self, request):
+        return False
 
 
 @admin.register(UserBlock)

@@ -161,6 +161,9 @@ class ProviderLeadReplyView(APIView):
             )
             if offer is None:
                 return Response({"detail": "Request not found."}, status=404)
+            owner = offer.service_request.user
+            if owner is not None and not owner.is_active:
+                return Response({"detail": "This request is no longer available."}, status=409)
             if not offer.record_reply(
                 LeadOffer.REPLY_YES if accepting else LeadOffer.REPLY_NO, LeadOffer.CHANNEL_APP
             ):
