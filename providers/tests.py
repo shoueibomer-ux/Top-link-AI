@@ -253,7 +253,8 @@ class FakeSignInNeverInProductionTests(TestCase):
         clean = {k: v for k, v in os.environ.items() if k not in ("DJANGO_DEBUG", "GOOGLE_DEV_FAKE_AUTH", "DATABASE_URL")}
         production = {
             "DJANGO_DEBUG": "False", "DJANGO_SECRET_KEY": "x" * 60, "API_KEY": "prod-like-key",
-            "DATABASE_URL": "postgres://nobody:nothing@localhost:5432/never_connected", **env,
+            "DATABASE_URL": "postgres://nobody:nothing@localhost:5432/never_connected",
+            "ADMIN_URL_PATH": "manage-prod-like", **env,
         }
         # Only this app's checks: they need no database, so nothing is connected to.
         return subprocess.run(
@@ -276,7 +277,8 @@ class FakeSignInNeverInProductionTests(TestCase):
             cwd=self.ROOT, capture_output=True, text=True, timeout=120,
             env={**{k: v for k, v in os.environ.items() if k not in ("DJANGO_DEBUG", "GOOGLE_DEV_FAKE_AUTH", "DATABASE_URL")},
                  "DJANGO_DEBUG": "False", "DJANGO_SECRET_KEY": "x" * 60, "API_KEY": "prod-like-key",
-                 "DATABASE_URL": "postgres://nobody:nothing@localhost:5432/never_connected"},
+                 "DATABASE_URL": "postgres://nobody:nothing@localhost:5432/never_connected",
+                 "ADMIN_URL_PATH": "manage-prod-like"},
         )
         self.assertEqual(probe.stdout.strip(), "False False", probe.stdout + probe.stderr)
 

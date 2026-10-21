@@ -81,6 +81,14 @@ services:
         value: "True"
       - key: DJANGO_ALLOWED_HOSTS
         sync: false
+      # The Django admin's URL path (required with DEBUG off): long and random,
+      # e.g. manage-<random letters>. Never "admin". See config/admin_path.py.
+      - key: ADMIN_URL_PATH
+        sync: false
+      # Error monitoring: the Django project's DSN from sentry.io. Leave blank
+      # to keep Sentry off. See config/sentry.py for what is scrubbed.
+      - key: SENTRY_DSN
+        sync: false
       - key: API_KEY
         sync: false
       - key: GOOGLE_PLACES_API_KEY
@@ -175,6 +183,12 @@ services:
         value: "False"
       - key: API_KEY
         generateValue: true
+      # Required by settings with DEBUG off; the cron job serves no pages, so any valid path does.
+      - key: ADMIN_URL_PATH
+        value: "not-served-by-cron"
+      # Same DSN as the web service (optional), so a failing job is reported too.
+      - key: SENTRY_DSN
+        sync: false
       - key: DATABASE_URL
         fromDatabase:
           name: toplinkai-db

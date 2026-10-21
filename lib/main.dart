@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'api/api_config.dart';
 import 'app_colors.dart';
 import 'messaging/push_service.dart';
+import 'monitoring/error_reporting.dart';
 import 'role/root_gate.dart';
 import 'onboarding/service_category.dart';
 
@@ -23,9 +24,12 @@ void main() {
   // notification/history lookups all see it without each needing their own
   // loading state. Leaves the static fallback in place until this resolves.
   loadCatalogFromApi();
-  runApp(const TabmatchApp());
-  // After the first frame, so it never delays launch. A build without Firebase config just skips it.
-  unawaited(PushService.instance.start());
+  // Reports crashes only when the build has a SENTRY_DSN (see monitoring/error_reporting.dart).
+  unawaited(runWithErrorReporting(() {
+    runApp(const TabmatchApp());
+    // After the first frame, so it never delays launch. A build without Firebase config just skips it.
+    unawaited(PushService.instance.start());
+  }));
 }
 
 class TabmatchApp extends StatelessWidget {

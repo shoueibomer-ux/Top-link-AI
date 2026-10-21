@@ -263,7 +263,14 @@ providers:
 - [ ] A lawyer has reviewed `/privacy/`, `/terms/` and `/provider-agreement/`, every orange placeholder is
       filled or decided, and the "DRAFT" banner is removed. In Play Console the account-deletion URL is
       `https://<your-host>/delete-account/`, and the Data safety form matches the privacy policy.
-- [ ] Rate limits see real client IPs behind Render's proxy (see "Backend production settings").
+- [ ] Rate limits see real client IPs behind Render's proxy: signed in to the admin, open
+      `https://<your-host>/<ADMIN_URL_PATH>/client-ip/` and check "Rate limits key on" is your own public IP
+      (compare with any "what is my IP" site), also with `curl -H "X-Forwarded-For: 1.2.3.4"` (it must not
+      show 1.2.3.4). If it shows a Render/Cloudflare address instead, set `TRUSTED_PROXY_HOPS` accordingly.
+- [ ] `ADMIN_URL_PATH` is set on Render (the admin is then only there, not at `/admin/`).
+- [ ] Sentry: `SENTRY_DSN` set on Render and in the release build's dart-defines, and a test error from each
+      shows up in sentry.io with no personal data in it.
+- [ ] Render Postgres backups confirmed for the database's plan (see "Backend production settings").
 
 ## Backend production settings
 
@@ -279,14 +286,17 @@ reports nothing. The app refuses to start without a real `DJANGO_SECRET_KEY` whe
 
 Known gaps to close before a public launch:
 
-- **Per-IP rate limits behind Render's proxy.** `django-ratelimit` reads `REMOTE_ADDR`, which behind Render is the
-  proxy's address, so limits keyed on `ip` (Google sign-in 20/min, token refresh, Ask AI) are shared by every user at
-  once instead of per person. Set `RATELIMIT_IP_META_KEY` to a function that reads the client address from the
-  proxy's `X-Forwarded-For` the way Render documents (and test it with a real request) before launch.
-- **The Django admin is public** at `/admin/` behind a password only. Use a long unique password, remove
-  `DJANGO_SUPERUSER_PASSWORD` from Render once the admin exists, and consider a non-default URL or an allow-list.
-- **No error monitoring or alerts** (only Render's logs). Add one (for example Sentry) so a failing deletion, a
-  failing push or a 500 is seen.
+- **Rate limits and the proxy (done, verify after deploy).** Limits read the client IP from `X-Forwarded-For`
+  through `config.client_ip`: only the entry Render's proxy appended (the `TRUSTED_PROXY_HOPS`-th from the right,
+  1 on Render) is trusted, so a client-sent header can't pick its own bucket. Signed-in callers are limited per
+  account (`user_or_ip`), anonymous ones per IP. Check it with the admin's `client-ip/` page (checklist above).
+- **The Django admin (done).** It is served at `ADMIN_URL_PATH`, required with `DEBUG` off (`/admin/` only in dev),
+  and its login is limited to 5 tries a minute per IP and 10 an hour per username (`config/admin_login.py`). Still
+  use a long unique password, and remove `DJANGO_SUPERUSER_PASSWORD` from Render once the admin exists.
+- **Error monitoring (done, needs `SENTRY_DSN`).** Sentry for the backend (`config/sentry.py`) and the app
+  (`lib/monitoring/error_reporting.dart`), each on only with a DSN. Errors only; request bodies, headers, cookies,
+  query strings, users, local variables and breadcrumb data are dropped, and emails, phone numbers and tokens in
+  error messages are replaced.
 - **The shared `API_KEY` is inside every app install.** It only keeps casual scrapers off; real protection is the
   per-user login, so keep new endpoints behind login and rate limits.
 - Confirm the **Postgres backups and plan size** on Render match what you need to restore from.

@@ -1,3 +1,4 @@
 {
-  "GOOGLE_SERVER_CLIENT_ID": "PASTE-THE-WEB-CLIENT-ID.apps.googleusercontent.com"
+  "GOOGLE_SERVER_CLIENT_ID": "PASTE-THE-WEB-CLIENT-ID.apps.googleusercontent.com",
+  "SENTRY_DSN": ""
 }
