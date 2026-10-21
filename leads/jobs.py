@@ -217,6 +217,19 @@ def send_daily_summary_if_due(now=None) -> bool:
     return True
 
 
+def purge_deleted_photos() -> int:
+    """Retries removing chat photos of deleted accounts that an earlier attempt could not (see messaging.photo_queue
+    and accounts.deletion). Never lets a storage problem stop the other jobs."""
+    try:
+        from messaging import photo_queue
+
+        deleted, _waiting = photo_queue.purge()
+        return deleted
+    except Exception:  # noqa: BLE001
+        logger.exception("Could not retry deleting queued chat photos")
+        return 0
+
+
 def run_all(now=None) -> dict:
     now = now or timezone.now()
     return {
@@ -225,4 +238,5 @@ def run_all(now=None) -> dict:
         "no_yes_alerts": alert_requests_without_yes(now),
         "completion_reminders": send_completion_reminders(now),
         "daily_summary_sent": send_daily_summary_if_due(now),
+        "photos_removed": purge_deleted_photos(),
     }

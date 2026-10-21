@@ -135,6 +135,20 @@ class MessageReport(models.Model):
         return f"Report #{self.pk} on message {self.message_id} ({self.reason})"
 
 
+class PhotoDeletion(models.Model):
+    """A chat photo in the private bucket that must be deleted (its account or conversation is gone). A row is
+    added before anything is removed and deleted once the object is, so a failed delete (network, bucket
+    unreachable) is retried by `manage.py purge_photo_queue` instead of leaving a stranger's photo behind."""
+
+    key = models.CharField(max_length=200, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    attempts = models.PositiveIntegerField(default=0)
+    last_error = models.CharField(max_length=200, blank=True)
+
+    def __str__(self):
+        return self.key
+
+
 class DeviceToken(models.Model):
     """A phone that can receive this user's push notifications (FCM registration token)."""
 

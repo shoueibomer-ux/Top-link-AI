@@ -153,6 +153,22 @@ def terms(request):
     return render(request, "website/terms.html", meta)
 
 
+def provider_agreement(request):
+    meta = _meta(
+        "Provider Agreement (Draft) | Tabmatch", "Draft agreement for service providers who use Tabmatch.", "noindex,follow"
+    )
+    return render(request, "website/provider_agreement.html", meta)
+
+
+def delete_account(request):
+    """Where Google Play's "account deletion" URL points: how to delete an account, what goes and what is kept."""
+    meta = _meta(
+        "Delete your account | Tabmatch",
+        "How to delete your Tabmatch account and your data, what is removed and what is kept.",
+    )
+    return render(request, "website/delete_account.html", meta)
+
+
 def not_found(request, exception=None):
     """Site-wide 404 (wired up as handler404 in config/urls.py). Unmatched /api/
     paths get JSON so API clients never receive the website's HTML page."""
@@ -177,7 +193,9 @@ def robots_txt(request):
 
 @require_GET
 def sitemap_xml(request):
-    paths = ["/", "/sectors/", "/providers/", "/how-it-works/", "/contact/"] + [f"/{slug}/" for slug in SEO_PAGES]
+    paths = ["/", "/sectors/", "/providers/", "/how-it-works/", "/contact/", "/delete-account/"] + [
+        f"/{slug}/" for slug in SEO_PAGES
+    ]
     urls = "".join(
         f"<url><loc>{escape(request.build_absolute_uri(p))}</loc></url>" for p in paths
     )

@@ -95,6 +95,10 @@ class LeadOffer(models.Model):
         offer was never sent or already has a YES/NO."""
         if self.sent_at is None or self.status in (self.STATUS_ACCEPTED, self.STATUS_DECLINED):
             return False
+        # A request whose person deleted their account is withdrawn: nobody can answer it any more.
+        owner = self.service_request.user
+        if owner is not None and not owner.is_active:
+            return False
         now = now or timezone.now()
         if reply == self.REPLY_NO_ANSWER:
             self.status = self.STATUS_EXPIRED

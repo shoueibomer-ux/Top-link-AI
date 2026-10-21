@@ -188,7 +188,14 @@ class ConversationOpenView(ChatView):
         if isinstance(offer_id, int) and not isinstance(offer_id, bool):
             offer = (
                 # A request with no signed-in owner (from before sign-in existed) has nobody to talk to.
-                LeadOffer.objects.filter(pk=offer_id, status=LeadOffer.STATUS_ACCEPTED, service_request__user__isnull=False)
+                LeadOffer.objects.filter(
+                    pk=offer_id,
+                    status=LeadOffer.STATUS_ACCEPTED,
+                    service_request__user__isnull=False,
+                    # nobody to talk to once either account has been deleted
+                    service_request__user__is_active=True,
+                    provider__user__is_active=True,
+                )
                 .filter(Q(service_request__user=request.user) | Q(provider__user=request.user))
                 .first()
             )

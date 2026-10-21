@@ -3,8 +3,10 @@ import 'package:flutter/services.dart';
 
 import '../api/api_client.dart';
 import '../api/provider_profile.dart';
+import '../account/account_section.dart';
 import '../app_colors.dart';
 import '../app_styles.dart';
+import '../legal/legal_pages.dart';
 import '../onboarding/phone_validation.dart';
 import '../onboarding/service_category.dart';
 import '../widgets/app_logo.dart';
@@ -34,7 +36,13 @@ class ProviderRegistrationScreen extends StatefulWidget {
     this.initial,
     this.defaultEmail = '',
     this.onCancel,
+    this.openUrl = openInBrowser,
+    this.afterDeleted,
   });
+
+  /// Opens a legal page, and what happens after the account is deleted. Tests replace both.
+  final UrlOpener openUrl;
+  final Future<void> Function(BuildContext context)? afterDeleted;
 
   final ProviderSession session;
   final ValueChanged<ProviderProfileData> onSaved;
@@ -349,6 +357,8 @@ class _ProviderRegistrationScreenState
               busy: _saving,
               onPressed: _save,
             ),
+            const SizedBox(height: 28),
+            AccountAndLegalSection(session: widget.session, openUrl: widget.openUrl, afterDeleted: widget.afterDeleted),
           ],
         ),
       ),

@@ -532,6 +532,22 @@ class ApiClient {
     return AuthTokens(access: json['access'] as String, refresh: json['refresh'] as String? ?? refreshToken);
   }
 
+  // ---- deleting the account ---------------------------------------------------------------------
+
+  /// Deletes the signed-in person's own account (see accounts.deletion for what goes and what is kept).
+  /// [confirm] is the word they typed. Afterwards the access token no longer works.
+  Future<void> deleteMyAccount(String accessToken, {required String confirm}) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/accounts/delete/'),
+      headers: _authHeaders(accessToken),
+      body: jsonEncode({'confirm': confirm}),
+    );
+    _throwForAuthProblems(response);
+    if (response.statusCode != 200) {
+      throw ApiException(_firstErrorMessage(response.body) ?? 'Could not delete your account (${response.statusCode}).');
+    }
+  }
+
   // ---- reviews and favorites (the reviews app) -----------------------------------------------
 
   Map<String, dynamic> _reviewBody(http.Response response, String failure) {

@@ -49,6 +49,9 @@ class ApiConfig {
 
   static String apiKey() => resolveApiKey(override: _apiKeyDefine, isRelease: kReleaseMode);
 
+  /// A page on the website (which the same server hosts), for example `siteUrl('/privacy/')`.
+  static String siteUrl(String path) => siteUrlFor(baseUrl(), path);
+
   /// Checks an explicitly supplied URL (e.g. `ApiClient(baseUrl: ...)`) with
   /// the same rules as the resolved default.
   static String checkBaseUrl(String url) => validateBaseUrl(url, isRelease: kReleaseMode);
@@ -72,6 +75,17 @@ class ApiConfig {
 /// a release build. It is already inert there (see
 /// [fakeGoogleSignInEnabled]); refusing to start makes a build that was given
 /// it by mistake fail loudly instead of looking fine.
+/// The website page at [path] on the same server as the API: `https://host/api` + `/privacy/` becomes
+/// `https://host/privacy/`.
+String siteUrlFor(String apiBaseUrl, String path) {
+  var base = apiBaseUrl.trim();
+  while (base.endsWith('/')) {
+    base = base.substring(0, base.length - 1);
+  }
+  if (base.endsWith('/api')) base = base.substring(0, base.length - 4);
+  return '$base${path.startsWith('/') ? path : '/$path'}';
+}
+
 void checkFakeGoogleSignIn({required String fakeEmail, required bool isRelease}) {
   if (isRelease && fakeEmail.trim().isNotEmpty) {
     throw ApiConfigException(

@@ -134,6 +134,7 @@ class _ProviderGateState extends State<ProviderGate> {
       case _Stage.pending:
         return ProviderPendingScreen(
           profile: _profile!,
+          session: _session,
           onRefresh: _refresh,
           onEdit: () => _go(_Stage.edit),
           onSignOut: _signOut,

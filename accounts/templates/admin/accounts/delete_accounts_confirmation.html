@@ -1,0 +1,17 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+<p><strong>This cannot be undone.</strong> For each account below, the person's name, email and sign-in are removed,
+their chats (and chat photos), push tokens and saved providers are deleted, the details of their requests are blanked,
+and a provider's profile becomes an anonymous "Deleted provider". Ratings, reviews (shown as "A client") and the counts
+of requests and offers are kept without anything that identifies the person. Staff accounts are skipped.</p>
+<ul>
+  {% for profile in profiles %}<li>{{ profile.user.email }} ({{ profile.get_role_display }}){% if profile.full_name %}, {{ profile.full_name }}{% endif %}</li>{% endfor %}
+</ul>
+<form method="post">{% csrf_token %}
+  {% for profile in profiles %}<input type="hidden" name="{{ action_checkbox_name }}" value="{{ profile.pk }}">{% endfor %}
+  <input type="hidden" name="action" value="delete_accounts">
+  <input type="hidden" name="confirm_delete" value="yes">
+  <input type="submit" value="Yes, delete these accounts">
+  <a href="{% url 'admin:accounts_userprofile_changelist' %}" class="button cancel-link">No, go back</a>
+</form>
+{% endblock %}

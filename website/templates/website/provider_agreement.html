@@ -1,0 +1,81 @@
+{% extends "website/base.html" %}
+{% block content %}
+<section class="page-head"><div class="wrap">
+  <h1>Provider agreement</h1>
+  <p class="lead-dark">The terms for businesses and tradespeople who receive requests through Tabmatch.</p>
+</div></section>
+<section class="section"><div class="wrap narrow prose">
+  {% include "website/partials/draft_banner.html" %}
+
+  <ol class="toc">
+    <li><a href="#about">This agreement</a></li>
+    <li><a href="#eligibility">Who can be a provider</a></li>
+    <li><a href="#approval">Registration and approval</a></li>
+    <li><a href="#requests">Receiving and answering requests</a></li>
+    <li><a href="#contact">Being contacted (CASL)</a></li>
+    <li><a href="#clients">Client information</a></li>
+    <li><a href="#independent">You are independent</a></li>
+    <li><a href="#law">Licences, insurance and the law</a></li>
+    <li><a href="#fees">Fees</a></li>
+    <li><a href="#reviews">Reviews and replies</a></li>
+    <li><a href="#conduct">Conduct</a></li>
+    <li><a href="#liability">Liability</a></li>
+    <li><a href="#ending">Suspension, ending and deleting your account</a></li>
+    <li><a href="#changes">Law, changes and contact</a></li>
+  </ol>
+
+  <h2 id="about">1. This agreement</h2>
+  <p>This agreement is between you (the business or individual who registers as a provider) and Tabmatch (<span class="fill-in">[legal name of the operating entity]</span>, Alberta, Canada). It applies on top of the <a href="{% url 'website:terms' %}">terms of service</a> and the <a href="{% url 'website:privacy' %}">privacy policy</a>. If you register for a business, you confirm you can bind it to this agreement.</p>
+
+  <h2 id="eligibility">2. Who can be a provider</h2>
+  <p>You must be at least 18, legally able to carry on the services you list in the places you list them, and registered, licensed, certified and insured as the law and your trade require.</p>
+
+  <h2 id="approval">3. Registration and approval</h2>
+  <p>You sign in with Google and give your business name, phone, email, services and cities. Every provider is reviewed before they can receive requests. We can approve, reject, or ask you to change your profile, at our discretion, and we may re-review a profile after you edit it. Approval does not mean we have checked your licences or insurance, and you must not say that it does. Keep your profile accurate and current. Tabmatch currently operates in Edmonton; you can join the waitlist for other cities and we will tell you when they open.</p>
+
+  <h2 id="requests">4. Receiving and answering requests</h2>
+  <ul class="ticks">
+    <li>Requests that match your services and cities are offered to you. Before you answer, you see the service, city and urgency only.</li>
+    <li>You can <strong>accept</strong> or <strong>decline</strong> a request in the app, or by replying YES or NO to the text we send. Your first answer counts, and you cannot change it.</li>
+    <li>When you accept, you see the client's first name and last initial, their description, where the job is, and their phone number, and you can chat and call. A request is not a guarantee of work: the client may choose someone else, and we do not promise any number of requests.</li>
+    <li>Answer promptly. Offers expire, and providers who often do not answer may receive fewer requests.</li>
+  </ul>
+
+  <h2 id="contact">5. Being contacted (CASL)</h2>
+  <p>By registering you agree that Tabmatch may contact you about client requests that match your services: by text message, and by messages and notifications in the app. Message and data rates may apply. Reply STOP to any text to opt out of texts, and turn off notifications in the app's Settings at any time. Opting out means you may not receive requests.</p>
+
+  <h2 id="clients">6. Client information</h2>
+  <p>Clients give you personal information so you can respond to and do their job. You must:</p>
+  <ul class="ticks">
+    <li>use it only to respond to the request and do or follow up on that job;</li>
+    <li>not sell it, share it with anyone who does not need it for the job, add it to a marketing list, or use it to contact the client about anything else;</li>
+    <li>keep it secure, and delete it when you no longer need it (keeping what the law requires, such as invoices);</li>
+    <li>follow the privacy laws that apply to your business, including PIPEDA and Alberta's PIPA where they apply, and tell us promptly if client information you received from Tabmatch is lost or misused.</li>
+  </ul>
+
+  <h2 id="independent">7. You are independent</h2>
+  <p>You are an independent business. You are not our employee, agent, partner or franchisee. You decide how to do your work, what to charge and which jobs to take. Nothing here creates an employment relationship, and you are responsible for your own taxes, workers' compensation and employees. Tabmatch is not a party to your agreement with a client.</p>
+
+  <h2 id="law">8. Licences, insurance and the law</h2>
+  <p>You are solely responsible for holding every licence, permit and certification your work requires (for example for electrical, gas, plumbing or other regulated trades), carrying suitable liability insurance, following building codes, safety rules and consumer-protection law, and complying with human-rights law in how you treat clients. You will give us proof if we ask. Do not do work you are not qualified or authorized to do.</p>
+
+  <h2 id="fees">9. Fees</h2>
+  <p>There are no fees to receive requests today. <span class="decide">Decision needed: if Tabmatch later charges a subscription, per-lead fee or commission, the amounts, billing and refund terms go here, and providers must be told in advance and be able to decline.</span></p>
+
+  <h2 id="reviews">10. Reviews and replies</h2>
+  <p>Clients may rate and review you after a completed job. You may post one public reply to each review. Keep replies polite, factual and about the job. You must not pay for or pressure anyone into a review, write reviews of yourself or competitors, or threaten or pursue a client over a review. You can report a review you believe breaks the rules; we decide whether to remove it.</p>
+
+  <h2 id="conduct">11. Conduct</h2>
+  <p>Follow the conduct rules in the <a href="{% url 'website:terms' %}#conduct">terms of service</a>. In particular: be honest about who you are and what you can do, be respectful in chat, do not ask clients to move off Tabmatch to avoid its rules or to sell them something unrelated, do not harass or discriminate, and do not misuse client contact details.</p>
+
+  <h2 id="liability">12. Liability</h2>
+  <p>You are responsible for your work, your statements and your dealings with clients, and you agree to compensate Tabmatch for claims, losses and costs that arise from them or from your breach of this agreement. To the fullest extent the law allows, Tabmatch is not liable for lost requests, lost income, or the actions of clients, and our total liability to you is limited to <span class="fill-in">[an amount set by the lawyer]</span>. Nothing limits liability that the law does not allow us to limit.</p>
+  <p class="decide"><strong>For the lawyer:</strong> the indemnity, limitation of liability and any arbitration or class-action terms.</p>
+
+  <h2 id="ending">13. Suspension, ending and deleting your account</h2>
+  <p>You can stop at any time. To delete your account, use <em>Delete my account</em> in the app or follow the steps on our <a href="{% url 'website:delete-account' %}">delete your account</a> page. Your business details are removed and your profile becomes an anonymous "Deleted provider"; reviews clients wrote about you stay (without your reply) so ratings history remains accurate. We may suspend or end your access, remove your profile or content, or stop sending requests if you break this agreement or the law, put a client at risk, receive repeated serious complaints, or become unreachable. We will tell you why where we can.</p>
+
+  <h2 id="changes">14. Law, changes and contact</h2>
+  <p>This agreement is governed by the laws of Alberta and the federal laws of Canada that apply there, and disputes go to the courts of Alberta in Edmonton. We may change it by posting the new version with its date and telling you in the app; if you keep using Tabmatch you accept the change. Questions: {% include "website/partials/legal_contact.html" %}.</p>
+</div></section>
+{% endblock %}

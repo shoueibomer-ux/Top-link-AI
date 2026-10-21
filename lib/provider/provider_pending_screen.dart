@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 
 import '../api/provider_profile.dart';
+import '../account/account_section.dart';
 import '../app_colors.dart';
+import '../legal/legal_pages.dart';
 import '../widgets/app_logo.dart';
+import 'provider_session.dart';
 import 'provider_widgets.dart';
 
 /// Shown after registering until an admin reviews the profile. Also covers a
@@ -15,9 +18,17 @@ class ProviderPendingScreen extends StatefulWidget {
     required this.onEdit,
     required this.onSignOut,
     required this.onSwitchRole,
+    this.session,
+    this.openUrl = openInBrowser,
+    this.afterDeleted,
   });
 
   final ProviderProfileData profile;
+
+  /// Needed to delete the account from here (the gate passes it).
+  final AuthSession? session;
+  final UrlOpener openUrl;
+  final Future<void> Function(BuildContext context)? afterDeleted;
 
   /// Re-checks the profile's status on the server.
   final Future<void> Function() onRefresh;
@@ -119,6 +130,10 @@ class _ProviderPendingScreenState extends State<ProviderPendingScreen> {
                 busy: _refreshing,
                 onPressed: _refresh,
               ),
+            ],
+            if (widget.session != null) ...[
+              const SizedBox(height: 28),
+              AccountAndLegalSection(session: widget.session!, openUrl: widget.openUrl, afterDeleted: widget.afterDeleted),
             ],
           ],
         ),
