@@ -7,6 +7,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from catalog.models import Service
 from leads.models import LeadOffer
 from matching.permissions import HasApiKey
 
@@ -105,7 +106,7 @@ def serialize_message(message, viewer) -> dict:
     return data
 
 
-def serialize_conversation(conversation, viewer) -> dict:
+def serialize_conversation(conversation, viewer, service_names=None) -> dict:
     offer = conversation.offer
     last = conversation.messages.filter(hidden=False).order_by("-id").first()
     return {
@@ -113,6 +114,7 @@ def serialize_conversation(conversation, viewer) -> dict:
         "offer_id": offer.id,
         "request_id": offer.service_request_id,
         "other_name": conversation.display_name_for(viewer),
+        "request_summary": conversation.request_summary(service_names),
         "unread_count": unread_count(conversation, viewer),
         "last_message": (
             {"preview": last.body[:80] if last.body else "Photo", "created_at": last.created_at, "mine": last.sender_id == viewer.pk}
@@ -171,7 +173,8 @@ class ConversationListView(ChatView):
             .annotate(latest=Max("messages__id"))
             .order_by(F("latest").desc(nulls_last=True), "-id")
         )
-        items = [serialize_conversation(c, request.user) for c in conversations]
+        service_names = dict(Service.objects.values_list("slug", "name"))
+        items = [serialize_conversation(c, request.user, service_names) for c in conversations]
         return Response({"conversations": items, "total_unread": sum(i["unread_count"] for i in items)})
 
 
@@ -217,6 +220,7 @@ class MessageListView(ChatView):
         return Response({
             "messages": [serialize_message(m, request.user) for m in messages],
             "other_name": conversation.display_name_for(request.user),
+            "request_summary": conversation.request_summary(),
             "blocked_by_me": UserBlock.objects.filter(blocker=request.user, blocked=other).exists(),
             "can_send": not blocked_between(request.user, other),
             "terms_accepted": terms_accepted(request.user),

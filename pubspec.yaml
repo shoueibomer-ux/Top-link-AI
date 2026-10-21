@@ -45,6 +45,7 @@ dependencies:
   firebase_messaging: ^17.0.0
   image_picker: ^1.2.4
   url_launcher: ^6.3.3
+  geocoding: ^5.0.0
 
 dev_dependencies:
   flutter_test:

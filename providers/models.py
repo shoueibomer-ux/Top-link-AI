@@ -41,6 +41,9 @@ class ProviderProfile(models.Model):
     categories = models.ManyToManyField("catalog.Service", blank=True, related_name="provider_profiles")
     # City names from provider_search.services.CITIES.
     cities = models.JSONField(default=list, blank=True)
+    # Cities that are not open yet (provider_search.services.WAITLIST_CITIES) where this provider asked to be
+    # told when Tabmatch opens.
+    waitlist_cities = models.JSONField(default=list, blank=True)
     bio = models.TextField(blank=True)
 
     # When they ticked "you may text me about client requests" (CASL), or an

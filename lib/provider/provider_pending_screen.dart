@@ -72,7 +72,7 @@ class _ProviderPendingScreenState extends State<ProviderPendingScreen> {
             ),
             const SizedBox(height: 20),
             Text(
-              rejected ? 'Not approved yet' : 'Pending review',
+              rejected ? 'Not approved yet' : "We're reviewing your profile",
               key: const Key('review-title'),
               style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: AppColors.navy),
             ),
@@ -80,8 +80,8 @@ class _ProviderPendingScreenState extends State<ProviderPendingScreen> {
             Text(
               rejected
                   ? 'We could not approve your profile as it is. Update your details and send it back for another look.'
-                  : "Thanks, ${profile.businessName}. We're reviewing your details and will approve you "
-                      'shortly. Once approved, you can be matched with clients in your cities.',
+                  : 'Thanks, ${profile.businessName}. We will approve you shortly. Once approved, you can be '
+                      'matched with clients in your cities.',
               style: TextStyle(fontSize: 14, height: 1.5, color: AppColors.muted),
             ),
             if (rejected && profile.reviewNote.trim().isNotEmpty) ...[

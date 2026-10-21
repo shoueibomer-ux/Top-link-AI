@@ -448,16 +448,16 @@ void main() {
       expect(find.byIcon(Icons.search), findsOneWidget);
     });
 
-    testWidgets('the field is empty and shows no hint text until the user types', (tester) async {
+    testWidgets('the field is empty and says what it is for until the user types', (tester) async {
       await pumpHome(tester);
 
       final field = tester.widget<TextField>(find.byType(TextField));
       expect(field.controller!.text, isEmpty);
-      expect(field.decoration!.hintText, isNull);
+      expect(field.decoration!.hintText, 'Search for a service');
+      expect(find.text('Search for a service'), findsOneWidget);
+      // No example search wording that could be mistaken for the person's own text.
       expect(find.textContaining('plumber'), findsNothing);
       expect(find.textContaining('leaking pipe'), findsNothing);
-      // Just the icon inside the field.
-      expect(find.descendant(of: find.byType(TextField), matching: find.byType(Text)), findsNothing);
     });
 
     // NOTE: there used to be a dedicated "the search bar stays put while Home

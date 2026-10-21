@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../api/provider_profile.dart';
 import '../app_colors.dart';
 import '../app_styles.dart';
+import '../onboarding/phone_validation.dart';
 import '../onboarding/service_category.dart';
 import '../widgets/stars.dart';
 
@@ -114,10 +115,14 @@ class ProviderProfileCard extends StatelessWidget {
             profile.businessName,
             style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.navy),
           ),
-          const SizedBox(height: 4),
-          KeyedSubtree(key: const Key('profile-rating'), child: RatingLine(rating: profile.rating, fontSize: 13)),
-          const SizedBox(height: 10),
-          _Line(icon: Icons.phone_outlined, text: profile.phone),
+          // Ratings only mean something once a provider is approved and can be matched.
+          if (profile.status == ProviderStatus.approved) ...[
+            const SizedBox(height: 4),
+            KeyedSubtree(key: const Key('profile-rating'), child: RatingLine(rating: profile.rating, fontSize: 13)),
+            const SizedBox(height: 10),
+          ] else
+            const SizedBox(height: 14),
+          _Line(icon: Icons.phone_outlined, text: formatPhone(profile.phone)),
           _Line(icon: Icons.email_outlined, text: profile.email),
           _Line(icon: Icons.category_outlined, text: services.join(', ')),
           _Line(icon: Icons.location_on_outlined, text: profile.cities.join(', ')),

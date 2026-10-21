@@ -5,13 +5,13 @@ from accounts.names import public_name
 from catalog.models import Service
 from leads.models import LeadOffer
 from leads.phone import normalize_north_american_phone
-from provider_search.services import CITIES
+from provider_search.services import CITIES, LAUNCHED_CITIES, WAITLIST_CITIES
 from reviews import ratings
 
 from .models import ProviderProfile
 
 INVALID_PHONE_MESSAGE = "Enter a valid Canadian or North American phone number, for example 780 555 0100."
-SMS_CONSENT_MESSAGE = "You must agree to be texted about client requests to register."
+SMS_CONSENT_MESSAGE = "You must agree to be contacted about client requests, by text and in the app, to register."
 
 
 class ProviderProfileSerializer(serializers.ModelSerializer):
@@ -27,6 +27,9 @@ class ProviderProfileSerializer(serializers.ModelSerializer):
         queryset=Service.objects.filter(is_active=True, category__is_active=True),
     )
     cities = serializers.ListField(child=serializers.ChoiceField(choices=CITIES), allow_empty=False)
+    waitlist_cities = serializers.ListField(
+        child=serializers.ChoiceField(choices=WAITLIST_CITIES), required=False, allow_empty=True
+    )
     email = serializers.EmailField(required=False)
     bio = serializers.CharField(max_length=1000, required=False, allow_blank=True)
     # The explicit CASL consent checkbox. Required (and must be true) when
@@ -40,7 +43,7 @@ class ProviderProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProviderProfile
         fields = [
-            "business_name", "phone", "email", "categories", "cities", "bio", "sms_consent",
+            "business_name", "phone", "email", "categories", "cities", "waitlist_cities", "bio", "sms_consent",
             "status", "review_note", "reviewed_at", "created_at", "rating_average", "review_count",
         ]
         read_only_fields = ["status", "review_note", "reviewed_at", "created_at"]
@@ -64,7 +67,18 @@ class ProviderProfileSerializer(serializers.ModelSerializer):
         return phone
 
     def validate_cities(self, value):
-        return list(dict.fromkeys(value))  # no repeats, order kept
+        value = list(dict.fromkeys(value))  # no repeats, order kept
+        # Only cities that are open can be served. A provider who already has another city saved keeps it.
+        allowed = set(LAUNCHED_CITIES) | set(self.instance.cities if self.instance is not None else [])
+        closed = [c for c in value if c not in allowed]
+        if closed:
+            raise serializers.ValidationError(
+                f"{', '.join(closed)} isn't open yet. Choose {' or '.join(LAUNCHED_CITIES)}, and join the waitlist for the others."
+            )
+        return value
+
+    def validate_waitlist_cities(self, value):
+        return list(dict.fromkeys(value))
 
     def validate(self, attrs):
         if self.instance is None and attrs.get("sms_consent") is not True:
@@ -114,6 +128,7 @@ class ProviderLeadSerializer(serializers.Serializer):
         if accepted:
             owner = request.user
             data["description"] = request.problem_description
+            data["location"] = request.location
             data["client_name"] = public_name(owner.profile.full_name if owner and hasattr(owner, "profile") else "")
         return data
 

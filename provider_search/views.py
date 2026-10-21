@@ -95,6 +95,12 @@ class ServiceRequestCreateView(APIView):
         raw_phone = request.data.get("phone")
         city = request.data.get("city") or "Edmonton"
         description = (request.data.get("description") or "").strip()
+        location = request.data.get("location") or ""
+        if not isinstance(location, str):
+            return Response({"detail": "location must be text."}, status=400)
+        location = " ".join(location.split())
+        if len(location) > 120:
+            return Response({"detail": "location is too long (120 characters at most)."}, status=400)
         urgency = request.data.get("urgency") or ""
         if not isinstance(urgency, str) or urgency not in dict(ServiceRequest.URGENCY_CHOICES):
             urgency = ""
@@ -123,6 +129,7 @@ class ServiceRequestCreateView(APIView):
             device_id=device_id,
             category=service.slug,
             city=city,
+            location=location,
             problem_description=description,
             phone=phone,
             consent_given=True,

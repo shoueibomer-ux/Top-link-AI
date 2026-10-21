@@ -6,3 +6,6 @@ against.
 """
 
 CITIES = ["Edmonton", "Calgary", "Fort McMurray", "Red Deer"]
+# Where Tabmatch is open. Providers can pick only these; the other cities take a waitlist signup.
+LAUNCHED_CITIES = ["Edmonton"]
+WAITLIST_CITIES = [c for c in CITIES if c not in LAUNCHED_CITIES]

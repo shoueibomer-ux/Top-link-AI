@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../api/api_client.dart';
 import '../api/provider_profile.dart';
@@ -7,17 +8,19 @@ import '../app_styles.dart';
 import '../onboarding/phone_validation.dart';
 import '../onboarding/service_category.dart';
 import '../widgets/app_logo.dart';
+import '../widgets/coming_soon_badge.dart';
 import 'provider_session.dart';
 import 'provider_widgets.dart';
 
 final _emailPattern = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
 
-/// The consent a new provider gives to be texted (CASL). The server records
-/// when it was given; without it they can't be sent client requests.
+/// The consent a new provider gives to be contacted (CASL): by text, and by messages and notifications in the
+/// app. The server records when it was given; without it they can't be sent client requests.
 const kProviderSmsConsentText =
-    'I agree that Tabmatch may text me about client requests that match my services. '
-    'Message and data rates may apply. I can reply STOP at any time to opt out.';
-const kProviderSmsConsentRequired = 'Please agree to be texted about client requests to register.';
+    'I agree that Tabmatch may contact me about client requests that match my services: by text message, '
+    'and by messages and notifications in the app. Message and data rates may apply. I can reply STOP to '
+    'opt out of texts, and turn off notifications in Settings at any time.';
+const kProviderSmsConsentRequired = 'Please agree to be contacted about client requests to register.';
 
 /// The provider registration form, also used to edit an existing profile.
 /// Saving a new profile sends it for review; saving edits keeps its status
@@ -60,7 +63,13 @@ class _ProviderRegistrationScreenState
   );
   late final _bio = TextEditingController(text: widget.initial?.bio ?? '');
   late final Set<String> _categories = {...?widget.initial?.categories};
-  late final Set<String> _cities = {...?widget.initial?.cities};
+  // Only cities that are open can be served. A city that isn't open yet is a waitlist signup instead (a
+  // provider saved before the cities were limited has theirs moved there).
+  late final Set<String> _cities = {...?widget.initial?.cities.where(kLaunchedCities.contains)};
+  late final Set<String> _waitlist = {
+    ...?widget.initial?.waitlistCities,
+    ...?widget.initial?.cities.where((c) => !kLaunchedCities.contains(c)),
+  };
 
   bool _smsConsent = false;
   bool _submitted = false;
@@ -133,8 +142,12 @@ class _ProviderRegistrationScreenState
       email: _email.text.trim(),
       categories: _categories.toList(),
       cities: [
-        for (final city in kProviderCities)
+        for (final city in kLaunchedCities)
           if (_cities.contains(city)) city,
+      ],
+      waitlistCities: [
+        for (final city in kWaitlistCities)
+          if (_waitlist.contains(city)) city,
       ],
       bio: _bio.text.trim(),
       smsConsent: !widget.isEditing && _smsConsent,
@@ -213,6 +226,7 @@ class _ProviderRegistrationScreenState
             _Field(
               fieldKey: const Key('field-business-name'),
               label: 'Business name',
+              hint: 'e.g. Ace Plumbing',
               controller: _name,
               error: showErrors ? _nameError : null,
               textCapitalization: TextCapitalization.words,
@@ -225,6 +239,7 @@ class _ProviderRegistrationScreenState
               error: _phoneError,
               errorKey: const Key('phone-error'),
               keyboardType: TextInputType.phone,
+              inputFormatters: const [PhoneInputFormatter()],
             ),
             _Field(
               fieldKey: const Key('field-email'),
@@ -249,7 +264,7 @@ class _ProviderRegistrationScreenState
               spacing: 8,
               runSpacing: 8,
               children: [
-                for (final city in kProviderCities)
+                for (final city in kLaunchedCities)
                   FilterChip(
                     key: Key('city-$city'),
                     label: Text(city),
@@ -264,6 +279,40 @@ class _ProviderRegistrationScreenState
             ),
             if (showErrors && _cityError != null)
               _ErrorText(_cityError!, key: const Key('city-error')),
+            const SizedBox(height: 14),
+            const _Label('Coming soon'),
+            Text(
+              "Tabmatch is open in Edmonton for now. Tap a city below to join its waitlist and we'll tell you when it opens.",
+              style: TextStyle(fontSize: 12, height: 1.4, color: AppColors.mutedText),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final city in kWaitlistCities)
+                  FilterChip(
+                    key: Key('waitlist-$city'),
+                    label: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(city),
+                        const SizedBox(width: 6),
+                        if (_waitlist.contains(city))
+                          const Text('On the waitlist', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.turquoise))
+                        else
+                          const ComingSoonBadge(compact: true),
+                      ],
+                    ),
+                    selected: _waitlist.contains(city),
+                    showCheckmark: false,
+                    selectedColor: AppColors.turquoise.withValues(alpha: 0.12),
+                    onSelected: (on) => setState(
+                      () => on ? _waitlist.add(city) : _waitlist.remove(city),
+                    ),
+                  ),
+              ],
+            ),
             const SizedBox(height: 18),
             _Field(
               fieldKey: const Key('field-bio'),
@@ -354,6 +403,7 @@ class _Field extends StatelessWidget {
     this.errorKey,
     this.keyboardType,
     this.textCapitalization = TextCapitalization.none,
+    this.inputFormatters,
     this.minLines,
     this.maxLines = 1,
     this.maxLength,
@@ -367,6 +417,7 @@ class _Field extends StatelessWidget {
   final Key? errorKey;
   final TextInputType? keyboardType;
   final TextCapitalization textCapitalization;
+  final List<TextInputFormatter>? inputFormatters;
   final int? minLines;
   final int maxLines;
   final int? maxLength;
@@ -390,6 +441,7 @@ class _Field extends StatelessWidget {
               controller: controller,
               keyboardType: keyboardType,
               textCapitalization: textCapitalization,
+              inputFormatters: inputFormatters,
               minLines: minLines,
               maxLines: maxLines,
               maxLength: maxLength,
@@ -432,6 +484,7 @@ class _ServiceGroup extends StatelessWidget {
     final chosen = group.services
         .where((s) => selected.contains(s.slug))
         .length;
+    final total = group.services.length;
     // The shadow lives on an outer box and the white fill on a Material, so the
     // tile's ink and background are painted by the Material it sits on.
     return Container(
@@ -458,15 +511,15 @@ class _ServiceGroup extends StatelessWidget {
                 color: AppColors.navy,
               ),
             ),
-            subtitle: chosen == 0
-                ? null
-                : Text(
-                    '$chosen selected',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: AppColors.turquoise,
-                    ),
-                  ),
+            subtitle: Text(
+              chosen == 0 ? '$total ${total == 1 ? 'service' : 'services'}' : '$chosen of $total selected',
+              key: Key('group-count-${group.slug}'),
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: chosen == 0 ? FontWeight.w400 : FontWeight.w600,
+                color: chosen == 0 ? AppColors.mutedText : AppColors.turquoise,
+              ),
+            ),
             childrenPadding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
             expandedCrossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -477,7 +530,16 @@ class _ServiceGroup extends StatelessWidget {
                   for (final service in group.services)
                     FilterChip(
                       key: Key('service-${service.slug}'),
-                      label: Text(service.label),
+                      label: service.isLaunched
+                          ? Text(service.label)
+                          : Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(service.label),
+                                const SizedBox(width: 6),
+                                ComingSoonBadge(key: Key('coming-soon-${service.slug}'), compact: true),
+                              ],
+                            ),
                       selected: selected.contains(service.slug),
                       selectedColor: AppColors.turquoise.withValues(
                         alpha: 0.25,

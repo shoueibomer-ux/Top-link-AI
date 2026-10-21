@@ -9,6 +9,7 @@ import '../client/client_sign_in_screen.dart';
 import '../messaging/conversation_screen.dart';
 import '../messaging/push_service.dart';
 import '../onboarding/onboarding_screen.dart';
+import '../onboarding/phone_validation.dart';
 import '../onboarding/service_category.dart';
 import '../onboarding/urgency_step.dart';
 import '../pages/settings_page.dart';
@@ -209,6 +210,10 @@ class _HistoryTabState extends State<HistoryTab> {
   void initState() {
     super.initState();
     _load();
+    // The names and icons of services that are not open yet (a waitlisted request) come from the full catalog.
+    loadCatalogFromApi(_apiClient).then((_) {
+      if (mounted) setState(() {});
+    });
     PushService.instance.chatActivity.addListener(_refreshUnread);
   }
 
@@ -233,7 +238,7 @@ class _HistoryTabState extends State<HistoryTab> {
       final chat = await _session.authorized((token) => _apiClient.openConversation(token, offer.offerId));
       if (!mounted) return;
       await Navigator.of(context).push<void>(MaterialPageRoute(
-        builder: (_) => ConversationScreen(session: _session, conversationId: chat.id, otherName: chat.otherName),
+        builder: (_) => ConversationScreen(session: _session, conversationId: chat.id, otherName: chat.otherName, requestSummary: chat.requestSummary),
       ));
       if (mounted) _refreshUnread();
     } on SessionExpiredException {
@@ -459,6 +464,12 @@ class _HistoryTabState extends State<HistoryTab> {
 /// Public (not `_`-prefixed) so it can be pumped directly in widget tests
 /// with a hand-built [ServiceRequestRecord] rather than needing to mock the
 /// network call the History tab makes to fetch real data.
+const _urgencyLabels = {
+  'today': 'Needed today',
+  'this_week': 'This week',
+  'exploring': 'Just exploring',
+};
+
 class ServiceRequestCard extends StatelessWidget {
   const ServiceRequestCard({
     super.key,
@@ -490,6 +501,8 @@ class ServiceRequestCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final category = findCategoryBySlug(request.category);
+    final urgency = _urgencyLabels[request.urgency];
+    final where = [if (request.city.isNotEmpty) request.city, ?urgency].join(' · ');
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
@@ -503,7 +516,12 @@ class ServiceRequestCard extends StatelessWidget {
           CircleAvatar(
             radius: 22,
             backgroundColor: AppColors.turquoise.withValues(alpha: 0.12),
-            child: Icon(category?.icon ?? Icons.assignment_outlined, color: AppColors.turquoise, size: 20),
+            child: Icon(
+              category?.icon ??
+                  (requestStatusOf(request) == RequestStatus.waitlisted ? Icons.hourglass_empty : Icons.assignment_outlined),
+              color: AppColors.turquoise,
+              size: 20,
+            ),
           ),
           const SizedBox(width: 14),
           Expanded(
@@ -511,17 +529,21 @@ class ServiceRequestCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  category?.label ?? request.category,
+                  categoryLabel(request.category),
                   style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.navy),
                 ),
                 const SizedBox(height: 6),
                 _StatusPill(request: request),
+                if (where.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Text(where, key: Key('request-where-${request.id}'), style: TextStyle(fontSize: 13, color: AppColors.muted)),
+                ],
                 const SizedBox(height: 3),
                 Row(
                   children: [
                     Icon(Icons.phone_outlined, size: 13, color: AppColors.muted),
                     const SizedBox(width: 4),
-                    Text(request.phone, style: TextStyle(fontSize: 13, color: AppColors.muted)),
+                    Text(formatPhone(request.phone), style: TextStyle(fontSize: 13, color: AppColors.muted)),
                   ],
                 ),
                 if (request.problemDescription.isNotEmpty) ...[
@@ -571,7 +593,7 @@ class ServiceRequestCard extends StatelessWidget {
                           TextButton.icon(
                             key: Key('message-${offer.offerId}'),
                             onPressed: () => onMessage!(offer),
-                            style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 8), minimumSize: const Size(0, 32)),
+                            style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 8), minimumSize: const Size(0, 32), tapTargetSize: MaterialTapTargetSize.shrinkWrap),
                             icon: const Icon(Icons.chat_bubble_outline, size: 16, color: AppColors.turquoise),
                             label: Row(mainAxisSize: MainAxisSize.min, children: [
                               const Text('Message', style: TextStyle(fontSize: 12, color: AppColors.turquoise, fontWeight: FontWeight.w600)),
@@ -581,7 +603,9 @@ class ServiceRequestCard extends StatelessWidget {
                               ],
                             ]),
                           ),
-                        if (offer.jobCompleted)
+                        // The pill above already says "Completed"; name the provider's completion only when
+                        // there are several providers on the request.
+                        if (offer.jobCompleted && request.acceptedOffers.length > 1)
                           const Padding(
                             padding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                             child: Text('Completed', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF15803D))),
@@ -590,7 +614,7 @@ class ServiceRequestCard extends StatelessWidget {
                           TextButton(
                             key: Key('complete-${offer.offerId}'),
                             onPressed: () => onMarkComplete!(offer),
-                            style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 8), minimumSize: const Size(0, 32)),
+                            style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 8), minimumSize: const Size(0, 32), tapTargetSize: MaterialTapTargetSize.shrinkWrap),
                             child: const Text(
                               'Mark job complete',
                               style: TextStyle(fontSize: 12, color: AppColors.turquoise, fontWeight: FontWeight.w600),
@@ -600,7 +624,7 @@ class ServiceRequestCard extends StatelessWidget {
                           TextButton.icon(
                             key: Key('rate-${offer.offerId}'),
                             onPressed: () => onReview!(offer),
-                            style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 8), minimumSize: const Size(0, 32)),
+                            style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 8), minimumSize: const Size(0, 32), tapTargetSize: MaterialTapTargetSize.shrinkWrap),
                             icon: const Icon(Icons.star_outline_rounded, size: 16, color: AppColors.turquoise),
                             label: const Text(
                               'Rate provider',
@@ -623,7 +647,7 @@ class ServiceRequestCard extends StatelessWidget {
                               TextButton(
                                 key: Key('edit-review-${offer.offerId}'),
                                 onPressed: () => onReview!(offer),
-                                style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 8), minimumSize: const Size(0, 28)),
+                                style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 8), minimumSize: const Size(0, 28), tapTargetSize: MaterialTapTargetSize.shrinkWrap),
                                 child: const Text('Edit', style: TextStyle(fontSize: 12, color: AppColors.turquoise, fontWeight: FontWeight.w600)),
                               ),
                           ]),

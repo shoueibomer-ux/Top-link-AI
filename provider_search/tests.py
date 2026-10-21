@@ -156,6 +156,24 @@ class ServiceRequestCreateViewTests(TestCase):
         request = ServiceRequest.objects.get(id=response.json()["request_id"])
         self.assertEqual(request.problem_description, "")
 
+    def test_location_is_stored_trimmed_and_is_optional(self):
+        response = self._create(location="  T5J   0N3 ")
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(ServiceRequest.objects.get(id=response.json()["request_id"]).location, "T5J 0N3")
+        blank = self._create(device_id="dev-2")
+        self.assertEqual(ServiceRequest.objects.get(id=blank.json()["request_id"]).location, "")
+
+    def test_an_address_is_accepted_as_the_location(self):
+        response = self._create(location="10123 99 Street NW, Edmonton")
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(ServiceRequest.objects.get().location, "10123 99 Street NW, Edmonton")
+
+    def test_a_location_that_is_not_text_or_is_too_long_is_refused(self):
+        for bad in (["T5J 0N3"], {"lat": 53.5}, 53.5, "x" * 121):
+            with self.subTest(bad=bad):
+                self.assertEqual(self._create(location=bad).status_code, 400)
+        self.assertFalse(ServiceRequest.objects.exists())
+
     def test_city_defaults_to_edmonton_when_not_given(self):
         body = {"device_id": "dev-1", "category": "plumbing", "phone": "+1 780-555-0100", "consent": True}
         response = self.client.post("/api/requests/", body, content_type="application/json", **self.headers)

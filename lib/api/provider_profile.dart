@@ -1,8 +1,14 @@
 import 'auth_models.dart';
 import 'reviews.dart';
 
-/// The cities a provider can serve (provider_search.services.CITIES).
+/// Every city Tabmatch knows about (provider_search.services.CITIES).
 const kProviderCities = ['Edmonton', 'Calgary', 'Fort McMurray', 'Red Deer'];
+
+/// Where Tabmatch is open: the only cities a provider can serve (provider_search.services.LAUNCHED_CITIES).
+const kLaunchedCities = ['Edmonton'];
+
+/// The other cities are "coming soon": a provider can join the waitlist for them instead.
+const kWaitlistCities = ['Calgary', 'Fort McMurray', 'Red Deer'];
 
 enum ProviderStatus {
   pending,
@@ -24,6 +30,7 @@ class ProviderProfileData {
     required this.email,
     required this.categories,
     required this.cities,
+    this.waitlistCities = const [],
     this.bio = '',
     this.smsConsent = false,
     this.status = ProviderStatus.pending,
@@ -38,6 +45,7 @@ class ProviderProfileData {
       email: json['email'] as String? ?? '',
       categories: [for (final c in json['categories'] as List<dynamic>? ?? const []) c as String],
       cities: [for (final c in json['cities'] as List<dynamic>? ?? const []) c as String],
+      waitlistCities: [for (final c in json['waitlist_cities'] as List<dynamic>? ?? const []) c as String],
       bio: json['bio'] as String? ?? '',
       status: ProviderStatus.parse(json['status'] as String?),
       reviewNote: json['review_note'] as String? ?? '',
@@ -50,6 +58,9 @@ class ProviderProfileData {
   final String email;
   final List<String> categories;
   final List<String> cities;
+
+  /// Cities that are not open yet where the provider asked to be told when Tabmatch opens.
+  final List<String> waitlistCities;
   final String bio;
 
   /// The "you may text me about client requests" checkbox. Only sent when
@@ -68,6 +79,7 @@ class ProviderProfileData {
         'email': email,
         'categories': categories,
         'cities': cities,
+        'waitlist_cities': waitlistCities,
         'bio': bio,
         if (smsConsent) 'sms_consent': true,
       };
@@ -134,6 +146,7 @@ class ProviderLead {
     this.jobCompleted = false,
     this.description,
     this.clientName,
+    this.location,
   });
 
   factory ProviderLead.fromJson(Map<String, dynamic> json) {
@@ -151,6 +164,7 @@ class ProviderLead {
       jobCompleted: json['job_completed'] as bool? ?? false,
       description: json['description'] as String?,
       clientName: json['client_name'] as String?,
+      location: json['location'] as String?,
     );
   }
 
@@ -166,4 +180,10 @@ class ProviderLead {
   final bool jobCompleted;
   final String? description;
   final String? clientName;
+
+  /// Where the job is (a postal code or address), only once the provider has accepted.
+  final String? location;
+
+  /// The number the provider quotes when answering by text ("YES 42").
+  int get ref => offerId;
 }

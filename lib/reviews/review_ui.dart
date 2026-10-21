@@ -210,6 +210,7 @@ class _ReviewSheetState extends State<_ReviewSheet> {
               padding: const EdgeInsets.only(bottom: 8),
               child: Text(_error!, key: const Key('review-error'), style: const TextStyle(color: Color(0xFFBA1A1A), fontSize: 13)),
             ),
+          const SizedBox(height: 14),
           FilledButton(
             key: const Key('review-save'),
             onPressed: _saving ? null : _save,
@@ -308,6 +309,7 @@ class _ReplySheetState extends State<_ReplySheet> {
               padding: const EdgeInsets.only(bottom: 8),
               child: Text(_error!, key: const Key('reply-error'), style: const TextStyle(color: Color(0xFFBA1A1A), fontSize: 13)),
             ),
+          const SizedBox(height: 14),
           FilledButton(
             key: const Key('reply-send'),
             onPressed: _saving ? null : _send,

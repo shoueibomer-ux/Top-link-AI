@@ -47,8 +47,16 @@ void main() {
     await tester.tap(find.text('Next'));
     await tester.pumpAndSettle();
 
-    // Step 3: location — prefilled with a demo location, so Next is enabled.
-    expect(find.text('Where are you located?'), findsOneWidget);
+    // Step 3: where the job is: the phone's location, or a postal code / address. Never coordinates, and
+    // there is no going on without one.
+    expect(find.text('Where is the job?'), findsOneWidget);
+    expect(find.text('Latitude'), findsNothing);
+    expect(find.text('Longitude'), findsNothing);
+    ElevatedButton nextButton() => tester.widget<ElevatedButton>(find.widgetWithText(ElevatedButton, 'Next'));
+    expect(nextButton().onPressed, isNull);
+    await tester.enterText(find.byKey(const Key('location-field')), 'T5J 0N3');
+    await tester.pump();
+    expect(nextButton().onPressed, isNotNull);
     await tester.tap(find.text('Next'));
     await tester.pumpAndSettle();
 

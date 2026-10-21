@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 
+import '../api/api_client.dart';
+import '../api/auth_models.dart';
 import '../app_colors.dart';
 import '../app_styles.dart';
 import '../onboarding/onboarding_screen.dart';
 import '../messaging/push_service.dart';
 import '../provider/auth_storage.dart';
+import '../provider/provider_session.dart';
 import '../widgets/app_drawer.dart';
 
 const _appVersion = '1.0.0';
@@ -28,15 +31,69 @@ class SettingsPage extends StatelessWidget {
 /// body (the home screen's bottom-nav Profile tab), without duplicating the
 /// notifications/language/logout logic in two places.
 class SettingsBody extends StatefulWidget {
-  const SettingsBody({super.key});
+  const SettingsBody({super.key, this.api});
+
+  /// Tests pass a client backed by a fake HTTP layer.
+  final ApiClient? api;
 
   @override
   State<SettingsBody> createState() => _SettingsBodyState();
 }
 
 class _SettingsBodyState extends State<SettingsBody> {
-  bool _notificationsEnabled = true;
+  bool _notificationsEnabled = false;
+  bool _notificationsBusy = false;
   String _language = 'English';
+
+  /// Who is signed in, for the card at the top: null until loaded or when nobody is.
+  AccountProfile? _account;
+  bool _accountLoaded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadNotifications();
+    _loadAccount();
+  }
+
+  Future<void> _loadNotifications() async {
+    final on = await PushService.instance.notificationsOn();
+    if (mounted) setState(() => _notificationsEnabled = on);
+  }
+
+  Future<void> _loadAccount() async {
+    AccountProfile? account;
+    try {
+      if (await AuthStorage.isLoggedIn()) {
+        final session = AuthSession(api: widget.api);
+        account = await session.authorized(session.api.getMe);
+      }
+    } catch (_) {
+      // Settings still works without the account card.
+    }
+    if (mounted) {
+      setState(() {
+        _account = account;
+        _accountLoaded = true;
+      });
+    }
+  }
+
+  Future<void> _setNotifications(bool wanted) async {
+    if (_notificationsBusy) return;
+    setState(() => _notificationsBusy = true);
+    final on = await PushService.instance.setNotifications(wanted);
+    if (!mounted) return;
+    setState(() {
+      _notificationsEnabled = on;
+      _notificationsBusy = false;
+    });
+    if (wanted && !on) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Notifications are off for Tabmatch on this phone. Turn them on in your phone's settings.")),
+      );
+    }
+  }
 
   Future<void> _pickLanguage() async {
     final selected = await showModalBottomSheet<String>(
@@ -100,6 +157,7 @@ class _SettingsBodyState extends State<SettingsBody> {
     return ListView(
       padding: const EdgeInsets.symmetric(vertical: 12),
       children: [
+        if (_accountLoaded) _AccountCard(account: _account),
         const _SectionHeader('Preferences'),
         _SettingsCard(
           children: [
@@ -107,7 +165,7 @@ class _SettingsBodyState extends State<SettingsBody> {
               icon: Icons.notifications_outlined,
               title: 'Notifications',
               value: _notificationsEnabled,
-              onChanged: (value) => setState(() => _notificationsEnabled = value),
+              onChanged: _setNotifications,
             ),
             _SettingsTile(
               icon: Icons.language_outlined,
@@ -152,6 +210,53 @@ class _SettingsBodyState extends State<SettingsBody> {
         ),
         const SizedBox(height: 16),
       ],
+    );
+  }
+}
+
+/// Who is signed in: their name and email, or a note that nobody is.
+class _AccountCard extends StatelessWidget {
+  const _AccountCard({required this.account});
+
+  final AccountProfile? account;
+
+  @override
+  Widget build(BuildContext context) {
+    final name = account?.fullName.trim() ?? '';
+    final initial = (name.isNotEmpty ? name : (account?.email ?? '?')).characters.first.toUpperCase();
+    return Container(
+      key: const Key('account-card'),
+      margin: const EdgeInsets.fromLTRB(20, 8, 20, 4),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: AppColors.white, borderRadius: BorderRadius.circular(kRadius), boxShadow: kCardShadow),
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 26,
+            backgroundColor: AppColors.turquoise.withValues(alpha: 0.15),
+            child: account == null
+                ? const Icon(Icons.person_outline, color: AppColors.navy)
+                : Text(initial, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.navy)),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: account == null
+                ? Text(
+                    "You're not signed in. Sign in from History to keep your requests and chats with your Google account.",
+                    key: const Key('account-signed-out'),
+                    style: TextStyle(fontSize: 14, height: 1.4, color: AppColors.mutedText),
+                  )
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (name.isNotEmpty)
+                        Text(name, key: const Key('account-name'), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.navy)),
+                      Text(account!.email, key: const Key('account-email'), style: TextStyle(fontSize: 14, color: AppColors.mutedText)),
+                    ],
+                  ),
+          ),
+        ],
+      ),
     );
   }
 }

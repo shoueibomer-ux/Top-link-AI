@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../api/api_client.dart';
@@ -6,6 +8,7 @@ import '../app_colors.dart';
 import '../app_styles.dart';
 import '../client/client_sign_in_screen.dart';
 import '../home/home_screen.dart';
+import '../messaging/push_service.dart';
 import '../provider/auth_storage.dart';
 import '../provider/provider_session.dart';
 import '../subscription/device_id.dart';
@@ -16,6 +19,7 @@ import 'category_step.dart';
 import 'confirmation_step.dart';
 import 'phone_validation.dart';
 import 'location_step.dart';
+import 'location_validation.dart';
 import 'service_category.dart';
 import 'urgency_step.dart';
 
@@ -45,8 +49,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   late int _step = widget.initialCategory == null ? 0 : 1;
   late ServiceCategory? _selectedCategory = widget.initialCategory;
   Urgency? _selectedUrgency;
-  double _lat = ApiClient.demoLat;
-  double _lng = ApiClient.demoLng;
+  String _location = '';
   bool _consentGiven = false;
   bool _isSubmitting = false;
 
@@ -72,6 +75,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         return _selectedCategory != null;
       case 1:
         return _selectedUrgency != null;
+      case 2:
+        return normalizeLocation(_location) != null;
       case 3:
         return !_isSubmitting && normalizeNorthAmericanPhone(_phoneController.text) != null && _consentGiven;
       default:
@@ -118,6 +123,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               consent: _consentGiven,
               description: _descriptionController.text.trim(),
               urgency: urgency.apiValue,
+              location: normalizeLocation(_location) ?? '',
             ),
           );
       ServiceRequestSubmission submission;
@@ -152,6 +158,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           builder: (_) => HomeScreen(category: category, urgency: urgency),
         ),
       );
+      // Now that the first request is sent, notifications are worth asking for (once).
+      unawaited(PushService.instance.askAfterFirstRequest());
     } catch (e) {
       if (!mounted) return;
       setState(() => _isSubmitting = false);
@@ -209,12 +217,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                               setState(() => _selectedUrgency = urgency),
                         ),
                       2 => LocationStep(
-                          lat: _lat,
-                          lng: _lng,
-                          onLocationChanged: (location) => setState(() {
-                            _lat = location.lat;
-                            _lng = location.lng;
-                          }),
+                          location: _location,
+                          onLocationChanged: (location) => setState(() => _location = location),
                         ),
                       _ => ConfirmationStep(
                           categoryLabel: _selectedCategory?.label ?? 'service',
