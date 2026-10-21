@@ -1,5 +1,10 @@
+from django.conf import settings
 from django.contrib import admin
+from django.http import HttpResponse
 from django.urls import include, path
+
+from config.admin_login import admin_login
+from config.client_ip import client_ip
 
 from leads.views import twilio_sms_webhook
 from notifications.views import NotificationListView, NotificationMarkReadView
@@ -14,8 +19,27 @@ from provider_search.views import (
 admin.site.site_header = "Tabmatch administration"
 admin.site.site_title = "Tabmatch admin"
 
+
+def client_ip_check(request):
+    """Staff only: what the rate limiter sees as this request's client IP,
+    next to the raw proxy values, to confirm after a deploy that it is your
+    own public address (compare with any "what is my IP" site)."""
+    lines = [
+        f"Rate limits key on:  {client_ip(request)}",
+        f"REMOTE_ADDR:         {request.META.get('REMOTE_ADDR', '')}",
+        f"X-Forwarded-For:     {request.META.get('HTTP_X_FORWARDED_FOR', '(none)')}",
+        f"TRUSTED_PROXY_HOPS:  {settings.TRUSTED_PROXY_HOPS}",
+    ]
+    return HttpResponse("\n".join(lines) + "\n", content_type="text/plain")
+
+
 urlpatterns = [
-    path("admin/", admin.site.urls),
+    # The admin lives at ADMIN_URL_PATH (see config/settings.py). Its login
+    # form is answered by the rate-limited view first, which then hands off
+    # to the admin's own login.
+    path(f"{settings.ADMIN_URL_PATH}login/", admin_login),
+    path(f"{settings.ADMIN_URL_PATH}client-ip/", admin.site.admin_view(client_ip_check), name="admin-client-ip"),
+    path(settings.ADMIN_URL_PATH, admin.site.urls),
     path("api/accounts/", include("accounts.urls")),
     path("api/provider/", include("providers.urls")),
     path("api/catalog/", include("catalog.urls")),

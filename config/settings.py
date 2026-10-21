@@ -326,3 +326,35 @@ SECURE_HSTS_PRELOAD = not DEBUG
 # defeats SECURE_SSL_REDIRECT entirely.
 if os.environ.get("DJANGO_BEHIND_PROXY") == "True":
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
+# --- Rate limiting: the real client IP behind the proxy ----------------------
+# django-ratelimit's "ip" key (and "user_or_ip" for signed-out callers) reads
+# the client from config.client_ip instead of REMOTE_ADDR, which behind
+# Render is the proxy for every user. TRUSTED_PROXY_HOPS is how many proxies
+# append to X-Forwarded-For in front of this app: 1 on Render, 0 (header
+# ignored, it is client-controlled) when not behind a proxy.
+RATELIMIT_IP_META_KEY = "config.client_ip.client_ip"
+TRUSTED_PROXY_HOPS = int(
+    os.environ.get("TRUSTED_PROXY_HOPS", "1" if os.environ.get("DJANGO_BEHIND_PROXY") == "True" else "0")
+)
+
+# --- Django admin URL ----------------------------------------------------------
+# A path only staff know instead of the well-known /admin/ (set ADMIN_URL_PATH
+# on Render to something long and random, e.g. "manage-7f3k9q2xw8/"). /admin/
+# is used only when it is unset in DEBUG; with DEBUG off it must be set.
+from config.admin_path import admin_url_path  # noqa: E402
+
+ADMIN_URL_PATH = admin_url_path(os.environ.get("ADMIN_URL_PATH"), DEBUG)
+
+# --- Error monitoring (Sentry) -------------------------------------------------
+# Off unless SENTRY_DSN is set. See config/sentry.py for what is scrubbed.
+SENTRY_DSN = os.environ.get("SENTRY_DSN", "").strip()
+if SENTRY_DSN:
+    from config.sentry import init_sentry  # noqa: E402
+
+    init_sentry(
+        SENTRY_DSN,
+        environment=os.environ.get("SENTRY_ENVIRONMENT", "development" if DEBUG else "production"),
+        # Render sets this to the deployed commit, so errors are tied to a release.
+        release=os.environ.get("RENDER_GIT_COMMIT"),
+    )

@@ -21,7 +21,7 @@ from .matching_engine import (
 _AI_ENDPOINT_RATE = "10/m"
 
 
-@method_decorator(ratelimit(key="ip", rate=_AI_ENDPOINT_RATE, method="POST", block=False), name="post")
+@method_decorator(ratelimit(key="user_or_ip", rate=_AI_ENDPOINT_RATE, method="POST", block=False), name="post")
 class ProfileCreateView(APIView):
     """POST /api/profiles/  — description is required; categories are assigned automatically."""
 
@@ -40,7 +40,7 @@ class ProfileCreateView(APIView):
         return Response(ProfileCreateSerializer(profile).data, status=status.HTTP_201_CREATED)
 
 
-@method_decorator(ratelimit(key="ip", rate=_AI_ENDPOINT_RATE, method="POST", block=False), name="post")
+@method_decorator(ratelimit(key="user_or_ip", rate=_AI_ENDPOINT_RATE, method="POST", block=False), name="post")
 class MatchView(APIView):
     """POST /api/match/  — request_text is required; returns ranked matches with transparent scores."""
 
