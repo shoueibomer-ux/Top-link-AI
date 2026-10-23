@@ -6,6 +6,7 @@ from rest_framework.response import Response
 from accounts.permissions import IsClientAccount
 from catalog.models import Service
 from catalog.taxonomy import launched_slugs
+from growth import attribution
 from leads.models import LeadOffer
 from leads.phone import normalize_north_american_phone
 from matching.permissions import HasApiKey
@@ -51,7 +52,8 @@ class ChatRefineView(APIView):
 class ServiceRequestCreateView(APIView):
     """POST /api/requests/   (signed-in client, Authorization: Bearer ...)
     {"category", "phone", "consent": true, "device_id": (optional),
-     "city": (optional), "description": (optional), "urgency": (optional)}
+     "city": (optional), "description": (optional), "urgency": (optional),
+     "source" / "source_ref": (optional, see growth.attribution)}
 
     The request belongs to the signed-in client: every later look at it, and
     chat and reviews, go through that account, never through device_id.
@@ -124,7 +126,10 @@ class ServiceRequestCreateView(APIView):
         if request.data.get("consent") is not True:
             return Response({"detail": self.REQUIRED_CONSENT_MESSAGE}, status=400)
 
+        source, source_ref = attribution.resolve(request.user, request.data.get("source"), request.data.get("source_ref"))
         service_request = ServiceRequest.objects.create(
+            source=source,
+            source_ref=source_ref,
             user=request.user,
             device_id=device_id,
             category=service.slug,

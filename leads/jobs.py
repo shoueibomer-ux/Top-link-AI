@@ -1,6 +1,6 @@
 """What the Render cron job runs every 15 minutes (see run_lead_jobs): nudge
-slow providers, expire stale offers, email you when a request has no YES, and
-send the daily summary. All of it is plain queries over LeadOffer — no queue,
+slow providers, expire stale offers, email you when a request has no YES,
+send the daily summary, and send seasonal reminders (growth.jobs). All of it is plain queries over LeadOffer — no queue,
 no agents."""
 
 import logging
@@ -230,6 +230,17 @@ def purge_deleted_photos() -> int:
         return 0
 
 
+def send_seasonal_reminders(now=None) -> int:
+    """Seasonal reminders to past clients (see growth.jobs). Never lets a problem there stop the other jobs."""
+    try:
+        from growth.jobs import send_seasonal_reminders as send
+
+        return send(now)
+    except Exception:  # noqa: BLE001
+        logger.exception("Could not send seasonal reminders")
+        return 0
+
+
 def run_all(now=None) -> dict:
     now = now or timezone.now()
     return {
@@ -239,4 +250,5 @@ def run_all(now=None) -> dict:
         "completion_reminders": send_completion_reminders(now),
         "daily_summary_sent": send_daily_summary_if_due(now),
         "photos_removed": purge_deleted_photos(),
+        "seasonal_reminders": send_seasonal_reminders(now),
     }

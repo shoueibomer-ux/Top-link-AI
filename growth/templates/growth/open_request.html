@@ -1,0 +1,16 @@
+{% extends "website/base.html" %}
+{% block content %}
+<section class="page-head"><div class="wrap">
+  <h1>Request {{ service.name }}</h1>
+  <p class="lead-dark">Requests are sent from the Tabmatch app. Open it and your request starts with {{ service.name }} already chosen.</p>
+</div></section>
+<section class="section"><div class="wrap narrow">
+  <div class="card">
+    <h2>Have the app?</h2>
+    <p><a class="btn btn-primary btn-lg" id="open-app" href="{{ app_link }}">Open in the Tabmatch app</a></p>
+    <h2>Don't have it yet?</h2>
+    <p>Get the app, then choose {{ service.name }} on the home screen.</p>
+    <p><a class="btn btn-secondary" href="{{ get_app_url }}">Get the Tabmatch app</a></p>
+  </div>
+</div></section>
+{% endblock %}

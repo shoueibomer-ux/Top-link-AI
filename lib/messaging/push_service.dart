@@ -5,6 +5,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../growth/growth_links.dart';
 import '../provider/auth_storage.dart';
 import '../provider/provider_session.dart';
 import 'conversation_screen.dart';
@@ -92,7 +93,7 @@ class FirebasePushBackend implements PushBackend {
   Future<void> deleteToken() => _messaging.deleteToken();
 }
 
-/// Push notifications for new chat messages. It does nothing at all (and never throws) unless Firebase is
+/// Push notifications for new chat messages (and seasonal reminders, which open the request flow). It does nothing at all (and never throws) unless Firebase is
 /// configured for the build, and it registers this phone with the server only while someone is signed in.
 /// The notification never contains the message: the app fetches that itself when it opens.
 class PushService {
@@ -219,9 +220,16 @@ class PushService {
   }
 
   void _openFromPush(Map<String, dynamic> data) {
-    final id = conversationIdFromPush(data);
     final navigator = navigatorKey.currentState;
-    if (id == null || navigator == null) return;
+    if (navigator == null) return;
+    // A seasonal reminder: open the request flow with its service chosen.
+    final request = requestLinkFromPush(data);
+    if (request != null) {
+      navigator.push(routeForGrowthLink(request));
+      return;
+    }
+    final id = conversationIdFromPush(data);
+    if (id == null) return;
     navigator.push(MaterialPageRoute<void>(
       builder: (_) => ConversationScreen(session: _sessionFactory(), conversationId: id),
     ));

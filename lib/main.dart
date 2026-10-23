@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import 'api/api_config.dart';
 import 'app_colors.dart';
+import 'growth/growth_links.dart';
 import 'messaging/push_service.dart';
 import 'monitoring/error_reporting.dart';
 import 'role/root_gate.dart';
@@ -55,6 +56,9 @@ class TabmatchApp extends StatelessWidget {
         ),
       ),
       home: const RootGate(),
+      // Links from the website, invites and reminder emails (tabmatch://open/request?..., /invite?...).
+      onGenerateRoute: growthRoute,
+      onUnknownRoute: (settings) => MaterialPageRoute<void>(settings: settings, builder: (_) => const RootGate()),
     );
   }
 }

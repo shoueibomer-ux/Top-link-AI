@@ -7,6 +7,7 @@ import 'api_config.dart';
 import 'app_notification.dart';
 import 'auth_models.dart';
 import 'category_suggestions.dart';
+import 'growth.dart';
 import 'messaging.dart';
 import 'provider_onboarding.dart';
 import 'provider_profile.dart';
@@ -79,6 +80,7 @@ class ApiClient {
     String description = '',
     String urgency = '',
     String location = '',
+    RequestAttribution? attribution,
   }) async {
     final response = await http.post(
       Uri.parse('$baseUrl/requests/'),
@@ -92,6 +94,8 @@ class ApiClient {
         'description': description,
         'urgency': urgency,
         'location': location,
+        if (attribution != null) 'source': attribution.source,
+        if (attribution != null && attribution.ref.isNotEmpty) 'source_ref': attribution.ref,
       }),
     );
     _throwForAuthProblems(response);
@@ -99,6 +103,48 @@ class ApiClient {
       throw ApiException(_firstErrorMessage(response.body) ?? 'Could not submit your request.');
     }
     return ServiceRequestSubmission.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
+  /// See growth.views.InviteView: the signed-in client's own invite link.
+  Future<InviteInfo> getInvite(String accessToken) async {
+    final response = await http.get(Uri.parse('$baseUrl/growth/invite/'), headers: _authHeaders(accessToken));
+    _throwForAuthProblems(response);
+    if (response.statusCode != 200) {
+      throw ApiException(_firstErrorMessage(response.body) ?? 'Could not load your invite link.');
+    }
+    return InviteInfo.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
+  /// See growth.views.InviteClaimView: records that this new account came through a friend's invite.
+  Future<void> claimInvite(String accessToken, String code, {int? providerId}) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/growth/invite/claim/'),
+      headers: _authHeaders(accessToken),
+      body: jsonEncode({'code': code, 'provider_id': ?providerId}),
+    );
+    _throwForAuthProblems(response);
+    if (response.statusCode != 201) {
+      throw InviteClaimRejected(_firstErrorMessage(response.body) ?? 'Could not use that invite code.');
+    }
+  }
+
+  /// See growth.views.ReminderPreferenceView: whether seasonal reminders are on.
+  Future<bool> getSeasonalReminders(String accessToken) async {
+    final response = await http.get(Uri.parse('$baseUrl/growth/reminders/'), headers: _authHeaders(accessToken));
+    _throwForAuthProblems(response);
+    if (response.statusCode != 200) throw ApiException('Could not load your reminder setting.');
+    return (jsonDecode(response.body) as Map<String, dynamic>)['seasonal_reminders'] as bool? ?? true;
+  }
+
+  Future<bool> setSeasonalReminders(String accessToken, bool on) async {
+    final response = await http.patch(
+      Uri.parse('$baseUrl/growth/reminders/'),
+      headers: _authHeaders(accessToken),
+      body: jsonEncode({'seasonal_reminders': on}),
+    );
+    _throwForAuthProblems(response);
+    if (response.statusCode != 200) throw ApiException('Could not save your reminder setting.');
+    return (jsonDecode(response.body) as Map<String, dynamic>)['seasonal_reminders'] as bool? ?? on;
   }
 
   /// See provider_search.views.ServiceRequestListView: "Your requests", for the

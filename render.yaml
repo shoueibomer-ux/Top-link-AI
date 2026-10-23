@@ -148,6 +148,9 @@ services:
         sync: false
       - key: ADMIN_ALERT_EMAIL
         sync: false
+      # The website's public address (https://..., no trailing slash), for links in emails. See the cron job.
+      - key: SITE_URL
+        sync: false
       - key: DJANGO_SUPERUSER_PASSWORD
         sync: false
       - key: DATABASE_URL
@@ -162,8 +165,9 @@ services:
 
   # Runs every 15 minutes (UTC, as all Render cron schedules are): reminds
   # providers who haven't replied after 30 minutes (only when SMS_ENABLED),
-  # expires stale offers, emails when a request has no YES after 2 hours, and
-  # sends the daily summary once after 14:00 UTC. See leads/jobs.py. It needs
+  # expires stale offers, emails when a request has no YES after 2 hours,
+  # sends the daily summary once after 14:00 UTC, and sends seasonal reminders
+  # to past clients (10:00-19:00 Edmonton time, when enabled). See leads/jobs.py. It needs
   # the same database and the same secrets as the web service, entered in this
   # service's own Environment tab (Render doesn't allow sync: false values in
   # shared environment groups). It never serves requests, so it gets its own
@@ -223,4 +227,18 @@ services:
       - key: DEFAULT_FROM_EMAIL
         sync: false
       - key: ADMIN_ALERT_EMAIL
+        sync: false
+      # Seasonal reminders to past clients (growth.jobs): off until SEASONAL_REMINDERS_ENABLED=True. Push needs
+      # the same FCM_SERVICE_ACCOUNT_JSON as the web service; email needs SITE_URL (the website's public
+      # address, for the request and unsubscribe links) and BUSINESS_MAILING_ADDRESS (CASL requires a mailing
+      # address in every commercial email). SEASONAL_REMINDERS_DAILY_CAP defaults to 150 a day.
+      - key: SEASONAL_REMINDERS_ENABLED
+        sync: false
+      - key: SEASONAL_REMINDERS_DAILY_CAP
+        sync: false
+      - key: SITE_URL
+        sync: false
+      - key: BUSINESS_MAILING_ADDRESS
+        sync: false
+      - key: FCM_SERVICE_ACCOUNT_JSON
         sync: false

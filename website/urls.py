@@ -17,6 +17,9 @@ urlpatterns = [
     path("provider-agreement/", views.provider_agreement, name="provider-agreement"),
     path("delete-account/", views.delete_account, name="delete-account"),
     path("services/<slug:slug>/", views.service_detail, name="service-detail"),
+    path("edmonton/", views.edmonton_index, name="edmonton"),
+    path("edmonton/<slug:neighbourhood>/", views.neighbourhood_hub, name="neighbourhood"),
+    path("edmonton/<slug:neighbourhood>/<slug:service>/", views.local_page, name="local-page"),
     path("robots.txt", views.robots_txt, name="robots"),
     path("sitemap.xml", views.sitemap_xml, name="sitemap"),
 ]

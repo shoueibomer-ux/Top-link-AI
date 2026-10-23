@@ -97,6 +97,18 @@ DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "").strip() or EMAIL_H
 # Where the 2-hour "no YES" alert and the daily summary are sent.
 ADMIN_ALERT_EMAIL = os.environ.get("ADMIN_ALERT_EMAIL", "").strip()
 
+# --- Growth (the growth app) -------------------------------------------------
+# The public address of the website, e.g. https://tabmatch.ca, for links in emails sent by the cron job, which
+# has no request to read the host from. Without it seasonal reminder emails are not sent (push still is).
+SITE_URL = (os.environ.get("SITE_URL", "").strip() or ("http://localhost:8000" if DEBUG else "")).rstrip("/")
+# Seasonal reminders (growth.jobs) are off until this is turned on, so deploying never starts emailing clients.
+SEASONAL_REMINDERS_ENABLED = _env_flag("SEASONAL_REMINDERS_ENABLED", False)
+# At most this many reminders a day, to stay well inside Gmail's sending limit next to the other emails.
+SEASONAL_REMINDERS_DAILY_CAP = int(os.environ.get("SEASONAL_REMINDERS_DAILY_CAP", "150"))
+# CASL: a commercial email must say who sent it and give a mailing address. Shown at the bottom of every
+# reminder email; reminder emails are not sent while it is empty.
+BUSINESS_MAILING_ADDRESS = os.environ.get("BUSINESS_MAILING_ADDRESS", "").strip()
+
 ALLOWED_HOSTS = [h.strip() for h in os.environ.get("DJANGO_ALLOWED_HOSTS", "").split(",") if h.strip()]
 
 # Render sets this for every service automatically (its *.onrender.com
@@ -125,6 +137,7 @@ INSTALLED_APPS = [
     "messaging",
     "reviews",
     "providers",
+    "growth",
     "website",
 ]
 

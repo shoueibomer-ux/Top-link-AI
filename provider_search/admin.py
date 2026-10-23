@@ -13,9 +13,9 @@ from .models import ProviderOnboarding, ServiceRequest, WaitlistedRequest
 class ServiceRequestAdmin(admin.ModelAdmin):
     list_display = (
         "id", "user", "device_id", "category", "city", "phone", "consent_given",
-        "urgency", "job_size", "job_complexity", "estimated_team_size", "status", "created_at", "offers_link",
+        "urgency", "job_size", "job_complexity", "estimated_team_size", "status", "source", "created_at", "offers_link",
     )
-    list_filter = ("category", "city", "consent_given", "urgency", "job_size", "job_complexity", "status")
+    list_filter = ("category", "city", "consent_given", "urgency", "job_size", "job_complexity", "status", "source")
     search_fields = ("device_id", "phone", "problem_description", "user__email")
     raw_id_fields = ("user",)
     date_hierarchy = "created_at"

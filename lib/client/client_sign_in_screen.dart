@@ -5,8 +5,10 @@ import 'dart:async';
 import '../api/api_client.dart';
 import '../messaging/push_service.dart';
 import '../app_colors.dart';
+import '../growth/growth_links.dart';
 import '../provider/auth_storage.dart';
 import '../provider/google_sign_in_service.dart';
+import '../provider/provider_session.dart';
 import '../provider/provider_widgets.dart';
 import '../widgets/app_logo.dart';
 
@@ -51,6 +53,8 @@ class _ClientSignInScreenState extends State<ClientSignInScreen> {
       final result = await widget.api.signInClientWithGoogle(idToken);
       await AuthStorage.save(access: result.tokens.access, refresh: result.tokens.refresh);
       unawaited(PushService.instance.register());
+      // A friend's invite opened before signing in is recorded now that there's an account to record it on.
+      unawaited(claimPendingInvite(AuthSession(api: widget.api)));
       if (!mounted) return;
       Navigator.of(context).pop(true);
       return;

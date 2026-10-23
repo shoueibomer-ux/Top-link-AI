@@ -8,7 +8,7 @@ What happens, and why the User row itself is kept:
 
   Removed outright   chat conversations and every message in them (and their photos in the private R2 bucket,
                      through a retry queue), push-notification tokens, saved providers, blocks, the chat-rules
-                     agreement, the link to their Google account, and request notifications.
+                     agreement, the link to their Google account, their invite link, and request notifications.
   Blanked            the name and email on the account, a client's request details (phone, description, where
                      the job is, device id), a provider's business name, phone, email, bio, cities, notes and
                      replies to reviews, and a provider's replies to a deleted client's review. The account can no
@@ -29,6 +29,7 @@ from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 
+from growth.models import InviteCode
 from leads.models import LeadOffer
 from messaging import photo_queue
 from messaging.models import (
@@ -103,6 +104,8 @@ def delete_account(user, via: str = AccountDeletion.VIA_APP) -> DeletionSummary:
         UserBlock.objects.filter(Q(blocker=user) | Q(blocked=user)).delete()
         Favorite.objects.filter(user=user).delete()
         GoogleIdentity.objects.filter(user=user).delete()
+        # Their invite link stops working; who signed up through it stays counted (InviteSignup keeps the code).
+        InviteCode.objects.filter(user=user).delete()
         # A provider's reply to their review can use their name: the reply goes, the review stays.
         Review.objects.filter(client=user).update(reply="", reply_at=None)
         # Free text they wrote when reporting something: the report stays, their words go.

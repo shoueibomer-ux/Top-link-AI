@@ -1,0 +1,18 @@
+{% extends "website/base.html" %}
+{% block content %}
+<section class="page-head"><div class="wrap">
+  <h1>Seasonal reminders</h1>
+</div></section>
+<section class="section"><div class="wrap narrow">
+  <div class="card">
+    {% if done %}
+    <h2>You're unsubscribed</h2>
+    <p>You won't get any more seasonal reminders from Tabmatch, by email or in the app. Messages about your own requests and chats are not affected. You can turn reminders back on in the app under Settings &gt; Seasonal reminders.</p>
+    {% else %}
+    <h2>Stop seasonal reminders?</h2>
+    <p>Tabmatch sends past clients a few reminders a year, like a furnace check before winter. Turn them off below; messages about your own requests and chats are not affected.</p>
+    <form method="post"><button class="btn btn-primary" type="submit">Unsubscribe from seasonal reminders</button></form>
+    {% endif %}
+  </div>
+</div></section>
+{% endblock %}

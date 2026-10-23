@@ -43,6 +43,7 @@ urlpatterns = [
     path("api/accounts/", include("accounts.urls")),
     path("api/provider/", include("providers.urls")),
     path("api/catalog/", include("catalog.urls")),
+    path("api/growth/", include("growth.urls")),
     path("api/", include("messaging.urls")),
     path("api/", include("reviews.urls")),
     path("api/", include("matching.urls")),
@@ -54,6 +55,8 @@ urlpatterns = [
     path("api/twilio/sms/", twilio_sms_webhook, name="twilio-sms-webhook"),
     path("api/notifications/", NotificationListView.as_view(), name="notification-list"),
     path("api/notifications/mark-read/", NotificationMarkReadView.as_view(), name="notification-mark-read"),
+    # Website pages behind growth links (/open/, /invite/, /reminders/).
+    path("", include("growth.web_urls")),
     # Marketing website — keep last so admin/ and api/ always take precedence.
     path("", include("website.urls")),
 ]

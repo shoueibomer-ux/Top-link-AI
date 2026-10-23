@@ -12,7 +12,7 @@ from urllib.parse import urldefrag, urlparse
 
 from django.contrib.staticfiles import finders
 
-SKIP_SCHEMES = ("mailto:", "tel:", "http://", "https://", "javascript:", "data:")
+SKIP_SCHEMES = ("mailto:", "tel:", "sms:", "tabmatch:", "http://", "https://", "javascript:", "data:")
 
 
 class _Collector(HTMLParser):
@@ -50,6 +50,8 @@ def crawl(client, start="/"):
             continue
         collector = _Collector()
         collector.feed(response.content.decode())
+        # Fetched with its query string (some pages need one, e.g. /open/request/?service=...), recorded by path.
+        path = urlparse(path).path
         pages[path] = collector
         ids_by_path[path] = collector.ids
         for tag, url in collector.links:
@@ -60,7 +62,7 @@ def crawl(client, start="/"):
             if not target:
                 continue
             if target.startswith("/") and not target.startswith("/static/"):
-                queue.append(target.split("?")[0])
+                queue.append(target)
 
     checked = 0
     for source, tag, url in edges:

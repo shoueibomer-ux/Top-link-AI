@@ -70,5 +70,20 @@
 		</array>
 		<key>UIStatusBarHidden</key>
 		<false/>
+		<!-- Links from the website, invites and reminder emails: tabmatch://open/request?... and
+		     tabmatch://open/invite?... (see lib/growth/growth_links.dart). -->
+		<key>FlutterDeepLinkingEnabled</key>
+		<true/>
+		<key>CFBundleURLTypes</key>
+		<array>
+			<dict>
+				<key>CFBundleURLName</key>
+				<string>tabmatch</string>
+				<key>CFBundleURLSchemes</key>
+				<array>
+					<string>tabmatch</string>
+				</array>
+			</dict>
+		</array>
 	</dict>
 </plist>

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../api/api_client.dart';
+import '../api/growth.dart';
 import '../api/service_request.dart';
 import '../app_colors.dart';
 import '../app_styles.dart';
@@ -26,9 +27,22 @@ import 'urgency_step.dart';
 class OnboardingScreen extends StatefulWidget {
   /// With [initialCategory] (e.g. picked from the Home screen's search bar),
   /// the flow starts at the urgency step with that category already chosen.
-  const OnboardingScreen({super.key, this.initialCategory, this.api, this.idTokenProvider});
+  const OnboardingScreen({
+    super.key,
+    this.initialCategory,
+    this.attribution,
+    this.initialDescription = '',
+    this.api,
+    this.idTokenProvider,
+  });
 
   final ServiceCategory? initialCategory;
+
+  /// Where the person came from (an SEO page, a seasonal reminder, an invite), sent with the request.
+  final RequestAttribution? attribution;
+
+  /// Text to start the description with, e.g. "Book again" naming the provider.
+  final String initialDescription;
 
   /// Tests pass a client backed by a fake HTTP layer and a fake Google token.
   final ApiClient? api;
@@ -44,7 +58,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   late final _apiClient = widget.api ?? ApiClient();
   late final _session = AuthSession(api: _apiClient);
   final _phoneController = TextEditingController();
-  final _descriptionController = TextEditingController();
+  late final _descriptionController = TextEditingController(text: widget.initialDescription);
 
   late int _step = widget.initialCategory == null ? 0 : 1;
   late ServiceCategory? _selectedCategory = widget.initialCategory;
@@ -124,6 +138,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               description: _descriptionController.text.trim(),
               urgency: urgency.apiValue,
               location: normalizeLocation(_location) ?? '',
+              attribution: widget.attribution,
             ),
           );
       ServiceRequestSubmission submission;
