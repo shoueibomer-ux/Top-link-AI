@@ -5,7 +5,9 @@ from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
 from django.views.decorators.http import require_GET
 
-from . import config, selectors
+from catalog.taxonomy import launched_slugs
+
+from . import config, local_pages, selectors
 from .content.icons import SEO_PAGE_ICONS
 from .content.pages import (
     HERO_CLUSTER_HOME,
@@ -15,6 +17,7 @@ from .content.pages import (
     PROVIDER_FEATURES,
     TRUST_POINTS,
 )
+from .content.neighbourhoods import NEIGHBOURHOODS
 from .content.seo_pages import SEO_PAGE_BY_SERVICE, SEO_PAGES
 
 _COMMON = {
@@ -115,9 +118,86 @@ def seo_page(request, slug):
             "page": page,
             "page_icon": SEO_PAGE_ICONS.get(slug),
             "related": related,
+            # Only a launched service can be requested; the others keep the plain get-the-app link.
+            "request_url": (
+                local_pages.request_url(page["service_slug"], slug)
+                if page["service_slug"] in launched_slugs()
+                else ""
+            ),
+            "local_links": (
+                [(local_pages.page_path(n["slug"], page["service_slug"]), n["name"]) for n in NEIGHBOURHOODS]
+                if page["service_slug"] in local_pages.live_service_slugs()
+                else []
+            ),
             "jsonld": [_jsonld(x) for x in jsonld],
         },
     )
+
+
+def local_page(request, neighbourhood, service):
+    """/edmonton/<neighbourhood>/<service>/ — see website.local_pages."""
+    page = local_pages.build_page(neighbourhood, service)
+    if page is None:
+        raise Http404
+    n = page["neighbourhood"]
+    url = request.build_absolute_uri()
+    jsonld = [
+        {
+            "@context": "https://schema.org",
+            "@type": "Service",
+            "name": page["h1"],
+            "serviceType": page["service"]["label"],
+            "description": page["description"],
+            "url": url,
+            "areaServed": {
+                "@type": "Place",
+                "name": f"{n['name']}, {config.CITY}",
+                "containedInPlace": {"@type": "City", "name": config.CITY, "address": {
+                    "@type": "PostalAddress", "addressLocality": config.CITY, "addressRegion": "AB", "addressCountry": "CA",
+                }},
+            },
+            "provider": {"@type": "Organization", "name": config.SITE_NAME, "url": request.build_absolute_uri("/")},
+        },
+        {
+            "@context": "https://schema.org",
+            "@type": "FAQPage",
+            "mainEntity": [
+                {"@type": "Question", "name": q, "acceptedAnswer": {"@type": "Answer", "text": a}}
+                for q, a in page["faqs"]
+            ],
+        },
+        {
+            "@context": "https://schema.org",
+            "@type": "BreadcrumbList",
+            "itemListElement": [
+                {"@type": "ListItem", "position": 1, "name": "Home", "item": request.build_absolute_uri("/")},
+                {"@type": "ListItem", "position": 2, "name": config.CITY, "item": request.build_absolute_uri("/edmonton/")},
+                {"@type": "ListItem", "position": 3, "name": n["name"],
+                 "item": request.build_absolute_uri(local_pages.hub_path(n["slug"]))},
+                {"@type": "ListItem", "position": 4, "name": page["service"]["label"], "item": url},
+            ],
+        },
+    ]
+    return render(
+        request,
+        "website/local_page.html",
+        {**_COMMON, **_meta(page["title"], page["description"]), "page": page, "jsonld": [_jsonld(x) for x in jsonld]},
+    )
+
+
+def neighbourhood_hub(request, neighbourhood):
+    hub = local_pages.build_hub(neighbourhood)
+    if hub is None:
+        raise Http404
+    return render(request, "website/neighbourhood_hub.html", {**_meta(hub["title"], hub["description"]), "hub": hub})
+
+
+def edmonton_index(request):
+    meta = _meta(
+        "Edmonton Neighbourhoods | Tabmatch",
+        "Find local plumbers, electricians, furnace technicians, painters and more in your Edmonton neighbourhood with Tabmatch.",
+    )
+    return render(request, "website/edmonton_index.html", {**meta, "groups": local_pages.build_index()})
 
 
 def service_detail(request, slug):
@@ -185,6 +265,11 @@ def robots_txt(request):
         "Allow: /",
         "Disallow: /admin/",
         "Disallow: /api/",
+        # Links into the app (request, invite) and email-only pages: nothing to index there.
+        "Disallow: /open/",
+        "Disallow: /invite/",
+        "Disallow: /reminders/",
+        "Allow: /edmonton/",
         f"Sitemap: {request.build_absolute_uri('/sitemap.xml')}",
         "",
     ]
@@ -195,7 +280,7 @@ def robots_txt(request):
 def sitemap_xml(request):
     paths = ["/", "/sectors/", "/providers/", "/how-it-works/", "/contact/", "/delete-account/"] + [
         f"/{slug}/" for slug in SEO_PAGES
-    ]
+    ] + local_pages.all_paths()
     urls = "".join(
         f"<url><loc>{escape(request.build_absolute_uri(p))}</loc></url>" for p in paths
     )

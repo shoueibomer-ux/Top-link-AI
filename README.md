@@ -210,6 +210,31 @@ here needs a key or any Render setting; the migration only adds tables.
   hide / restore / remove-reply actions. A hidden review disappears from every page and no longer counts
   toward the rating; its author is told it was removed.
 
+### Growth: neighbourhood pages, seasonal reminders, invites
+
+All in the `growth` app plus `website/local_pages.py`; no paid service. The admin's **Growth dashboard**
+(under *Growth*) shows requests per week by source (SEO page, seasonal reminder, invite, direct) and how many
+were accepted and completed. Each request's `source` / `source_ref` is set by `growth.attribution`.
+
+- **Neighbourhood pages:** `/edmonton/<neighbourhood>/<service>/` for every launched service with copy in
+  `website/content/local_services.py` and every neighbourhood in `website/content/neighbourhoods.py` (30 to start),
+  plus `/edmonton/` and a hub per neighbourhood. They are built from data (housing era, traits, garage and basement
+  type, access notes), listed in `sitemap.xml`, and a test fails if two pages for a service get too alike. Add a
+  neighbourhood or a service's copy there and the pages appear; un-launching a service takes its pages down.
+- **"Request this service"** goes to `/open/request/?service=...&src=seo&ref=...`, which offers
+  `tabmatch://open/request?...` (the app opens the request flow with the service chosen) or the get-the-app page.
+  Someone who installs the app first and opens it later is counted as direct.
+- **Seasonal reminders** (`growth/campaigns.py`, sent by the 15-minute cron job): one push and one email per
+  in-season campaign to past clients of that service (a completed job in the last 2 years, or a request in the
+  last 6 months), at most one a month, 10:00-19:00 Edmonton time, logged as *Reminder sends*. Off until the cron
+  service has `SEASONAL_REMINDERS_ENABLED=True`; emails also need `SITE_URL` and `BUSINESS_MAILING_ADDRESS` (CASL
+  requires a mailing address), and push needs `FCM_SERVICE_ACCOUNT_JSON` on the cron service. Clients turn them off
+  in Settings or with the unsubscribe link (one-click unsubscribe headers included).
+- **Invites:** every client has a link (`/invite/<code>/`, Settings > *Invite friends*). After a completed,
+  reviewed job, History offers *Share this provider* (WhatsApp, text, copy link: the invite link naming the
+  provider) and *Book again*. A new account (30 days or less) that opened an invite link, or typed the code in
+  Settings, is recorded as an *Invite sign-up*, and its first request counts for that invite.
+
 ### Account deletion and the legal pages
 
 - **In the app:** *Delete my account* is in Settings / the Profile tab for clients, and in the provider's Profile

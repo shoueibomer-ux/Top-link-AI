@@ -1,0 +1,14 @@
+{% extends "website/base.html" %}
+{% block content %}
+<section class="page-head"><div class="wrap">
+  <nav class="crumbs" aria-label="Breadcrumb"><a href="{% url 'website:home' %}">Home</a> / <span>{{ site.city }}</span></nav>
+  <h1>Local services across {{ site.city }}</h1>
+  <p class="lead-dark">Choose your neighbourhood to see the services Tabmatch offers there.</p>
+</div></section>
+<section class="section"><div class="wrap">
+  {% for group in groups %}
+  <h2>{{ group.label|capfirst }}</h2>
+  <ul class="chips">{% for href, name in group.links %}<li><a href="{{ href }}">{{ name }}</a></li>{% endfor %}</ul>
+  {% endfor %}
+</div></section>
+{% endblock %}

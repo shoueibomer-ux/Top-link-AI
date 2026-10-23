@@ -5,6 +5,8 @@ import '../api/auth_models.dart';
 import '../app_colors.dart';
 import '../account/delete_account.dart';
 import '../app_styles.dart';
+import '../growth/growth_links.dart';
+import '../growth/share_provider.dart';
 import '../legal/legal_pages.dart';
 import '../onboarding/onboarding_screen.dart';
 import '../messaging/push_service.dart';
@@ -51,6 +53,10 @@ class _SettingsBodyState extends State<SettingsBody> {
   bool _notificationsBusy = false;
   String _language = 'English';
 
+  /// Seasonal reminders (clients only): null until loaded, or when it couldn't be.
+  bool? _seasonalReminders;
+  bool _seasonalBusy = false;
+
   /// Who is signed in, for the card at the top: null until loaded or when nobody is.
   AccountProfile? _account;
   bool _accountLoaded = false;
@@ -87,6 +93,69 @@ class _SettingsBodyState extends State<SettingsBody> {
         _accountLoaded = true;
       });
     }
+    if (account?.role == 'customer') await _loadSeasonalReminders();
+  }
+
+  bool get _isClient => _account?.role == 'customer';
+
+  Future<void> _loadSeasonalReminders() async {
+    try {
+      final session = AuthSession(api: widget.api);
+      final on = await session.authorized(session.api.getSeasonalReminders);
+      if (mounted) setState(() => _seasonalReminders = on);
+    } catch (_) {
+      // The switch stays hidden.
+    }
+  }
+
+  Future<void> _setSeasonalReminders(bool wanted) async {
+    if (_seasonalBusy) return;
+    setState(() => _seasonalBusy = true);
+    try {
+      final session = AuthSession(api: widget.api);
+      final on = await session.authorized((token) => session.api.setSeasonalReminders(token, wanted));
+      if (mounted) setState(() => _seasonalReminders = on);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not save that. Try again.')));
+      }
+    }
+    if (mounted) setState(() => _seasonalBusy = false);
+  }
+
+  Future<void> _inviteFriends() => showInviteFriendsSheet(context, session: AuthSession(api: widget.api));
+
+  /// A friend's invite code, typed in. Recorded straight away (the person is signed in to see this).
+  Future<void> _enterInviteCode() async {
+    final controller = TextEditingController();
+    final code = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Invite code'),
+        content: TextField(
+          key: const Key('invite-code-field'),
+          controller: controller,
+          autofocus: true,
+          textCapitalization: TextCapitalization.characters,
+          decoration: const InputDecoration(hintText: "Your friend's code"),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(dialogContext).pop(), child: const Text('Cancel')),
+          TextButton(
+            key: const Key('invite-code-submit'),
+            onPressed: () => Navigator.of(dialogContext).pop(controller.text.trim()),
+            child: const Text('Use code'),
+          ),
+        ],
+      ),
+    );
+    if (code == null || code.isEmpty || !mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    await PendingInvite.save(code.toUpperCase());
+    final recorded = await claimPendingInvite(AuthSession(api: widget.api));
+    messenger.showSnackBar(SnackBar(
+      content: Text(recorded ? "Thanks! Your friend's invite is recorded." : 'That code could not be used.'),
+    ));
   }
 
   Future<void> _setNotifications(bool wanted) async {
@@ -178,6 +247,15 @@ class _SettingsBodyState extends State<SettingsBody> {
               value: _notificationsEnabled,
               onChanged: _setNotifications,
             ),
+            if (_isClient && _seasonalReminders != null)
+              _SettingsSwitchTile(
+                key: const Key('seasonal-reminders'),
+                icon: Icons.event_repeat_outlined,
+                title: 'Seasonal reminders',
+                subtitle: 'A few tips a year, like a furnace check before winter',
+                value: _seasonalReminders!,
+                onChanged: _setSeasonalReminders,
+              ),
             _SettingsTile(
               icon: Icons.language_outlined,
               title: 'Language',
@@ -186,6 +264,25 @@ class _SettingsBodyState extends State<SettingsBody> {
             ),
           ],
         ),
+        if (_isClient) ...[
+          const _SectionHeader('Invite'),
+          _SettingsCard(
+            children: [
+              _SettingsTile(
+                key: const Key('invite-friends'),
+                icon: Icons.card_giftcard_outlined,
+                title: 'Invite friends',
+                onTap: _inviteFriends,
+              ),
+              _SettingsTile(
+                key: const Key('enter-invite-code'),
+                icon: Icons.confirmation_number_outlined,
+                title: 'I have an invite code',
+                onTap: _enterInviteCode,
+              ),
+            ],
+          ),
+        ],
         const _SectionHeader('Legal'),
         _SettingsCard(
           children: [
@@ -380,14 +477,17 @@ class _SettingsTile extends StatelessWidget {
 
 class _SettingsSwitchTile extends StatelessWidget {
   const _SettingsSwitchTile({
+    super.key,
     required this.icon,
     required this.title,
+    this.subtitle,
     required this.value,
     required this.onChanged,
   });
 
   final IconData icon;
   final String title;
+  final String? subtitle;
   final bool value;
   final ValueChanged<bool> onChanged;
 
@@ -397,6 +497,7 @@ class _SettingsSwitchTile extends StatelessWidget {
       contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
       leading: Icon(icon, color: AppColors.navy),
       title: Text(title, style: const TextStyle(color: AppColors.navy, fontWeight: FontWeight.w500)),
+      subtitle: subtitle == null ? null : Text(subtitle!, style: TextStyle(fontSize: 12, color: AppColors.mutedText)),
       trailing: Switch(
         value: value,
         activeThumbColor: AppColors.turquoise,

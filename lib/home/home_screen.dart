@@ -6,6 +6,7 @@ import '../app_colors.dart';
 import '../app_styles.dart';
 import '../chat/chat_screen.dart';
 import '../client/client_sign_in_screen.dart';
+import '../growth/share_provider.dart';
 import '../messaging/conversation_screen.dart';
 import '../messaging/push_service.dart';
 import '../onboarding/onboarding_screen.dart';
@@ -277,6 +278,19 @@ class _HistoryTabState extends State<HistoryTab> {
     await _load();
   }
 
+  /// A new request for the same service, with the provider named so it can go back to them.
+  Future<void> _bookAgain(ServiceRequestRecord request, AcceptedOffer offer) async {
+    await Navigator.of(context).push<void>(MaterialPageRoute(
+      builder: (_) => OnboardingScreen(
+        api: _apiClient,
+        idTokenProvider: widget.idTokenProvider,
+        initialCategory: findCategoryBySlug(request.category),
+        initialDescription: "I'd like to book ${offer.providerName} again.",
+      ),
+    ));
+    if (mounted) _load();
+  }
+
   Future<void> _load() async {
     if (mounted) setState(() => _state = _HistoryState.loading);
     try {
@@ -450,6 +464,14 @@ class _HistoryTabState extends State<HistoryTab> {
                     onMessage: _openChat,
                     onOpenProvider: _openProvider,
                     onReview: _review,
+                    onShare: (offer) => showShareProviderSheet(
+                      context,
+                      session: _session,
+                      providerId: offer.providerId,
+                      providerName: offer.providerName,
+                      serviceLabel: categoryLabel(request.category),
+                    ),
+                    onBookAgain: (offer) => _bookAgain(request, offer),
                     unreadByOffer: _unreadByOffer,
                   ),
                   const SizedBox(height: 14),
@@ -478,10 +500,16 @@ class ServiceRequestCard extends StatelessWidget {
     this.onMessage,
     this.onOpenProvider,
     this.onReview,
+    this.onShare,
+    this.onBookAgain,
     this.unreadByOffer = const {},
   });
 
   final ServiceRequestRecord request;
+
+  /// "Share this provider" and "Book again": offered once the job is complete and the client has reviewed it.
+  final ValueChanged<AcceptedOffer>? onShare;
+  final ValueChanged<AcceptedOffer>? onBookAgain;
 
   /// Called when the client taps "Message" next to a provider who accepted.
   final ValueChanged<AcceptedOffer>? onMessage;
@@ -652,6 +680,25 @@ class ServiceRequestCard extends StatelessWidget {
                               ),
                           ]),
                         ),
+                      if (offer.jobCompleted && offer.review != null && (onShare != null || onBookAgain != null))
+                        Wrap(key: Key('after-job-${offer.offerId}'), spacing: 4, children: [
+                          if (onShare != null)
+                            TextButton.icon(
+                              key: Key('share-provider-${offer.offerId}'),
+                              onPressed: () => onShare!(offer),
+                              style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 8), minimumSize: const Size(0, 32), tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+                              icon: const Icon(Icons.share_outlined, size: 16, color: AppColors.turquoise),
+                              label: const Text('Share this provider', style: TextStyle(fontSize: 12, color: AppColors.turquoise, fontWeight: FontWeight.w600)),
+                            ),
+                          if (onBookAgain != null)
+                            TextButton.icon(
+                              key: Key('book-again-${offer.offerId}'),
+                              onPressed: () => onBookAgain!(offer),
+                              style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 8), minimumSize: const Size(0, 32), tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+                              icon: const Icon(Icons.replay, size: 16, color: AppColors.turquoise),
+                              label: const Text('Book again', style: TextStyle(fontSize: 12, color: AppColors.turquoise, fontWeight: FontWeight.w600)),
+                            ),
+                        ]),
                     ],
                   ),
                 ],

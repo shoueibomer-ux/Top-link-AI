@@ -170,6 +170,23 @@ class ServiceRequest(models.Model):
     urgency = models.CharField(max_length=20, choices=URGENCY_CHOICES, blank=True)
 
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_NEW)
+
+    # Where the request came from, for the growth dashboard (see growth.attribution): an SEO landing page, a
+    # seasonal reminder, a friend's invite, or none of those ("direct"). `source_ref` says which one: the
+    # neighbourhood or SEO page, the campaign, or the invite code.
+    SOURCE_DIRECT = "direct"
+    SOURCE_SEO = "seo"
+    SOURCE_SEASONAL = "seasonal"
+    SOURCE_INVITE = "invite"
+    SOURCE_CHOICES = [
+        (SOURCE_DIRECT, "Direct"),
+        (SOURCE_SEO, "SEO page"),
+        (SOURCE_SEASONAL, "Seasonal reminder"),
+        (SOURCE_INVITE, "Invite"),
+    ]
+    source = models.CharField(max_length=20, choices=SOURCE_CHOICES, default=SOURCE_DIRECT, db_index=True)
+    source_ref = models.CharField(max_length=120, blank=True)
+
     # Set once the "no YES after 2 hours" email has gone out for this request
     # (see leads.jobs), so it is only sent once.
     no_yes_alert_sent_at = models.DateTimeField(null=True, blank=True)

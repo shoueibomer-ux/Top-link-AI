@@ -1,0 +1,17 @@
+{% extends "website/base.html" %}
+{% load website_tags %}
+{% block content %}
+<section class="page-head"><div class="wrap">
+  <nav class="crumbs" aria-label="Breadcrumb"><a href="{% url 'website:home' %}">Home</a> / <a href="{% url 'website:edmonton' %}">{{ site.city }}</a> / <span>{{ hub.neighbourhood.name }}</span></nav>
+  <h1>Home services in {{ hub.neighbourhood.name }}, {{ site.city }}</h1>
+  <p class="lead-dark">{{ hub.neighbourhood.blurb }} {{ hub.neighbourhood.homes }}</p>
+</div></section>
+<section class="section"><div class="wrap">
+  <h2>Services in {{ hub.neighbourhood.name }}</h2>
+  <ul class="chips chips-lg">{% for href, name, slug in hub.services %}<li><a href="{{ href }}">{% service_icon slug "chip-icon" %}{{ name }}</a></li>{% endfor %}</ul>
+  {% if hub.nearby_links %}
+  <h2>Other neighbourhoods in {{ hub.area }}</h2>
+  <ul class="chips">{% for href, name in hub.nearby_links %}<li><a href="{{ href }}">{{ name }}</a></li>{% endfor %}</ul>
+  {% endif %}
+</div></section>
+{% endblock %}

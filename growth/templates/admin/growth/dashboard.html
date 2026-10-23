@@ -1,0 +1,54 @@
+{% extends "admin/base_site.html" %}
+{% block extrastyle %}{{ block.super }}
+<style>
+  .growth-table { border-collapse: collapse; margin: 1em 0 2em; }
+  .growth-table th, .growth-table td { padding: 6px 10px; border-bottom: 1px solid var(--hairline-color); text-align: right; vertical-align: top; }
+  .growth-table th:first-child, .growth-table td:first-child { text-align: left; white-space: nowrap; }
+  .growth-table .n { font-weight: 600; font-size: 1.05em; }
+  .growth-table .rate { color: var(--body-quiet-color); font-size: .9em; white-space: nowrap; }
+  .growth-table tfoot td { font-weight: 600; border-top: 2px solid var(--hairline-color); }
+  .growth-weeks a { margin-right: .8em; }
+</style>
+{% endblock %}
+{% block breadcrumbs %}<div class="breadcrumbs"><a href="{% url 'admin:index' %}">Home</a> &rsaquo; Growth dashboard</div>{% endblock %}
+{% block content %}
+<div id="content-main">
+  <p class="growth-weeks">Show the last:
+    {% for w in week_choices %}{% if w == report.weeks %}<strong>{{ w }} weeks</strong>{% else %}<a href="?weeks={{ w }}">{{ w }} weeks</a>{% endif %}{% endfor %}
+  </p>
+  <p>Requests created each week (Monday to Sunday, Edmonton time) by where they came from, with how many of them got
+    an accepted offer and how many were marked completed so far. Recent weeks keep converting as jobs get done.</p>
+
+  <table class="growth-table">
+    <thead>
+      <tr><th>Week of</th>{% for c in report.columns %}<th>{{ c }}</th>{% endfor %}<th>Invite sign-ups</th><th>Reminders sent</th><th>Reminder opt-outs</th></tr>
+    </thead>
+    <tbody>
+      {% for row in report.rows %}
+      <tr>
+        <td>{{ row.week|date:"M j, Y" }}</td>
+        {% for cell in row.cells %}{% include "admin/growth/_cell.html" %}{% endfor %}
+        <td>{{ row.invite_signups }}</td><td>{{ row.reminders_sent }}</td><td>{{ row.reminder_opt_outs }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr>
+        <td>All {{ report.weeks }} weeks</td>
+        {% for cell in report.totals %}{% include "admin/growth/_cell.html" %}{% endfor %}
+        <td>{{ report.totals_extra.invite_signups }}</td><td>{{ report.totals_extra.reminders_sent }}</td><td>{{ report.totals_extra.reminder_opt_outs }}</td>
+      </tr>
+    </tfoot>
+  </table>
+
+  {% if report.top_refs %}
+  <h2>Top sources in this period</h2>
+  {% for group in report.top_refs %}
+  <h3>{{ group.label }}</h3>
+  <table class="growth-table"><tbody>
+    {% for ref, n in group.refs %}<tr><td>{{ ref }}</td><td>{{ n }} request{{ n|pluralize }}</td></tr>{% endfor %}
+  </tbody></table>
+  {% endfor %}
+  {% endif %}
+</div>
+{% endblock %}

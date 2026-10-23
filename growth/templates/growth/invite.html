@@ -1,0 +1,16 @@
+{% extends "website/base.html" %}
+{% block content %}
+<section class="page-head"><div class="wrap">
+  <h1>You're invited to Tabmatch</h1>
+  <p class="lead-dark">{% if provider %}Your friend recommends {{ provider.business_name }} on Tabmatch. {% endif %}Tabmatch sends your request to approved local service providers in {{ site.city }} and shows you who can take it.</p>
+</div></section>
+<section class="section"><div class="wrap narrow">
+  <div class="card">
+    <h2>Have the app?</h2>
+    <p><a class="btn btn-primary btn-lg" id="open-app" href="{{ app_link }}">Open in the Tabmatch app</a></p>
+    <h2>New to Tabmatch?</h2>
+    <p>Get the app and sign in. When you're asked for an invite code, or in Settings &gt; Invite code, enter <strong class="invite-code">{{ code }}</strong>.</p>
+    <p><a class="btn btn-secondary" href="{{ get_app_url }}">Get the Tabmatch app</a></p>
+  </div>
+</div></section>
+{% endblock %}

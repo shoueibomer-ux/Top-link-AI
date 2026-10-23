@@ -13,7 +13,7 @@
   </div>
   <p class="lead">{{ page.intro }}</p>
   <div class="btn-row">
-    <a class="btn btn-primary btn-lg" href="{{ site.app_url }}{% if page.service_slug %}?service={{ page.service_slug }}{% endif %}">Request this service</a>
+    <a class="btn btn-primary btn-lg" href="{% if request_url %}{{ request_url }}{% else %}{{ site.app_url }}{% endif %}">Request this service</a>
     <a class="btn btn-ghost-light btn-lg" href="{% url 'website:sectors' %}">Browse all services</a>
   </div>
 </div></section>
@@ -33,6 +33,13 @@
 <section class="section alt"><div class="wrap">
   <h2>Related services</h2>
   <ul class="chips chips-lg">{% for s in related %}<li><a href="/services/{{ s.slug }}/">{% service_icon s.slug "chip-icon" %}{{ s.name }}</a></li>{% endfor %}</ul>
+</div></section>
+{% endif %}
+
+{% if local_links %}
+<section class="section"><div class="wrap">
+  <h2>{{ page.breadcrumb }} by neighbourhood</h2>
+  <ul class="chips">{% for href, name in local_links %}<li><a href="{{ href }}">{{ name }}</a></li>{% endfor %}</ul>
 </div></section>
 {% endif %}
 

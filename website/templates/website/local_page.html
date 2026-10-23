@@ -1,0 +1,64 @@
+{% extends "website/base.html" %}
+{% load website_tags %}
+{% block head %}{% for block in jsonld %}<script type="application/ld+json">{{ block|safe }}</script>{% endfor %}{% endblock %}
+{% block content %}
+<section class="hero hero-sm"><div class="wrap hero-inner">
+  <nav class="crumbs" aria-label="Breadcrumb"><a href="{% url 'website:home' %}">Home</a> / <a href="{% url 'website:edmonton' %}">{{ site.city }}</a> / <a href="{% url 'website:neighbourhood' page.neighbourhood.slug %}">{{ page.neighbourhood.name }}</a> / <span>{{ page.service.label }}</span></nav>
+  <div class="title-row">
+    <span class="icon-tile icon-tile-hero">{% service_icon page.service_slug %}</span>
+    <div>
+      <span class="cat-chip">{{ page.neighbourhood.name }}, {{ site.city }}</span>
+      <h1>{{ page.h1 }}</h1>
+    </div>
+  </div>
+  {% for p in page.intro %}<p class="lead">{{ p }}</p>{% endfor %}
+  <div class="btn-row">
+    <a class="btn btn-primary btn-lg" href="{{ page.request_url }}">Request this service</a>
+    <a class="btn btn-ghost-light btn-lg" href="{% url 'website:neighbourhood' page.neighbourhood.slug %}">More services in {{ page.neighbourhood.name }}</a>
+  </div>
+</div></section>
+
+<section class="section"><div class="wrap two-col">
+  <div>
+    <h2>{{ page.service.label }} for homes in {{ page.neighbourhood.name }}</h2>
+    {% for p in page.housing %}<p>{{ p }}</p>{% endfor %}
+  </div>
+  <div>
+    <h2>Common {{ page.service.label|lower }} jobs</h2>
+    <ul class="ticks">{% for j in page.jobs %}<li>{{ j }}</li>{% endfor %}</ul>
+    <h3>Seasonal tip for {{ site.city }}</h3>
+    <p>{{ page.season }}</p>
+  </div>
+</div></section>
+
+<section class="section alt"><div class="wrap">
+  <h2>How Tabmatch works</h2>
+  {% include "website/partials/how_it_works.html" %}
+</div></section>
+
+<section class="section"><div class="wrap narrow">
+  <h2>Frequently asked questions</h2>
+  {% for q, a in page.faqs %}
+  <details class="faq"><summary>{{ q }}</summary><p>{{ a }}</p></details>
+  {% endfor %}
+</div></section>
+
+<section class="section alt"><div class="wrap">
+  {% if page.nearby_links %}
+  <h2>{{ page.service.label }} near {{ page.neighbourhood.name }}</h2>
+  <ul class="chips chips-lg">{% for href, name in page.nearby_links %}<li><a href="{{ href }}">{{ name }}</a></li>{% endfor %}</ul>
+  {% endif %}
+  {% if page.other_services %}
+  <h2>Other services in {{ page.neighbourhood.name }}</h2>
+  <ul class="chips chips-lg">{% for href, name in page.other_services %}<li><a href="{{ href }}">{{ name }}</a></li>{% endfor %}</ul>
+  {% endif %}
+</div></section>
+
+<section class="cta-band">
+  <div class="wrap">
+    <h2>Need a {{ page.service.noun }} in {{ page.neighbourhood.name }}?</h2>
+    <p>Send your request in the Tabmatch app and see which local providers accept it.</p>
+    <div class="btn-row"><a class="btn btn-primary" href="{{ page.request_url }}">Request this service</a></div>
+  </div>
+</section>
+{% endblock %}

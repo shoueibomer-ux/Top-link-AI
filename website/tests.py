@@ -1,9 +1,15 @@
+import itertools
+import json
+import re
+
 from django.test import TestCase, override_settings
 
 from catalog.models import Category, Service
 from matching.matching_engine import CATEGORY_TAXONOMY
 
-from . import selectors
+from . import local_pages, selectors
+from .content.local_services import LOCAL_SERVICES
+from .content.neighbourhoods import ERAS, GROUPS, NEIGHBOURHOODS
 from .content.seo_pages import SEO_PAGES
 from .models import Sector, SectorItem
 
@@ -502,3 +508,132 @@ class DeleteAccountPageTests(TestCase):
         self.assertIn("/delete-account/", sitemap)
         for draft in ("/privacy/", "/terms/", "/provider-agreement/"):
             self.assertNotIn(draft, sitemap)
+
+
+class NeighbourhoodPageTests(TestCase):
+    """The generated /edmonton/<neighbourhood>/<service>/ pages (website.local_pages)."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.services = local_pages.live_service_slugs()
+        cls.pages = [local_pages.build_page(n["slug"], s) for n in NEIGHBOURHOODS for s in cls.services]
+
+    def test_thirty_neighbourhoods_times_every_launched_service(self):
+        self.assertEqual(len(NEIGHBOURHOODS), 30)
+        launched = set(Service.objects.filter(is_launched=True).values_list("slug", flat=True))
+        self.assertEqual(set(self.services), launched & set(LOCAL_SERVICES))
+        self.assertIn("plumbing", self.services)
+        self.assertEqual(len(self.pages), 30 * len(self.services))
+
+    def test_example_page_renders_with_everything_it_needs(self):
+        response = self.client.get("/edmonton/windermere/plumbing/")
+        self.assertEqual(response.status_code, 200)
+        html = response.content.decode()
+        page = local_pages.build_page("windermere", "plumbing")
+        self.assertIn(f"<title>{page['title']}</title>", html)
+        self.assertIn(f'<meta name="description" content="{page["description"]}">', html)
+        self.assertIn(f"<h1>{page['h1']}</h1>", html)
+        self.assertIn('content="index,follow"', html)
+        self.assertIn("Frequently asked questions", html)
+        self.assertIn('href="/open/request/?service=plumbing&amp;src=seo&amp;ref=windermere"', html)
+        self.assertIn("Request this service", html)
+        blocks = [json.loads(b) for b in re.findall(r'<script type="application/ld\+json">(.*?)</script>', html, re.S)]
+        self.assertEqual({b["@type"] for b in blocks}, {"Service", "FAQPage", "BreadcrumbList"})
+        service = next(b for b in blocks if b["@type"] == "Service")
+        self.assertEqual(service["areaServed"]["name"], "Windermere, Edmonton")
+        self.assertEqual(service["areaServed"]["containedInPlace"]["name"], "Edmonton")
+        self.assertEqual(service["provider"]["name"], "Tabmatch")
+        faq = next(b for b in blocks if b["@type"] == "FAQPage")
+        self.assertEqual(len(faq["mainEntity"]), len(page["faqs"]))
+
+    def test_trailing_slash_redirect(self):
+        self.assertEqual(self.client.get("/edmonton/windermere/plumbing").status_code, 301)
+
+    def test_every_page_renders(self):
+        for page in self.pages:
+            with self.subTest(page["path"]):
+                self.assertEqual(self.client.get(page["path"]).status_code, 200)
+
+    def test_titles_descriptions_and_h1s_are_unique_and_fit(self):
+        for key, limit in (("title", 60), ("description", 160), ("h1", None)):
+            values = [p[key] for p in self.pages]
+            self.assertEqual(len(values), len(set(values)), key)
+            if limit:
+                self.assertLessEqual(max(map(len, values)), limit, key)
+
+    def test_pages_are_not_near_duplicates(self):
+        """Pages for the same service in two neighbourhoods share the service's copy, but each has to say
+        enough of its own: no two may share more than 65% of their three-word phrases."""
+
+        def shingles(text):
+            words = re.findall(r"[a-z0-9']+", text.lower())
+            return {tuple(words[i:i + 3]) for i in range(len(words) - 2)}
+
+        for service in self.services:
+            texts = {p["path"]: shingles(local_pages.page_text(p)) for p in self.pages if p["service_slug"] == service}
+            worst = max(
+                (len(a & b) / len(a | b), x, y)
+                for (x, a), (y, b) in itertools.combinations(texts.items(), 2)
+            )
+            with self.subTest(service):
+                self.assertLess(worst[0], 0.65, worst)
+
+    def test_every_neighbourhood_has_its_own_words(self):
+        for key in ("blurb", "homes", "access"):
+            values = [n[key] for n in NEIGHBOURHOODS]
+            self.assertEqual(len(values), len(set(values)), key)
+        for n in NEIGHBOURHOODS:
+            self.assertIn(n["era"], ERAS)
+            self.assertIn(n["group"], GROUPS)
+            self.assertIn(n["garage"], ("detached", "attached", ""))
+            self.assertIn(n["basement"], ("walkout", "unfinished", "finished", "suites", ""))
+
+    def test_every_service_has_copy_for_every_trait(self):
+        for slug, service in LOCAL_SERVICES.items():
+            with self.subTest(slug):
+                self.assertEqual(set(service["era"]), set(ERAS))
+                self.assertEqual(set(service["flags"]), {"river_valley", "lake", "infill", "university"})
+                self.assertEqual(set(service["garage"]), {"detached", "attached"})
+                self.assertEqual(set(service["basement"]), {"walkout", "unfinished", "finished", "suites"})
+
+    def test_unknown_and_unlaunched_pages_are_404_and_left_out_of_the_sitemap(self):
+        self.assertEqual(self.client.get("/edmonton/atlantis/plumbing/").status_code, 404)
+        self.assertEqual(self.client.get("/edmonton/windermere/cleaning-services/").status_code, 404)
+        Service.objects.filter(slug="painting").update(is_launched=False)
+        self.assertEqual(self.client.get("/edmonton/windermere/painting/").status_code, 404)
+        sitemap = self.client.get("/sitemap.xml").content.decode()
+        self.assertNotIn("/painting/", sitemap)
+        self.assertIn("/edmonton/windermere/plumbing/", sitemap)
+
+    def test_sitemap_and_robots(self):
+        sitemap = self.client.get("/sitemap.xml").content.decode()
+        for page in self.pages:
+            self.assertIn(f"{page['path']}</loc>", sitemap)
+        self.assertIn("/edmonton/</loc>", sitemap)
+        self.assertIn("/edmonton/glenora/</loc>", sitemap)
+        self.assertNotIn("/open/", sitemap)
+        robots = self.client.get("/robots.txt").content.decode()
+        self.assertIn("Allow: /edmonton/", robots)
+        self.assertIn("Disallow: /admin/", robots)
+
+    def test_hub_and_index_pages(self):
+        html = self.client.get("/edmonton/").content.decode()
+        for n in NEIGHBOURHOODS:
+            self.assertIn(f'href="/edmonton/{n["slug"]}/"', html)
+        hub = self.client.get("/edmonton/glenora/")
+        self.assertEqual(hub.status_code, 200)
+        for service in self.services:
+            self.assertIn(f'href="/edmonton/glenora/{service}/"', hub.content.decode())
+        self.assertEqual(self.client.get("/edmonton/atlantis/").status_code, 404)
+
+    def test_city_seo_page_links_to_its_neighbourhood_pages_and_the_request_flow(self):
+        html = self.client.get("/plumber-edmonton/").content.decode()
+        self.assertIn('href="/edmonton/windermere/plumbing/"', html)
+        self.assertIn('href="/open/request/?service=plumbing&amp;src=seo&amp;ref=plumber-edmonton"', html)
+
+    def test_pages_make_no_fake_claims(self):
+        for path in ("/edmonton/windermere/plumbing/", "/edmonton/oliver/hvac/", "/edmonton/garneau/electrical/"):
+            html = self.client.get(path).content.decode().lower()
+            main = html.split("<main")[1].split("</main>")[0]
+            for banned in ("5-star", "\u2605", "testimonial", "verified providers", "licensed and insured", "$"):
+                self.assertNotIn(banned, main)
