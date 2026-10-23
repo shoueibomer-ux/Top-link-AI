@@ -507,7 +507,8 @@ void main() {
         expect(find.byKey(const Key('sign-in-message')), findsNothing);
         expect(find.text('Continue with Google'), findsOneWidget);
       }, backend.client);
-      expect(backend.requests, isEmpty);
+      // Nothing but the check for whether email sign-in is available.
+      expect(backend.requests.where((r) => !r.url.path.endsWith('/accounts/email/status/')), isEmpty);
     });
 
     testWidgets('a build without Google set up says so', (tester) async {
@@ -517,7 +518,8 @@ void main() {
         await _signIn(tester);
         expect(find.textContaining('not set up in this build'), findsOneWidget);
       }, backend.client);
-      expect(backend.requests, isEmpty);
+      // Nothing but the check for whether email sign-in is available.
+      expect(backend.requests.where((r) => !r.url.path.endsWith('/accounts/email/status/')), isEmpty);
     });
 
     testWidgets('the server refusing the account (e.g. a client email) is shown', (tester) async {

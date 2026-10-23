@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../account/email_sign_in.dart';
 import '../api/api_client.dart';
 import '../api/provider_profile.dart';
 import '../app_colors.dart';
@@ -11,7 +12,7 @@ import 'auth_storage.dart';
 import 'google_sign_in_service.dart';
 import 'provider_widgets.dart';
 
-/// Provider sign-in: one button, "Continue with Google". The Google ID token
+/// Provider sign-in: "Continue with Google", and "Continue with email" when the server can send codes. The Google ID token
 /// goes to the backend, which verifies it and answers with this provider's own
 /// tokens (and their profile, if they've already registered).
 class ProviderSignInScreen extends StatefulWidget {
@@ -40,6 +41,31 @@ class _ProviderSignInScreenState extends State<ProviderSignInScreen> {
   bool _busy = false;
   String? _error;
 
+  /// "Continue with email" shows only when the server can send codes (accounts.email_login).
+  bool _emailAvailable = false;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.api.emailSignInEnabled().then((on) {
+      if (mounted) setState(() => _emailAvailable = on);
+    });
+  }
+
+  Future<void> _finishSignIn(ProviderSignIn result) async {
+    await AuthStorage.save(access: result.tokens.access, refresh: result.tokens.refresh);
+    unawaited(PushService.instance.register());
+    if (mounted) widget.onSignedIn(result);
+  }
+
+  Future<void> _signInWithEmail() async {
+    final result = await Navigator.of(context).push<Map<String, dynamic>>(
+      MaterialPageRoute(builder: (_) => EmailSignInScreen(api: widget.api, role: 'provider')),
+    );
+    if (result == null || !mounted) return;
+    await _finishSignIn(ProviderSignIn.fromJson(result));
+  }
+
   Future<void> _signIn() async {
     setState(() {
       _busy = true;
@@ -48,10 +74,7 @@ class _ProviderSignInScreenState extends State<ProviderSignInScreen> {
     try {
       final idToken = await widget.idTokenProvider();
       final result = await widget.api.signInProviderWithGoogle(idToken);
-      await AuthStorage.save(access: result.tokens.access, refresh: result.tokens.refresh);
-      unawaited(PushService.instance.register());
-      if (!mounted) return;
-      widget.onSignedIn(result);
+      await _finishSignIn(result);
     } on SignInCancelled {
       // They closed the Google sheet; nothing to report.
     } on SignInUnavailable catch (e) {
@@ -110,6 +133,16 @@ class _ProviderSignInScreenState extends State<ProviderSignInScreen> {
                 busy: _busy,
                 onPressed: _signIn,
               ),
+              if (_emailAvailable) ...[
+                const SizedBox(height: 12),
+                BrandButton(
+                  key: const Key('provider-email-sign-in'),
+                  label: 'Continue with email',
+                  icon: Icons.mail_outline,
+                  outlined: true,
+                  onPressed: _busy ? null : _signInWithEmail,
+                ),
+              ],
               const SizedBox(height: 12),
               Center(
                 child: TextButton(

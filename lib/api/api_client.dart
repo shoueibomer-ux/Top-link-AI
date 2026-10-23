@@ -510,6 +510,46 @@ class ApiClient {
   // shape rather than surfacing a raw status code to the user.
   // ---- Provider self-registration (the providers app) ----------------------
 
+  /// See accounts.views.EmailLoginStatusView: whether the server can send sign-in codes. False on any problem,
+  /// so the email option simply stays hidden and Google sign-in carries on as before.
+  Future<bool> emailSignInEnabled() async {
+    try {
+      final response = await http.get(Uri.parse('$baseUrl/accounts/email/status/'), headers: _headers);
+      if (response.statusCode != 200) return false;
+      return (jsonDecode(response.body) as Map<String, dynamic>)['enabled'] == true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// See accounts.views.EmailLoginStartView: emails a 6-digit code. [role] is 'customer' or 'provider'.
+  /// Returns the server's message, which is the same whether or not the email has an account.
+  Future<String> startEmailSignIn(String email, String role) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/accounts/email/start/'),
+      headers: _headers,
+      body: jsonEncode({'email': email, 'role': role}),
+    );
+    if (response.statusCode != 200) {
+      throw ApiException(_firstErrorMessage(response.body) ?? 'Could not send a code (${response.statusCode}).');
+    }
+    return _firstErrorMessage(response.body) ?? 'We sent you a code.';
+  }
+
+  /// See accounts.views.EmailLoginVerifyView: signs in with the code. The answer has the same shape as the
+  /// Google sign-in for that role (parse it with ClientSignIn.fromJson or ProviderSignIn.fromJson).
+  Future<Map<String, dynamic>> verifyEmailSignIn(String email, String role, String code) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/accounts/email/verify/'),
+      headers: _headers,
+      body: jsonEncode({'email': email, 'role': role, 'code': code}),
+    );
+    if (response.statusCode != 200) {
+      throw ApiException(_firstErrorMessage(response.body) ?? 'Could not sign in (${response.statusCode}).');
+    }
+    return jsonDecode(response.body) as Map<String, dynamic>;
+  }
+
   /// See providers.views.GoogleSignInView: trades a Google ID token for this
   /// provider's own tokens and, if they've registered, their profile.
   Future<ProviderSignIn> signInProviderWithGoogle(String idToken) async {

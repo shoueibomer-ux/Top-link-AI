@@ -45,7 +45,7 @@ from provider_search.models import ServiceRequest
 from providers.models import GoogleIdentity, ProviderProfile
 from reviews.models import Favorite, Review, ReviewReport
 
-from .models import AccountDeletion, UserProfile
+from .models import AccountDeletion, EmailLoginCode, UserProfile
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -151,6 +151,9 @@ def delete_account(user, via: str = AccountDeletion.VIA_APP) -> DeletionSummary:
                 sms_opt_out=True,  # never text this number again
                 status=ProviderProfile.STATUS_REJECTED,
             )
+
+        # Email sign-in codes are filed under the address; they go before it does.
+        EmailLoginCode.objects.filter(email__iexact=user.email).delete()
 
         # The account itself: nothing left that names the person, and it can't sign in.
         user.username = f"deleted-{user.pk}"

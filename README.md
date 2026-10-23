@@ -94,6 +94,19 @@ flutter build apk --release --dart-define=API_BASE_URL=https://toplinkai-backend
 flutter run --release --dart-define=API_BASE_URL=https://toplinkai-backend.onrender.com/api --dart-define="API_KEY=$env:TOPLINKAI_PROD_API_KEY"
 ```
 
+### Sign-in with an emailed code
+
+Clients and providers can also tap *Continue with email*: they get a 6-digit code by email and type it in. No
+passwords. A new email makes a new account; an email that already has one (also one made with Google) signs into
+it. A code works once, for 10 minutes, with 5 wrong tries; sends are limited to 5 an hour per address and 20 per IP.
+Code is in `accounts/email_login.py`.
+
+- **Production (Render web service):** set `EMAIL_HOST_USER` (the Gmail address) and `EMAIL_HOST_PASSWORD` (a Gmail
+  app password, not the account password). Optional: `DEFAULT_FROM_EMAIL` (defaults to `EMAIL_HOST_USER`), and
+  `EMAIL_HOST` / `EMAIL_PORT` / `EMAIL_USE_TLS` for a provider other than Gmail (defaults `smtp.gmail.com`, `587`,
+  `True`). Without both of the first two the option is hidden in the app and Google sign-in works as before.
+- **Local development (`DJANGO_DEBUG=True`):** no email is sent; the code is printed in the `runserver` console.
+
 ### Google sign-in for providers
 
 Provider sign-in needs the Web OAuth client ID (Google Cloud project "tabmatch"):
