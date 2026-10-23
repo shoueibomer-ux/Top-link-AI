@@ -156,6 +156,34 @@ class AdminMountedAtConfiguredPathTests(TestCase):
         self.assertEqual(self.client.get("/manage-test-9q2/login/").status_code, 200)
         self.assertEqual(self.client.get("/admin/login/").status_code, 404)
 
+    def test_get_on_the_admin_path_shows_the_admin_login_not_the_site_404(self):
+        response = self.client.get("/manage-test-9q2/", follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "admin/login.html")
+        self.assertTemplateNotUsed(response, "404.html")
+        self.assertEqual(response.redirect_chain, [("/manage-test-9q2/login/?next=/manage-test-9q2/", 302)])
+
+    def test_the_admin_path_without_its_trailing_slash_redirects_to_it(self):
+        response = self.client.get("/manage-test-9q2")
+        self.assertEqual((response.status_code, response["Location"]), (301, "/manage-test-9q2/"))
+
+
+class AdminMatchedBeforeTheWebsiteTests(AdminMountedAtConfiguredPathTests):
+    """Even an admin path that collides with a website page wins: the admin
+    patterns come before the website's in config/urls.py."""
+
+    def setUp(self):
+        self._reload_urls("providers/")
+
+    def test_the_admin_takes_precedence_over_a_website_page(self):
+        response = self.client.get("/providers/", follow=True)
+        self.assertTemplateUsed(response, "admin/login.html")
+
+    # The parent's path-specific tests don't apply to this path.
+    test_the_admin_is_served_only_at_the_configured_path = None
+    test_get_on_the_admin_path_shows_the_admin_login_not_the_site_404 = None
+    test_the_admin_path_without_its_trailing_slash_redirects_to_it = None
+
 
 @override_settings(TRUSTED_PROXY_HOPS=1)
 class AdminLoginRateLimitTests(_RateLimitTestCase):
