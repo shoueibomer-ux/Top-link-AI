@@ -14,7 +14,8 @@ import '../provider/provider_session.dart';
 import '../provider/provider_widgets.dart';
 import '../widgets/app_logo.dart';
 
-/// Asks the client to sign in with Google, then closes with `true`. Shown when
+/// Asks the client to sign in (with Google, or with an emailed code when the server can send one), then
+/// closes with `true`. Shown when
 /// they submit a request (or open their history) without being signed in: a
 /// request belongs to the account that sent it, which is also what lets them
 /// chat with providers and review a job later. "Not now" closes with `false`
@@ -26,7 +27,7 @@ class ClientSignInScreen extends StatefulWidget {
     this.idTokenProvider,
     this.title = 'Sign in to send your request',
     this.message =
-        'We use your Google account so your request, the replies and your job history stay yours. '
+        'Sign in so your request, the replies and your job history stay with your account. '
         'Your request is sent as soon as you sign in.',
   });
 

@@ -319,7 +319,7 @@ class _HistoryTabState extends State<HistoryTab> {
           api: _apiClient,
           idTokenProvider: widget.idTokenProvider,
           title: 'Sign in to see your requests',
-          message: 'Your requests, the providers who accept them and your job history are kept with your Google account.',
+          message: 'Your requests, the providers who accept them and your job history are kept with your account.',
         ),
       ),
     );
@@ -401,7 +401,7 @@ class _HistoryTabState extends State<HistoryTab> {
               TextButton(
                 key: const Key('history-sign-in'),
                 onPressed: _signIn,
-                child: const Text('Sign in with Google', style: TextStyle(color: AppColors.turquoise, fontWeight: FontWeight.w600)),
+                child: const Text('Sign in', style: TextStyle(color: AppColors.turquoise, fontWeight: FontWeight.w600)),
               ),
             ],
           ),
