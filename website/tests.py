@@ -80,12 +80,13 @@ class PageTests(TestCase):
         self.assertIn('rel="apple-touch-icon" sizes="180x180"', html)
         self.assertIn('rel="icon" type="image/svg+xml"', html)
 
+    @override_settings(SITE_URL="https://tabmatch.ca")
     def test_social_share_image_tags_and_real_dimensions(self):
         import struct
         from django.contrib.staticfiles import finders
 
         html = self.client.get("/").content.decode()
-        self.assertIn('property="og:image" content="http://testserver/static/website/images/og-image.png"', html)
+        self.assertIn('property="og:image" content="https://tabmatch.ca/static/website/images/og-image.png"', html)
         self.assertIn('name="twitter:card" content="summary_large_image"', html)
 
         def png_size(name):

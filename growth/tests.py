@@ -137,6 +137,11 @@ class InviteApiTests(TestCase):
         self.assertIn(first["url"], first["share_text"])
         self.assertEqual(InviteCode.objects.count(), 1)
 
+    @override_settings(SITE_URL="https://tabmatch.ca")
+    def test_the_invite_link_is_on_site_url_whichever_host_the_app_calls(self):
+        response = self.client.get("/api/growth/invite/", HTTP_HOST="testserver", **self.inviter_h).json()
+        self.assertEqual(response["url"], f"https://tabmatch.ca/invite/{response['code']}/")
+
     def test_providers_and_signed_out_people_get_no_invite(self):
         provider = make_provider()
         token = RefreshToken.for_user(provider.user).access_token

@@ -5,6 +5,8 @@ import dj_database_url
 from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
+from config.hosts import csrf_trusted_origins, site_redirect_hosts
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 load_dotenv(BASE_DIR / ".env")
@@ -112,12 +114,20 @@ BUSINESS_MAILING_ADDRESS = os.environ.get("BUSINESS_MAILING_ADDRESS", "").strip(
 ALLOWED_HOSTS = [h.strip() for h in os.environ.get("DJANGO_ALLOWED_HOSTS", "").split(",") if h.strip()]
 
 # Render sets this for every service automatically (its *.onrender.com
-# hostname) — added on top of DJANGO_ALLOWED_HOSTS (for a custom domain, once
-# there is one) rather than replacing it, so nothing manual is needed just to
+# hostname) — added on top of DJANGO_ALLOWED_HOSTS (the custom domain,
+# tabmatch.ca,www.tabmatch.ca) rather than replacing it, so nothing manual is needed just to
 # reach the default Render URL.
 _render_hostname = os.environ.get("RENDER_EXTERNAL_HOSTNAME")
 if _render_hostname and _render_hostname not in ALLOWED_HOSTS:
     ALLOWED_HOSTS.append(_render_hostname)
+
+# Django checks a POST's Origin against these over HTTPS. Same-origin forms (the admin login) pass without them;
+# listing every allowed host keeps a form posted from one of our hosts to another working too.
+CSRF_TRUSTED_ORIGINS = csrf_trusted_origins(ALLOWED_HOSTS)
+
+# www.<SITE_URL's host> and the *.onrender.com hostname: their website pages 301 to SITE_URL
+# (config.site_url.CanonicalHostMiddleware). Empty unless SITE_URL is https://.
+SITE_REDIRECT_HOSTS = site_redirect_hosts(SITE_URL, _render_hostname)
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -149,6 +159,8 @@ MIDDLEWARE = [
     # SecurityMiddleware and above everything else (whitenoise's own
     # requirement).
     "whitenoise.middleware.WhiteNoiseMiddleware",
+    # www. and the onrender.com host -> SITE_URL, for website pages only (never /api/).
+    "config.site_url.CanonicalHostMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",

@@ -9,9 +9,13 @@
 # One-time manual steps after the first Blueprint deploy: Render will prompt
 # for every env var below marked `sync: false` (never committed here, since
 # they're real secrets/config, not something to check into source control).
-#   - DJANGO_ALLOWED_HOSTS: a custom domain, if any. The *.onrender.com
-#     hostname is added automatically (see RENDER_EXTERNAL_HOSTNAME handling
-#     in config/settings.py) — leave this blank until there's a custom domain.
+#   - DJANGO_ALLOWED_HOSTS: the custom domain, tabmatch.ca,www.tabmatch.ca.
+#     The *.onrender.com hostname is added automatically (see
+#     RENDER_EXTERNAL_HOSTNAME handling in config/settings.py), and every
+#     allowed host is also a trusted CSRF origin.
+#   - SITE_URL: https://tabmatch.ca. Canonical URLs, the sitemap, robots.txt
+#     and email links use it, and website pages on www.tabmatch.ca and the
+#     *.onrender.com host 301 to it (never /api/, POSTs or /robots.txt).
 #   - API_KEY: the shared secret the Flutter app sends as X-API-Key. Must not
 #     be the dev placeholder ("dev-local-shared-key") — see config/settings.py.
 #   - GOOGLE_PLACES_API_KEY: required for provider search to return anything.
@@ -150,7 +154,8 @@ services:
         sync: false
       - key: ADMIN_ALERT_EMAIL
         sync: false
-      # The website's public address (https://..., no trailing slash), for links in emails. See the cron job.
+      # The website's public address, https://tabmatch.ca (no trailing slash): canonical URLs, sitemap, robots.txt
+      # and invite links use it, and www. / onrender.com website pages redirect to it. See the cron job.
       - key: SITE_URL
         sync: false
       - key: DJANGO_SUPERUSER_PASSWORD

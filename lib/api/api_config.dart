@@ -22,7 +22,8 @@ class ApiConfigException implements Exception {
 /// So it is enforced here, in code:
 ///
 ///  * `--dart-define=API_BASE_URL=https://api.example.com/api` sets the
-///    backend. **Release builds require it, and require `https://`.**
+///    backend, and **must be `https://` in a release build**. A release build
+///    without it talks to production, [productionApiBaseUrl].
 ///  * `--dart-define=API_KEY=<production key>` sets the shared API key.
 ///    **Release builds require it, and refuse the dev placeholder** — that
 ///    default would otherwise ship inside every install.
@@ -40,6 +41,9 @@ class ApiConfig {
   /// The placeholder the backend also falls back to when DEBUG=True (see
   /// config/settings.py). Public knowledge — must never reach a release.
   static const devApiKey = 'dev-local-shared-key';
+
+  /// Where a release build talks when no `API_BASE_URL` is given.
+  static const productionApiBaseUrl = 'https://tabmatch.ca/api';
 
   static String baseUrl() => resolveApiBaseUrl(
         override: _baseUrlDefine,
@@ -109,7 +113,7 @@ String describeApiConfig({required String baseUrl, required String apiKey}) {
 String? apiConfigWarning({required String baseUrlOverride, required String apiKey}) {
   if (baseUrlOverride.trim().isNotEmpty || apiKey == ApiConfig.devApiKey) return null;
   return 'API_KEY is set but API_BASE_URL is not, so this build talks to the local dev server, '
-      'not the deployed backend. Add --dart-define=API_BASE_URL=https://<your-backend>/api, '
+      'not the deployed backend. Add --dart-define=API_BASE_URL=https://tabmatch.ca/api, '
       'or make the local server use the same API_KEY.';
 }
 
@@ -118,12 +122,7 @@ String resolveApiBaseUrl({required String override, required bool isRelease, req
   final trimmed = override.trim();
   if (trimmed.isNotEmpty) return validateBaseUrl(trimmed, isRelease: isRelease);
 
-  if (isRelease) {
-    throw ApiConfigException(
-      'API_BASE_URL is not set. Release builds must be built with '
-      '--dart-define=API_BASE_URL=https://<your-backend>/api.',
-    );
-  }
+  if (isRelease) return ApiConfig.productionApiBaseUrl;
   // The Android emulator can't reach the host machine via "localhost" — that
   // resolves to the emulator itself. 10.0.2.2 is its alias for the host.
   final host = isAndroid ? '10.0.2.2' : 'localhost';

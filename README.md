@@ -34,14 +34,16 @@ flutter run
 
 ## Release builds: required configuration
 
-The app talks to the backend over HTTPS with a shared API key, both supplied
-at build time. **A release build refuses to run without them** — it shows a
-"This build is misconfigured" screen instead of the app — so a wrong build is
-caught the moment it launches, not after users hit it.
+The app talks to the backend over HTTPS with a shared API key, supplied at
+build time. **A release build refuses to run without the key, or with an
+`http://` URL** — it shows a "This build is misconfigured" screen instead of
+the app — so a wrong build is caught the moment it launches, not after users
+hit it. Without `API_BASE_URL` a release build talks to production,
+`https://tabmatch.ca/api`.
 
 | `--dart-define` | Release build requires | Debug build default |
 |---|---|---|
-| `API_BASE_URL` | set, and `https://` (e.g. `https://api.example.com/api`) | `http://localhost:8000/api` (`10.0.2.2` on the Android emulator) |
+| `API_BASE_URL` | `https://` if set; defaults to `https://tabmatch.ca/api` | `http://localhost:8000/api` (`10.0.2.2` on the Android emulator) |
 | `API_KEY` | set, and not the dev placeholder | `dev-local-shared-key` |
 
 ```bash
@@ -59,7 +61,9 @@ phone can reach your dev server); a release build may not.
 
 ### Building against this project's production backend
 
-`API_BASE_URL` is `https://toplinkai-backend.onrender.com/api` — note the
+`API_BASE_URL` is `https://tabmatch.ca/api` (the default, so it can be left
+out; builds made before the custom domain use
+`https://toplinkai-backend.onrender.com/api`, which keeps working) — note the
 trailing `/api`: every endpoint call appends its own path to this (see
 `lib/api/api_client.dart`), matching how Django mounts everything under
 `/api/` (see `config/urls.py`), so a value without it would 404 on every
@@ -73,12 +77,12 @@ export TOPLINKAI_PROD_API_KEY=<the value from Render's API_KEY env var>
 
 # a release APK:
 flutter build apk --release \
-  --dart-define=API_BASE_URL=https://toplinkai-backend.onrender.com/api \
+  --dart-define=API_BASE_URL=https://tabmatch.ca/api \
   --dart-define=API_KEY="$TOPLINKAI_PROD_API_KEY"
 
 # or run it directly on a connected device, same configuration:
 flutter run --release \
-  --dart-define=API_BASE_URL=https://toplinkai-backend.onrender.com/api \
+  --dart-define=API_BASE_URL=https://tabmatch.ca/api \
   --dart-define=API_KEY="$TOPLINKAI_PROD_API_KEY"
 ```
 
@@ -88,10 +92,10 @@ Windows PowerShell:
 $env:TOPLINKAI_PROD_API_KEY = "<the value from Render's API_KEY env var>"
 
 # a release APK:
-flutter build apk --release --dart-define=API_BASE_URL=https://toplinkai-backend.onrender.com/api --dart-define="API_KEY=$env:TOPLINKAI_PROD_API_KEY"
+flutter build apk --release --dart-define=API_BASE_URL=https://tabmatch.ca/api --dart-define="API_KEY=$env:TOPLINKAI_PROD_API_KEY"
 
 # or run it directly on a connected device, same configuration:
-flutter run --release --dart-define=API_BASE_URL=https://toplinkai-backend.onrender.com/api --dart-define="API_KEY=$env:TOPLINKAI_PROD_API_KEY"
+flutter run --release --dart-define=API_BASE_URL=https://tabmatch.ca/api --dart-define="API_KEY=$env:TOPLINKAI_PROD_API_KEY"
 ```
 
 ### Sign-in with an emailed code
@@ -118,7 +122,7 @@ so each build machine sets its own:
 ```bash
 cp dart_defines.example.json dart_defines.local.json   # then paste the Web client ID into it
 flutter run --dart-define-from-file=dart_defines.local.json
-flutter build apk --release --dart-define-from-file=dart_defines.local.json   --dart-define=API_BASE_URL=https://toplinkai-backend.onrender.com/api   --dart-define=API_KEY="$TOPLINKAI_PROD_API_KEY"
+flutter build apk --release --dart-define-from-file=dart_defines.local.json   --dart-define=API_BASE_URL=https://tabmatch.ca/api   --dart-define=API_KEY="$TOPLINKAI_PROD_API_KEY"
 ```
 
 Clients sign in with Google too, using the same Web client ID. The app asks at
