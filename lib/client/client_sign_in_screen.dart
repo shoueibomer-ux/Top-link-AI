@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 
 import 'dart:async';
 
+import '../account/email_sign_in.dart';
 import '../api/api_client.dart';
+import '../api/auth_models.dart';
 import '../messaging/push_service.dart';
 import '../app_colors.dart';
 import '../growth/growth_links.dart';
@@ -43,6 +45,33 @@ class _ClientSignInScreenState extends State<ClientSignInScreen> {
   bool _busy = false;
   String? _error;
 
+  /// "Continue with email" shows only when the server can send codes (accounts.email_login).
+  bool _emailAvailable = false;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.api.emailSignInEnabled().then((on) {
+      if (mounted) setState(() => _emailAvailable = on);
+    });
+  }
+
+  Future<void> _finishSignIn(ClientSignIn result) async {
+    await AuthStorage.save(access: result.tokens.access, refresh: result.tokens.refresh);
+    unawaited(PushService.instance.register());
+    // A friend's invite opened before signing in is recorded now that there's an account to record it on.
+    unawaited(claimPendingInvite(AuthSession(api: widget.api)));
+    if (mounted) Navigator.of(context).pop(true);
+  }
+
+  Future<void> _signInWithEmail() async {
+    final result = await Navigator.of(context).push<Map<String, dynamic>>(
+      MaterialPageRoute(builder: (_) => EmailSignInScreen(api: widget.api, role: 'customer')),
+    );
+    if (result == null || !mounted) return;
+    await _finishSignIn(ClientSignIn.fromJson(result));
+  }
+
   Future<void> _signIn() async {
     setState(() {
       _busy = true;
@@ -51,12 +80,7 @@ class _ClientSignInScreenState extends State<ClientSignInScreen> {
     try {
       final idToken = await (widget.idTokenProvider ?? GoogleSignInService.getIdToken)();
       final result = await widget.api.signInClientWithGoogle(idToken);
-      await AuthStorage.save(access: result.tokens.access, refresh: result.tokens.refresh);
-      unawaited(PushService.instance.register());
-      // A friend's invite opened before signing in is recorded now that there's an account to record it on.
-      unawaited(claimPendingInvite(AuthSession(api: widget.api)));
-      if (!mounted) return;
-      Navigator.of(context).pop(true);
+      await _finishSignIn(result);
       return;
     } on SignInCancelled {
       // They closed the Google sheet; nothing to report.
@@ -112,6 +136,16 @@ class _ClientSignInScreenState extends State<ClientSignInScreen> {
                 busy: _busy,
                 onPressed: _signIn,
               ),
+              if (_emailAvailable) ...[
+                const SizedBox(height: 12),
+                BrandButton(
+                  key: const Key('client-email-sign-in'),
+                  label: 'Continue with email',
+                  icon: Icons.mail_outline,
+                  outlined: true,
+                  onPressed: _busy ? null : _signInWithEmail,
+                ),
+              ],
               const SizedBox(height: 12),
               Center(
                 child: TextButton(

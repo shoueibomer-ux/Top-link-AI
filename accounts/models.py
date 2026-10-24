@@ -52,3 +52,22 @@ class AccountDeletion(models.Model):
 
     def __str__(self):
         return f"#{self.user_id} ({self.role}) deleted {self.deleted_at:%Y-%m-%d} via {self.via}"
+
+
+class EmailLoginCode(models.Model):
+    """One sign-in code sent by email (see accounts.email_login). Only a keyed hash of the code is stored.
+    `used_at` is set when it is used, replaced by a newer code, or locked after too many wrong tries."""
+
+    email = models.EmailField(db_index=True)
+    role = models.CharField(max_length=20, choices=UserRole.choices)
+    code_hash = models.CharField(max_length=64)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    used_at = models.DateTimeField(null=True, blank=True)
+    wrong_tries = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"code for {self.email} ({self.role})"

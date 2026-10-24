@@ -139,7 +139,9 @@ services:
       - key: TWILIO_FROM_NUMBER
         sync: false
       # Gmail SMTP with an app password. ADMIN_ALERT_EMAIL is where the
-      # "no YES after 2 hours" alert and the daily summary go.
+      # "no YES after 2 hours" alert and the daily summary go. EMAIL_HOST_USER
+      # and EMAIL_HOST_PASSWORD together also turn on "Continue with email"
+      # sign-in (accounts.email_login): without both, the app hides it.
       - key: EMAIL_HOST_USER
         sync: false
       - key: EMAIL_HOST_PASSWORD
