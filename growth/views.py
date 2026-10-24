@@ -8,6 +8,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from accounts.permissions import IsClientAccount
+from config.site_url import absolute_url
 from matching.permissions import HasApiKey
 from providers.models import ProviderProfile
 
@@ -20,7 +21,7 @@ CLAIM_WINDOW = timedelta(days=30)
 
 
 def _invite_url(request, code: str) -> str:
-    return request.build_absolute_uri(links.invite_path(code))
+    return absolute_url(request, links.invite_path(code))
 
 
 class InviteView(APIView):

@@ -6,6 +6,7 @@ from django.shortcuts import redirect, render
 from django.views.decorators.http import require_GET
 
 from catalog.taxonomy import launched_slugs
+from config.site_url import absolute_url
 
 from . import config, local_pages, selectors
 from .content.icons import SEO_PAGE_ICONS
@@ -80,7 +81,7 @@ def seo_page(request, slug):
         raise Http404
     related_slugs = page.get("related_service_slugs", [])
     related = [s for s in (selectors.get_service(x) for x in related_slugs) if s]
-    url = request.build_absolute_uri()
+    url = absolute_url(request, request.path)
     jsonld = [
         {
             "@context": "https://schema.org",
@@ -104,7 +105,7 @@ def seo_page(request, slug):
             "@context": "https://schema.org",
             "@type": "BreadcrumbList",
             "itemListElement": [
-                {"@type": "ListItem", "position": 1, "name": "Home", "item": request.build_absolute_uri("/")},
+                {"@type": "ListItem", "position": 1, "name": "Home", "item": absolute_url(request, "/")},
                 {"@type": "ListItem", "position": 2, "name": page["breadcrumb"], "item": url},
             ],
         },
@@ -140,7 +141,7 @@ def local_page(request, neighbourhood, service):
     if page is None:
         raise Http404
     n = page["neighbourhood"]
-    url = request.build_absolute_uri()
+    url = absolute_url(request, request.path)
     jsonld = [
         {
             "@context": "https://schema.org",
@@ -156,7 +157,7 @@ def local_page(request, neighbourhood, service):
                     "@type": "PostalAddress", "addressLocality": config.CITY, "addressRegion": "AB", "addressCountry": "CA",
                 }},
             },
-            "provider": {"@type": "Organization", "name": config.SITE_NAME, "url": request.build_absolute_uri("/")},
+            "provider": {"@type": "Organization", "name": config.SITE_NAME, "url": absolute_url(request, "/")},
         },
         {
             "@context": "https://schema.org",
@@ -170,10 +171,10 @@ def local_page(request, neighbourhood, service):
             "@context": "https://schema.org",
             "@type": "BreadcrumbList",
             "itemListElement": [
-                {"@type": "ListItem", "position": 1, "name": "Home", "item": request.build_absolute_uri("/")},
-                {"@type": "ListItem", "position": 2, "name": config.CITY, "item": request.build_absolute_uri("/edmonton/")},
+                {"@type": "ListItem", "position": 1, "name": "Home", "item": absolute_url(request, "/")},
+                {"@type": "ListItem", "position": 2, "name": config.CITY, "item": absolute_url(request, "/edmonton/")},
                 {"@type": "ListItem", "position": 3, "name": n["name"],
-                 "item": request.build_absolute_uri(local_pages.hub_path(n["slug"]))},
+                 "item": absolute_url(request, local_pages.hub_path(n["slug"]))},
                 {"@type": "ListItem", "position": 4, "name": page["service"]["label"], "item": url},
             ],
         },
@@ -270,7 +271,7 @@ def robots_txt(request):
         "Disallow: /invite/",
         "Disallow: /reminders/",
         "Allow: /edmonton/",
-        f"Sitemap: {request.build_absolute_uri('/sitemap.xml')}",
+        f"Sitemap: {absolute_url(request, '/sitemap.xml')}",
         "",
     ]
     return HttpResponse("\n".join(lines), content_type="text/plain")
@@ -282,7 +283,7 @@ def sitemap_xml(request):
         f"/{slug}/" for slug in SEO_PAGES
     ] + local_pages.all_paths()
     urls = "".join(
-        f"<url><loc>{escape(request.build_absolute_uri(p))}</loc></url>" for p in paths
+        f"<url><loc>{escape(absolute_url(request, p))}</loc></url>" for p in paths
     )
     xml = f'<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">{urls}</urlset>'
     return HttpResponse(xml, content_type="application/xml")

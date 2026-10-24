@@ -1,6 +1,8 @@
 from django import template
 from django.urls import reverse
 
+from config.site_url import absolute_url as _absolute_url
+
 from .. import config, selectors
 from ..content.icons import SECTOR_ICONS, SERVICE_ICONS
 from ..icons import FALLBACK, render_icon
@@ -26,6 +28,12 @@ def site():
         "app_url": config.APP_URL or get_app,
         "provider_url": config.PROVIDER_URL or reverse("website:get-app") + "?as=provider",
     }
+
+
+@register.simple_tag(takes_context=True)
+def absolute_url(context, path):
+    """{% absolute_url request.path %}: the path on SITE_URL (https://tabmatch.ca), whichever host was asked."""
+    return _absolute_url(context["request"], path)
 
 
 @register.simple_tag

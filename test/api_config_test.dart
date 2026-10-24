@@ -30,9 +30,23 @@ void main() {
       );
     });
 
-    test('a release build with no API_BASE_URL is refused, not silently pointed at localhost', () {
-      expect(() => resolveApiBaseUrl(override: '', isRelease: true, isAndroid: true), throwsConfigError('API_BASE_URL is not set'));
-      expect(() => resolveApiBaseUrl(override: '   ', isRelease: true, isAndroid: false), throwsConfigError('API_BASE_URL is not set'));
+    test('a release build with no API_BASE_URL talks to https://tabmatch.ca/api, never localhost', () {
+      expect(resolveApiBaseUrl(override: '', isRelease: true, isAndroid: true), 'https://tabmatch.ca/api');
+      expect(resolveApiBaseUrl(override: '   ', isRelease: true, isAndroid: false), 'https://tabmatch.ca/api');
+      expect(ApiConfig.productionApiBaseUrl, 'https://tabmatch.ca/api');
+    });
+
+    test('website pages of a default release build are on https://tabmatch.ca', () {
+      final base = resolveApiBaseUrl(override: '', isRelease: true, isAndroid: true);
+      expect(siteUrlFor(base, '/privacy/'), 'https://tabmatch.ca/privacy/');
+      expect(siteUrlFor(base, '/delete-account/'), 'https://tabmatch.ca/delete-account/');
+    });
+
+    test('an older build pointed at the onrender.com host still works when given it explicitly', () {
+      expect(
+        resolveApiBaseUrl(override: 'https://toplinkai-backend.onrender.com/api', isRelease: true, isAndroid: true),
+        'https://toplinkai-backend.onrender.com/api',
+      );
     });
 
     test('a release build refuses a cleartext http:// URL', () {
@@ -94,7 +108,7 @@ void main() {
 
   group('startup error screen', () {
     testWidgets('names the problem and how to fix it instead of showing the app', (tester) async {
-      const message = 'API_BASE_URL is not set. Release builds must be built with --dart-define=API_BASE_URL=https://<your-backend>/api.';
+      const message = 'API_KEY is not set. Release builds must be built with --dart-define=API_KEY=<the production key>.';
       await tester.pumpWidget(const ConfigErrorApp(message: message));
 
       expect(find.text('This build is misconfigured'), findsOneWidget);
