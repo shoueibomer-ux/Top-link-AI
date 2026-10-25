@@ -108,8 +108,8 @@ services:
       - key: DJANGO_SUPERUSER_EMAIL
         sync: false
       # Shown on the website's Contact page and on the privacy, terms, provider-agreement and delete-account
-      # pages (Google Play needs a working way to ask for account deletion). Set it before launch: until then
-      # those pages show a visible "to be set" placeholder.
+      # pages (Google Play needs a working way to ask for account deletion). Defaults to connect@tabmatch.ca:
+      # leave it blank, or set it only to use a different mailbox.
       - key: WEBSITE_CONTACT_EMAIL
         sync: false
       # Provider sign-in with Google (the providers app): the Web OAuth client ID

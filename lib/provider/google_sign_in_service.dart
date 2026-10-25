@@ -29,7 +29,7 @@ bool fakeGoogleSignInEnabled({required bool isDebug, required String fakeEmail})
 String googleSignInFailureMessage(GoogleSignInExceptionCode code) {
   switch (code) {
     case GoogleSignInExceptionCode.clientConfigurationError:
-      return 'Google sign-in is not set up correctly in this version of the app. Please contact support.';
+      return 'Google sign-in is not set up correctly in this version of the app. Please email connect@tabmatch.ca.';
     case GoogleSignInExceptionCode.providerConfigurationError:
       return 'Google sign-in is not available on this device. Update Google Play services and try again.';
     case GoogleSignInExceptionCode.uiUnavailable:

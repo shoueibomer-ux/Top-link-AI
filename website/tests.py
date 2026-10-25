@@ -453,6 +453,21 @@ class LegalPagesContentTests(TestCase):
             self.assertNotIn("{%", html, path)
             self.assertNotIn("{{", html, path)
 
+    def test_the_contact_email_defaults_to_connect_at_tabmatch(self):
+        import importlib
+        import os
+        from unittest.mock import patch
+
+        from . import config
+
+        try:
+            with patch.dict(os.environ, {"WEBSITE_CONTACT_EMAIL": ""}):
+                self.assertEqual(importlib.reload(config).CONTACT_EMAIL, "connect@tabmatch.ca")
+                for path in ("/contact/", "/privacy/", "/terms/", "/provider-agreement/", "/delete-account/"):
+                    self.assertIn('href="mailto:connect@tabmatch.ca"', self.page(path), path)
+        finally:
+            importlib.reload(config)
+
     def test_the_contact_email_is_a_visible_placeholder_until_it_is_set(self):
         from unittest.mock import patch
 

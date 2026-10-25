@@ -20,7 +20,7 @@ void main() {
     });
 
     test('a misconfigured build and an old Play services are told apart', () {
-      expect(googleSignInFailureMessage(GoogleSignInExceptionCode.clientConfigurationError), contains('contact support'));
+      expect(googleSignInFailureMessage(GoogleSignInExceptionCode.clientConfigurationError), contains('connect@tabmatch.ca'));
       expect(googleSignInFailureMessage(GoogleSignInExceptionCode.providerConfigurationError), contains('Google Play services'));
     });
   });
