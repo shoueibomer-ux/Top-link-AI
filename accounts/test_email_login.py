@@ -41,6 +41,12 @@ class EmailLoginTests(TestCase):
         with override_settings(EMAIL_HOST_USER="", EMAIL_HOST_PASSWORD=""):
             self.assertFalse(self.client.get("/api/accounts/email/status/", **H).json()["enabled"])
 
+    @override_settings(EMAIL_HOST_USER="12345@smtp-brevo.com", DEFAULT_FROM_EMAIL="Tabmatch <connect@tabmatch.ca>")
+    def test_with_brevo_smtp_the_option_shows_and_codes_come_from_default_from_email(self):
+        self.assertTrue(self.client.get("/api/accounts/email/status/", **H).json()["enabled"])
+        self.assertEqual(self.start().status_code, 200)
+        self.assertEqual(mail.outbox[0].from_email, "Tabmatch <connect@tabmatch.ca>")
+
     def test_a_new_email_gets_a_code_and_a_new_client_account(self):
         response = self.start("  Pat@Example.com ")
         self.assertEqual(response.status_code, 200)

@@ -272,7 +272,7 @@ were accepted and completed. Each request's `source` / `source_ref` is set by `g
 - **Website pages:** `/privacy/`, `/terms/`, `/provider-agreement/` (drafts, `noindex`, marked for a lawyer, with
   orange placeholders for decisions still to make) and `/delete-account/` (public; this is the URL Google Play asks
   for). They are linked from the footer and the app opens them from Settings. They print the contact email from
-  `WEBSITE_CONTACT_EMAIL` on Render; until it is set they show a visible placeholder.
+  `WEBSITE_CONTACT_EMAIL` on Render, `connect@tabmatch.ca` when it is unset.
 
 ### Before publishing
 
@@ -300,8 +300,8 @@ providers:
 - [ ] The R2 bucket is private (no public development URL, no custom domain).
 - [ ] **Account deletion** tested on a real device for a client and for a provider (Settings / Profile >
       Delete my account), and a chat photo really disappears from the R2 bucket afterwards.
-- [ ] `WEBSITE_CONTACT_EMAIL` is set on Render to a mailbox someone reads (the privacy and delete-account pages
-      show it), and a test deletion request sent to it is handled.
+- [ ] `connect@tabmatch.ca` (or `WEBSITE_CONTACT_EMAIL` on Render, which overrides it) is a mailbox someone
+      reads (the privacy and delete-account pages show it), and a test deletion request sent to it is handled.
 - [ ] A lawyer has reviewed `/privacy/`, `/terms/` and `/provider-agreement/`, every orange placeholder is
       filled or decided, and the "DRAFT" banner is removed. In Play Console the account-deletion URL is
       `https://<your-host>/delete-account/`, and the Data safety form matches the privacy policy.

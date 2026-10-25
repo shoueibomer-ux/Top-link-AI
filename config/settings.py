@@ -5,11 +5,14 @@ import dj_database_url
 from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
+from config.env import strip_environ
 from config.hosts import csrf_trusted_origins, site_redirect_hosts
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 load_dotenv(BASE_DIR / ".env")
+# Every env value without surrounding whitespace/newlines, for everything that reads os.environ from here on.
+STRIPPED_ENV_VARS = strip_environ(os.environ)
 
 DEBUG = os.environ.get("DJANGO_DEBUG", "False") == "True"
 

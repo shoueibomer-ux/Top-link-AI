@@ -13,4 +13,6 @@ REGION = "Alberta"
 # set these env vars to a store listing or web-app URL once one exists.
 APP_URL = os.environ.get("WEBSITE_APP_URL", "")
 PROVIDER_URL = os.environ.get("WEBSITE_PROVIDER_URL", "")
-CONTACT_EMAIL = os.environ.get("WEBSITE_CONTACT_EMAIL", "")
+# Shown on the contact, legal and delete-account pages (and so in the app, which opens them).
+DEFAULT_CONTACT_EMAIL = "connect@tabmatch.ca"
+CONTACT_EMAIL = os.environ.get("WEBSITE_CONTACT_EMAIL", "").strip() or DEFAULT_CONTACT_EMAIL
